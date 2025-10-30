@@ -904,8 +904,10 @@ def fetch_weather_icon(icon_code: str, size: int) -> Image.Image | None:
 
 
 def uv_index_color(uvi: int) -> tuple[int, int, int]:
-    if uvi < 2:
+    if uvi <= 1:
         return (0, 255, 0)
+    if uvi == 2:
+        return (200, 120, 255)
     if 3 <= uvi <= 5:
         return (255, 255, 0)
     if 6 <= uvi <= 7:
