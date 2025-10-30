@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Scheduler Admin (Legacy)</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 2rem auto;
+      max-width: 720px;
+      padding: 0 1rem 4rem;
+      line-height: 1.6;
+    }
+    textarea {
+      width: 100%;
+      min-height: 320px;
+      border-radius: 12px;
+      border: 1px solid #d4d4d4;
+      padding: 0.75rem;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.95rem;
+    }
+    button {
+      padding: 0.6rem 1.1rem;
+      border-radius: 999px;
+      border: none;
+      background: #2563eb;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: #475569;
+    }
+    pre {
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      overflow: auto;
+    }
+    .status {
+      margin-top: 1rem;
+      font-weight: 600;
+    }
+    .status.error {
+      color: #b91c1c;
+    }
+  </style>
+</head>
+<body>
+  <h1>Legacy configuration editor</h1>
+  <p>This minimal editor keeps the classic JSON workflow. To enable the new playlist UI, set <code>metadata.ui.playlist_admin_enabled</code> to <code>true</code> in the configuration and reload.</p>
+  <p>You can also append <code>?legacy=1</code> to the URL to reopen this view at any time.</p>
+
+  <textarea id="config-text">{{ config_json }}</textarea>
+  <div style="margin-top:1rem;display:flex;gap:0.75rem;">
+    <button type="button" id="save-json">Save JSON</button>
+    <button type="button" class="secondary" id="reload">Reload from disk</button>
+  </div>
+  <div class="status" id="status"></div>
+
+  <h2>Schema quick reference</h2>
+  <pre>{
+  "version": 2,
+  "catalog": {"presets": {}},
+  "metadata": {"ui": {"playlist_admin_enabled": false}},
+  "playlists": {
+    "main": {
+      "steps": [
+        {"screen": "date"},
+        {"playlist": "weather"},
+        {"rule": {"type": "every", "frequency": 3, "item": {"screen": "inside"}}}
+      ]
+    }
+  },
+  "sequence": [{"playlist": "main"}]
+}</pre>
+
+  <script>
+    const textarea = document.getElementById('config-text');
+    const statusEl = document.getElementById('status');
+
+    function setStatus(text, isError = false) {
+      statusEl.textContent = text;
+      statusEl.className = 'status' + (isError ? ' error' : '');
+    }
+
+    document.getElementById('save-json').addEventListener('click', async () => {
+      try {
+        const parsed = JSON.parse(textarea.value);
+        const resp = await fetch('/save_config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ config: parsed }),
+        });
+        const payload = await resp.json();
+        if (!resp.ok || payload.status !== 'success') {
+          throw new Error(payload.message || 'Save failed');
+        }
+        setStatus('Saved successfully.');
+      } catch (err) {
+        setStatus(err.message, true);
+      }
+    });
+
+    document.getElementById('reload').addEventListener('click', async () => {
+      try {
+        const resp = await fetch('/api/config');
+        const payload = await resp.json();
+        textarea.value = JSON.stringify(payload.config, null, 2);
+        setStatus('Reloaded.');
+      } catch (err) {
+        setStatus(err.message, true);
+      }
+    });
+  </script>
+</body>
+</html>
