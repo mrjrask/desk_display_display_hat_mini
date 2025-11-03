@@ -26,12 +26,25 @@ from config import (
     CENTRAL_TIME,
 )
 
-from utils import clear_display, load_team_logo
+from utils import clear_display, load_team_logo, standard_next_game_logo_height
 
 TS_PATH = TIMES_SQUARE_FONT_PATH
 NBA_DIR = NBA_IMAGES_DIR
 BULLS_TEAM_ID = str(NBA_TEAM_ID)
 BULLS_TRICODE = (NBA_TEAM_TRICODE or "CHI").upper()
+
+
+# Mirror the Hawks/MLB layout helpers when available for consistent typography.
+_MLB = None
+try:
+    import screens.mlb_schedule as _MLB  # noqa: N816 - third-party helper module
+except Exception:  # pragma: no cover - best effort import
+    _MLB = None
+
+_MLB_DRAW_TITLE = getattr(_MLB, "_draw_title_with_bold_result", None) if _MLB else None
+_MLB_REL_DATE_ONLY = getattr(_MLB, "_rel_date_only", None) if _MLB else None
+_MLB_FORMAT_GAME_LABEL = getattr(_MLB, "_format_game_label", None) if _MLB else None
+
 
 
 def _ts(size: int) -> ImageFont.ImageFont:
@@ -49,14 +62,10 @@ FONT_ABBR = _ts(33 if HEIGHT > 64 else 30)
 FONT_SCORE = _ts(48 if HEIGHT > 64 else 37)
 FONT_SMALL = _ts(22 if HEIGHT > 64 else 19)
 
-TITLE_GAP = 6
-ROW_HEIGHT = 74 if HEIGHT >= 96 else 59
-ROW_GAP = 4
-STATUS_GAP = 6
-FOOTER_MARGIN = 4
-LOGO_HEIGHT = ROW_HEIGHT - 11
-NEXT_LOGO_HEIGHT = 96 if HEIGHT >= 128 else 74
-MATCHUP_GAP = 6
+FONT_TITLE = FONT_TITLE_SPORTS
+FONT_BOTTOM = FONT_DATE_SPORTS
+FONT_NEXT_OPP = FONT_TEAM_SPORTS
+
 BACKGROUND_COLOR = (0, 0, 0)
 HIGHLIGHT_COLOR = (55, 14, 18)
 TEXT_COLOR = (255, 255, 255)
@@ -87,32 +96,294 @@ def _measure(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) ->
         return width, height, 0, 0
 
 
-def _draw_center(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, y: int, *, fill=TEXT_COLOR) -> int:
+def _text_w(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> int:
+    width, _, _, _ = _measure(draw, text, font)
+    return width
+
+
+def _text_h(draw: ImageDraw.ImageDraw, font: ImageFont.ImageFont) -> int:
+    _, height, _, _ = _measure(draw, "Hg", font)
+    return height
+
+
+def _center_text(
+    draw: ImageDraw.ImageDraw,
+    y: int,
+    text: str,
+    font: ImageFont.ImageFont,
+    *,
+    fill=TEXT_COLOR,
+) -> int:
     if not text:
-        return y
+        return 0
     width, height, left, top = _measure(draw, text, font)
     x = (WIDTH - width) // 2 - left
     draw.text((x, y - top), text, font=font, fill=fill)
-    return y + height
+    return height
 
 
-def _draw_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, x: int, top: int, height: int, *, align: str = "left", fill=TEXT_COLOR) -> None:
-    width, text_height, left, asc = _measure(draw, text, font)
-    y = top + (height - text_height) // 2 - asc
-    if align == "right":
-        tx = x - width - left
-    elif align == "center":
-        tx = x - width // 2 - left
-    else:
-        tx = x - left
-    draw.text((tx, y), text, font=font, fill=fill)
+def _center_wrapped_text(
+    draw: ImageDraw.ImageDraw,
+    y: int,
+    text: str,
+    font: ImageFont.ImageFont,
+    *,
+    max_width: Optional[int] = None,
+    line_spacing: int = 1,
+    fill=TEXT_COLOR,
+) -> int:
+    if not text:
+        return 0
+
+    max_width = min(max_width or WIDTH, WIDTH)
+    text_height = _text_h(draw, font)
+
+    if _text_w(draw, text, font) <= max_width:
+        _center_text(draw, y, text, font, fill=fill)
+        return text_height
+
+    words = text.split()
+    if not words:
+        return 0
+
+    lines: list[str] = []
+    current = words[0]
+
+    for word in words[1:]:
+        candidate = f"{current} {word}" if current else word
+        if _text_w(draw, candidate, font) <= max_width:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            current = word
+
+    if current:
+        lines.append(current)
+
+    fixed_lines: list[str] = []
+    for line in lines:
+        if _text_w(draw, line, font) <= max_width:
+            fixed_lines.append(line)
+            continue
+
+        chunk = ""
+        for char in line:
+            candidate = f"{chunk}{char}"
+            if chunk and _text_w(draw, candidate, font) > max_width:
+                fixed_lines.append(chunk)
+                chunk = char
+            else:
+                chunk = candidate
+        if chunk:
+            fixed_lines.append(chunk)
+
+    lines = fixed_lines or lines
+
+    total_height = 0
+    for idx, line in enumerate(lines):
+        line_y = y + idx * (text_height + line_spacing)
+        _center_text(draw, line_y, line, font, fill=fill)
+        total_height = (idx + 1) * text_height + idx * line_spacing
+
+    return total_height
 
 
-def _draw_title(draw: ImageDraw.ImageDraw, text: str, y: int = 0) -> int:
-    width, height, left, top = _measure(draw, text, FONT_TITLE_SPORTS)
+def _draw_title_line(
+    img: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    y: int,
+    text: str,
+    font: ImageFont.ImageFont = FONT_TITLE_SPORTS,
+    *,
+    fill=TEXT_COLOR,
+) -> int:
+    top = y
+    if callable(_MLB_DRAW_TITLE):
+        strip_height = _text_h(draw, font) + 4
+        strip = Image.new("RGBA", (WIDTH, strip_height), (0, 0, 0, 0))
+        strip_draw = ImageDraw.Draw(strip)
+        try:
+            _, used_height = _MLB_DRAW_TITLE(strip_draw, text)
+        except Exception:
+            used_height = _text_h(draw, font)
+            strip_draw.text(((WIDTH - _text_w(strip_draw, text, font)) // 2, 0), text, font=font, fill=fill)
+        img.paste(strip, (0, top), strip)
+        return max(strip_height, used_height)
+
+    width, height, left, top_offset = _measure(draw, text, font)
     x = (WIDTH - width) // 2 - left
-    draw.text((x, y - top), text, font=FONT_TITLE_SPORTS, fill=TEXT_COLOR)
-    return y + height
+    draw.text((x, top - top_offset), text, font=font, fill=fill)
+    return height
+
+
+def _team_scoreboard_label(entry: Dict[str, Optional[str]]) -> str:
+    name = (entry.get("name") or "").strip()
+    if name:
+        pieces = [piece for piece in name.replace("-", " ").split() if piece]
+        if len(pieces) >= 2:
+            return pieces[-1]
+        return name
+    tri = entry.get("tri") or ""
+    return tri.strip()
+
+
+def _draw_scoreboard_table(
+    img: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    top_y: int,
+    rows: Tuple[Dict[str, object], ...],
+    *,
+    score_label: Optional[str] = "PTS",
+    bottom_reserved_px: int = 0,
+) -> int:
+    if not rows:
+        return top_y
+
+    row_count = len(rows)
+    col1_w = min(WIDTH - 24, max(84, int(WIDTH * 0.72)))
+    col2_w = max(20, WIDTH - col1_w)
+    x0, x1, x2 = 0, col1_w, WIDTH
+
+    header_h = _text_h(draw, FONT_SMALL) + 4 if score_label else 0
+    table_top = top_y
+
+    total_available = max(0, HEIGHT - bottom_reserved_px - table_top)
+    available_for_rows = max(0, total_available - header_h)
+    row_h = max(available_for_rows // max(1, row_count), 32)
+    row_h = min(row_h, 48)
+    if row_h * row_count > available_for_rows and available_for_rows > 0:
+        row_h = max(24, available_for_rows // max(1, row_count))
+    if row_h <= 0:
+        row_h = 32
+
+    table_height = header_h + (row_h * row_count)
+    if total_available:
+        table_height = min(table_height, total_available)
+    if table_height < (header_h + 2):
+        table_height = header_h + 2
+    table_bottom = min(table_top + table_height, HEIGHT - bottom_reserved_px)
+    table_height = max(header_h + 2, table_bottom - table_top)
+    table_bottom = table_top + table_height
+
+    header_bottom = table_top + header_h
+    row_area_height = max(2, table_height - header_h)
+
+    # Determine row slices ensuring we use the whole available space.
+    row_slices: list[Tuple[int, int]] = []
+    next_top = header_bottom
+    remaining = row_area_height
+    remaining_rows = row_count
+    for _ in rows:
+        if remaining_rows <= 0:
+            break
+        height = max(1, remaining // remaining_rows)
+        row_slices.append((next_top, height))
+        next_top += height
+        remaining -= height
+        remaining_rows -= 1
+    if row_slices:
+        last_top, last_height = row_slices[-1]
+        row_slices[-1] = (last_top, table_bottom - last_top)
+
+    if score_label and header_h:
+        header_y = table_top + (header_h - _text_h(draw, FONT_SMALL)) // 2
+        label_w = _text_w(draw, score_label, FONT_SMALL)
+        label_x = x1 + (col2_w - label_w) // 2
+        draw.text((label_x, header_y), score_label, font=FONT_SMALL, fill=TEXT_COLOR)
+
+    specs = []
+    for row, (row_top, slice_h) in zip(rows, row_slices):
+        row_height = max(1, slice_h)
+        tri = str(row.get("tri") or "")
+        base_logo_height = max(1, row_height - 4)
+        logo_height = min(64, max(24, base_logo_height))
+        logo = _load_logo_cached(tri, logo_height)
+        logo_w = logo.width if logo else 0
+        text = (str(row.get("label") or "").strip() or tri or "—").strip()
+        text_start = x0 + 6 + (logo_w + 6 if logo else 0)
+        max_width = max(1, x1 - text_start - 4)
+        specs.append(
+            {
+                "top": row_top,
+                "height": row_height,
+                "tri": tri,
+                "score": row.get("score"),
+                "text": text,
+                "logo": logo,
+                "max_width": max_width,
+                "highlight": bool(row.get("highlight")),
+            }
+        )
+
+    def _fits(font: ImageFont.ImageFont) -> bool:
+        for spec in specs:
+            if spec["max_width"] <= 0 or not spec["text"]:
+                continue
+            if _text_w(draw, spec["text"], font) > spec["max_width"]:
+                return False
+        return True
+
+    name_font = FONT_ABBR
+    if not _fits(name_font):
+        size = getattr(FONT_ABBR, "size", None) or (33 if HEIGHT > 64 else 30)
+        min_size = max(10, int(round(size * 0.6)))
+        chosen = None
+        for candidate_size in range(size - 1, min_size - 1, -1):
+            candidate_font = _ts(candidate_size)
+            if _fits(candidate_font):
+                chosen = candidate_font
+                break
+        name_font = chosen or _ts(min_size)
+
+    for spec in specs:
+        row_top = spec["top"]
+        row_height = spec["height"]
+        cy = row_top + row_height // 2
+        highlight = spec["highlight"]
+
+        if highlight:
+            draw.rectangle((x0 + 2, row_top + 1, x2 - 2, row_top + row_height - 1), fill=HIGHLIGHT_COLOR)
+
+        logo = spec["logo"]
+        text_left = x0 + 6
+        if logo:
+            lw, lh = logo.size
+            ly = cy - lh // 2
+            try:
+                img.paste(logo, (text_left, ly), logo)
+            except Exception:
+                pass
+            text_left += lw + 6
+
+        text = spec["text"]
+        max_width = spec["max_width"]
+        if text and _text_w(draw, text, name_font) > max_width:
+            ellipsis = "…"
+            trimmed = text
+            while trimmed and _text_w(draw, trimmed + ellipsis, name_font) > max_width:
+                trimmed = trimmed[:-1]
+            text = trimmed + ellipsis if trimmed else ellipsis
+
+        if text:
+            text_w = _text_w(draw, text, name_font)
+            text_h = _text_h(draw, name_font)
+            text_left = min(text_left, x1 - text_w - 4)
+            text_left = max(text_left, x0 + 4)
+            _, _, t_left, t_top = _measure(draw, text, name_font)
+            tx = text_left - t_left
+            ty = cy - text_h // 2 - t_top
+            draw.text((tx, ty), text, font=name_font, fill=TEXT_COLOR)
+
+        score_val = spec["score"]
+        score_txt = "-" if score_val is None else str(score_val)
+        score_w, score_h, s_left, s_top = _measure(draw, score_txt, FONT_SCORE)
+        sx = x1 + (col2_w - score_w) // 2 - s_left
+        sy = cy - score_h // 2 - s_top
+        score_color = BULLS_RED if highlight else TEXT_COLOR
+        draw.text((sx, sy), score_txt, font=FONT_SCORE, fill=score_color)
+
+    return table_bottom
 
 
 def _parse_datetime(value: str) -> Optional[dt.datetime]:
@@ -240,9 +511,10 @@ def _live_status(game: Dict) -> str:
 def _render_message(title: str, message: str) -> Image.Image:
     img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
-    bottom = _draw_title(draw, title)
-    bottom += TITLE_GAP
-    _draw_center(draw, message, FONT_DATE_SPORTS, bottom)
+    y = 2
+    y += _draw_title_line(img, draw, y, title, FONT_TITLE)
+    y += 4
+    _center_text(draw, y, message, FONT_BOTTOM)
     return img
 
 
@@ -250,49 +522,51 @@ def _render_scoreboard(game: Dict, *, title: str, footer: str, status_line: str)
     img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
 
-    y = _draw_title(draw, title)
-    y += TITLE_GAP
+    y = 2
+    y += _draw_title_line(img, draw, y, title, FONT_TITLE)
+    y += 2
 
     away = _team_entry(game, "away")
     home = _team_entry(game, "home")
-    rows = [away, home]
 
-    for idx, info in enumerate(rows):
-        top = y + idx * (ROW_HEIGHT + ROW_GAP)
-        bottom = top + ROW_HEIGHT
-        highlight = _is_bulls_side(info)
-        if highlight:
-            draw.rectangle((4, top, WIDTH - 5, bottom), fill=HIGHLIGHT_COLOR)
-        logo = _load_logo_cached(info["tri"], LOGO_HEIGHT)
-        text_left = 10
-        if logo is not None:
-            lx = 8
-            ly = top + (ROW_HEIGHT - logo.height) // 2
-            img.paste(logo, (lx, ly), logo)
-            text_left = lx + logo.width + 6
-        abbr = info["tri"] or "—"
-        _draw_text(draw, abbr, FONT_ABBR, text_left, top, ROW_HEIGHT, align="left")
-        score_txt = "" if info["score"] is None else str(info["score"])
-        score_color = BULLS_RED if highlight else TEXT_COLOR
-        _draw_text(draw, score_txt, FONT_SCORE, WIDTH - 8, top, ROW_HEIGHT, align="right", fill=score_color)
+    bottom_parts = [part.strip() for part in (status_line, footer) if part and part.strip()]
+    bottom_text = " — ".join(bottom_parts)
+    bottom_reserved = (_text_h(draw, FONT_BOTTOM) + 2) if bottom_text else 0
 
-    y += 2 * ROW_HEIGHT + ROW_GAP
-    y += STATUS_GAP
-    if status_line:
-        _draw_center(draw, status_line, FONT_SMALL, y)
-        y += FONT_SMALL.size if hasattr(FONT_SMALL, "size") else 12
+    rows = (
+        {
+            "tri": away.get("tri") or "AWY",
+            "label": _team_scoreboard_label(away),
+            "score": away.get("score"),
+            "highlight": _is_bulls_side(away),
+        },
+        {
+            "tri": home.get("tri") or "HME",
+            "label": _team_scoreboard_label(home),
+            "score": home.get("score"),
+            "highlight": _is_bulls_side(home),
+        },
+    )
 
-    footer_text = footer.strip()
-    if footer_text:
-        footer_y = HEIGHT - FOOTER_MARGIN - FONT_DATE_SPORTS.size
-        footer_y = max(footer_y, y + STATUS_GAP)
-        _draw_center(draw, footer_text, FONT_DATE_SPORTS, footer_y)
+    _draw_scoreboard_table(img, draw, y, rows, score_label="PTS", bottom_reserved_px=bottom_reserved)
+
+    if bottom_text:
+        bottom_y = HEIGHT - _text_h(draw, FONT_BOTTOM) - 1
+        _center_text(draw, bottom_y, bottom_text, FONT_BOTTOM)
 
     return img
 
 
 def _format_footer_last(game: Dict) -> str:
-    label = _relative_label(_get_official_date(game))
+    official = (game.get("officialDate") or "").strip()
+    label = ""
+    if callable(_MLB_REL_DATE_ONLY):
+        try:
+            label = _MLB_REL_DATE_ONLY(official)
+        except Exception:
+            label = ""
+    if not label:
+        label = _relative_label(_get_official_date(game))
     away = _team_entry(game, "away")
     home = _team_entry(game, "home")
     bulls_home = _is_bulls_side(home)
@@ -305,10 +579,44 @@ def _format_footer_last(game: Dict) -> str:
 
 def _format_footer_next(game: Dict) -> str:
     start = _get_local_start(game)
-    date_label = _relative_label(_get_official_date(game))
+    official = (game.get("officialDate") or "").strip()
+    if not official and isinstance(start, dt.datetime):
+        official = start.date().isoformat()
+
     time_label = _format_time(start)
-    pieces = [piece for piece in (date_label, time_label) if piece]
-    return " ".join(pieces)
+    if callable(_MLB_FORMAT_GAME_LABEL):
+        try:
+            return _MLB_FORMAT_GAME_LABEL(official, time_label)
+        except Exception:
+            pass
+
+    if not isinstance(start, dt.datetime):
+        if official:
+            try:
+                date_val = dt.date.fromisoformat(official[:10])
+            except ValueError:
+                return official
+            return _relative_label(date_val)
+        return ""
+
+    today = dt.datetime.now(CENTRAL_TIME)
+    if time_label:
+        time_str = time_label
+    else:
+        time_fmt = "%-I:%M %p" if os.name != "nt" else "%#I:%M %p"
+        time_str = start.strftime(time_fmt)
+    game_date = start.date()
+
+    if game_date == today.date():
+        prefix = "Tonight" if start.hour >= 18 else "Today"
+        return f"{prefix} {time_str}".strip()
+    if game_date == today.date() + dt.timedelta(days=1):
+        return f"Tomorrow {time_str}".strip()
+
+    date_str = start.strftime("%a %b %-d") if os.name != "nt" else start.strftime("%a %b %#d")
+    if time_str:
+        return f"{date_str} {time_str}".strip()
+    return date_str
 
 
 def _format_matchup_line(game: Dict) -> str:
@@ -324,44 +632,66 @@ def _render_next_game(game: Dict, *, title: str) -> Image.Image:
     img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
 
-    y = _draw_title(draw, title)
-    y += TITLE_GAP
+    y = 2
+    y += _draw_title_line(img, draw, y, title, FONT_TITLE)
+    y += 2
 
     matchup = _format_matchup_line(game)
-    y = _draw_center(draw, matchup, FONT_TEAM_SPORTS, y)
-    y += MATCHUP_GAP
+    if matchup:
+        y += _center_wrapped_text(draw, y, matchup, FONT_NEXT_OPP, max_width=WIDTH - 8) + 2
 
     away = _team_entry(game, "away")
     home = _team_entry(game, "home")
-    away_logo = _load_logo_cached(away["tri"], NEXT_LOGO_HEIGHT)
-    home_logo = _load_logo_cached(home["tri"], NEXT_LOGO_HEIGHT)
-    at_text = "@"
-    at_width, at_height, at_left, at_top = _measure(draw, at_text, FONT_TITLE_SPORTS)
-    logo_width = (away_logo.width if away_logo else 0) + (home_logo.width if home_logo else 0)
-    total_width = logo_width + at_width + 24
-    start_x = max(0, (WIDTH - total_width) // 2)
-    logo_y = y
-    if away_logo:
-        ay = logo_y + (NEXT_LOGO_HEIGHT - away_logo.height) // 2
-        img.paste(away_logo, (start_x, ay), away_logo)
-        start_x += away_logo.width + 12
-    else:
-        _draw_text(draw, away.get("tri") or "AWY", FONT_TEAM_SPORTS, start_x, logo_y, NEXT_LOGO_HEIGHT, align="left")
-        start_x += FONT_TEAM_SPORTS.size + 12
-
-    draw.text((start_x - at_left, logo_y + (NEXT_LOGO_HEIGHT - at_height) // 2 - at_top), at_text, font=FONT_TITLE_SPORTS, fill=TEXT_COLOR)
-    start_x += at_width + 12
-
-    if home_logo:
-        hy = logo_y + (NEXT_LOGO_HEIGHT - home_logo.height) // 2
-        img.paste(home_logo, (start_x, hy), home_logo)
-    else:
-        _draw_text(draw, home.get("tri") or "HOME", FONT_TEAM_SPORTS, start_x, logo_y, NEXT_LOGO_HEIGHT, align="left")
+    away_tri = away.get("tri")
+    home_tri = home.get("tri")
 
     footer = _format_footer_next(game)
+    footer_height = _text_h(draw, FONT_BOTTOM) if footer else 0
+    footer_top = HEIGHT - (footer_height + 2) if footer else HEIGHT
+
+    desired_logo_h = standard_next_game_logo_height(HEIGHT)
+    available_h = max(10, footer_top - (y + 2))
+    logo_h = min(desired_logo_h, available_h)
+    centered_top = (HEIGHT - logo_h) // 2
+    row_y = max(y + 1, min(centered_top, footer_top - logo_h - 1))
+
+    away_logo = _load_logo_cached(away_tri, logo_h)
+    home_logo = _load_logo_cached(home_tri, logo_h)
+
+    at_text = "@"
+    at_w = _text_w(draw, at_text, FONT_NEXT_OPP)
+    at_h = _text_h(draw, FONT_NEXT_OPP)
+    at_x = (WIDTH - at_w) // 2
+    at_y = row_y + (logo_h - at_h) // 2
+    draw.text((at_x, at_y), at_text, font=FONT_NEXT_OPP, fill=TEXT_COLOR)
+
+    if away_logo:
+        aw, ah = away_logo.size
+        ax = max(2, at_x - 6 - aw)
+        ay = row_y + (logo_h - ah) // 2
+        img.paste(away_logo, (ax, ay), away_logo)
+    else:
+        fallback = (away_tri or "AWY")
+        tx = (at_x - 6) // 2 - _text_w(draw, fallback, FONT_NEXT_OPP) // 2
+        tx = max(2, tx)
+        ty = row_y + (logo_h - at_h) // 2
+        draw.text((tx, ty), fallback, font=FONT_NEXT_OPP, fill=TEXT_COLOR)
+
+    if home_logo:
+        hw, hh = home_logo.size
+        hx = min(WIDTH - hw - 2, at_x + at_w + 6)
+        hy = row_y + (logo_h - hh) // 2
+        img.paste(home_logo, (hx, hy), home_logo)
+    else:
+        fallback = (home_tri or "HME")
+        tx = at_x + at_w + ((WIDTH - (at_x + at_w)) // 2) - _text_w(draw, fallback, FONT_NEXT_OPP) // 2
+        tx = min(WIDTH - _text_w(draw, fallback, FONT_NEXT_OPP) - 2, max(at_x + at_w + 2, tx))
+        ty = row_y + (logo_h - at_h) // 2
+        draw.text((tx, ty), fallback, font=FONT_NEXT_OPP, fill=TEXT_COLOR)
+
     if footer:
-        footer_y = HEIGHT - FOOTER_MARGIN - FONT_DATE_SPORTS.size
-        _draw_center(draw, footer, FONT_DATE_SPORTS, footer_y)
+        footer_y = HEIGHT - footer_height - 1
+        _center_text(draw, footer_y, footer, FONT_BOTTOM)
 
     return img
 
