@@ -120,6 +120,8 @@ class Display:
         self._buffer = Image.new("RGB", (self.width, self.height), "black")
         self._display = None
         self._button_pins: Dict[str, Optional[int]] = {name: None for name in self._BUTTON_NAMES}
+        self._backlight_level = 1.0
+        self._backlight_lock = threading.Lock()
 
         if DisplayHATMini is None:  # pragma: no cover - hardware import
             if _DISPLAY_HAT_ERROR:
@@ -134,7 +136,7 @@ class Display:
         else:
             try:  # pragma: no cover - hardware import
                 self._display = DisplayHATMini(self._buffer)
-                self._display.set_backlight(1.0)
+                self.set_backlight(1.0)
                 for name in self._BUTTON_NAMES:
                     pin_name = f"BUTTON_{name}"
                     self._button_pins[name] = getattr(self._display, pin_name, None)
@@ -190,6 +192,39 @@ class Display:
         return self._buffer.copy()
 
     # ----- Hardware helpers -------------------------------------------------
+    def set_backlight(self, level: float) -> float:
+        """Set the LCD backlight brightness (0.0 – 1.0)."""
+
+        # Clamp the requested level to keep the screen visible but not blinding.
+        level = max(0.05, min(1.0, level))
+
+        with self._backlight_lock:
+            self._backlight_level = level
+
+            if self._display is None:  # pragma: no cover - hardware import
+                return self._backlight_level
+
+            try:  # pragma: no cover - hardware import
+                self._display.set_backlight(self._backlight_level)
+            except Exception as exc:  # pragma: no cover - hardware import
+                logging.debug("Failed to set backlight level: %s", exc)
+
+        return self._backlight_level
+
+    def adjust_backlight(self, delta: float) -> float:
+        """Adjust the backlight brightness by *delta* (0.0 – 1.0)."""
+
+        with self._backlight_lock:
+            new_level = self._backlight_level + delta
+
+        return self.set_backlight(new_level)
+
+    def backlight_level(self) -> float:
+        """Return the current backlight level."""
+
+        with self._backlight_lock:
+            return self._backlight_level
+
     def set_led(self, r: float = 0.0, g: float = 0.0, b: float = 0.0) -> None:
         """Set the onboard RGB LED, if hardware is available."""
 

@@ -108,6 +108,8 @@ _BUTTON_STATE = {name: False for name in _BUTTON_NAMES}
 _manual_skip_event = threading.Event()
 _button_monitor_thread: Optional[threading.Thread] = None
 
+BRIGHTNESS_STEP = 0.1
+
 
 def _load_scheduler_from_config() -> Optional[ScreenScheduler]:
     try:
@@ -235,9 +237,11 @@ def _check_control_buttons() -> bool:
                 logging.info("🔁 Y button pressed – restarting desk_display service…")
                 _restart_desk_display_service()
             elif name == "A":
-                logging.info("🅰️  A button pressed.")
+                new_level = display.adjust_backlight(-BRIGHTNESS_STEP)
+                logging.info("🅰️  A button pressed – dimming to %.0f%%.", new_level * 100)
             elif name == "B":
-                logging.info("🅱️  B button pressed.")
+                new_level = display.adjust_backlight(BRIGHTNESS_STEP)
+                logging.info("🅱️  B button pressed – brightening to %.0f%%.", new_level * 100)
         elif not pressed and previously_pressed:
             logging.debug("Button %s released.", name)
 
