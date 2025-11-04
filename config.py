@@ -431,6 +431,7 @@ def _load_emoji_font(size: int) -> ImageFont.ImageFont:
 
 
 FONT_EMOJI = _load_emoji_font(30)
+FONT_EMOJI_SMALL = _load_emoji_font(18)
 
 # ─── Screen-specific configuration ─────────────────────────────────────────────
 

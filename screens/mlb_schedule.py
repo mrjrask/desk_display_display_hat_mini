@@ -20,13 +20,16 @@ from config import (
     CENTRAL_TIME
 )
 from utils import (
+    LED_INDICATOR_LEVEL,
+    ScreenImage,
     clear_display,
     get_team_display_name,
-    wrap_text,
     get_mlb_abbreviation,
     log_call,
     load_team_logo,
     standard_next_game_logo_height,
+    temporary_display_led,
+    wrap_text,
 )
 
 # ── Paths ────────────────────────────────────────────────────────────────────
@@ -392,13 +395,36 @@ def draw_last_game(display, game, title="Last Game...", transition=False):
         winner_flag=(result_char if "Cubs" in title else None)  # flag only for Cubs
     )
 
-    if transition:
-        return img
+    def _as_int(value):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
 
-    clear_display(display)
-    display.image(img)
-    display.show()
-    time.sleep(5)
+    away_score = _as_int(away.get("score"))
+    home_score = _as_int(home.get("score"))
+    led_color = None
+    if away_score is not None and home_score is not None and away_score != home_score:
+        led_color = (
+            (0.0, LED_INDICATOR_LEVEL, 0.0)
+            if winner
+            else (LED_INDICATOR_LEVEL, 0.0, 0.0)
+        )
+
+    if transition:
+        return ScreenImage(img, displayed=False, led_override=led_color)
+
+    def _render_screen():
+        clear_display(display)
+        display.image(img)
+        display.show()
+        time.sleep(5)
+
+    if led_color is not None:
+        with temporary_display_led(*led_color):
+            _render_screen()
+    else:
+        _render_screen()
     return None
 
 

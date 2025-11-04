@@ -15,6 +15,8 @@ Screen 2:
 """
 
 import datetime
+from typing import Optional, Tuple
+
 from PIL import Image, ImageDraw
 
 from config import (
@@ -27,23 +29,109 @@ from config import (
     FONT_WEATHER_DETAILS,
     FONT_WEATHER_DETAILS_BOLD,
     FONT_EMOJI,
+    FONT_EMOJI_SMALL,
     WEATHER_ICON_SIZE,
     WEATHER_DESC_GAP,
 )
 from utils import (
+    LED_INDICATOR_LEVEL,
+    ScreenImage,
     clear_display,
     fetch_weather_icon,
     log_call,
+    temporary_display_led,
     timestamp_to_datetime,
     uv_index_color,
     wind_direction,
 )
+
+ALERT_SYMBOL = "⚠️"
+ALERT_PRIORITY = {"warning": 3, "watch": 2, "hazard": 1}
+ALERT_LED_COLORS = {
+    "warning": (LED_INDICATOR_LEVEL, 0.0, 0.0),
+    "watch": (LED_INDICATOR_LEVEL, LED_INDICATOR_LEVEL * 0.5, 0.0),
+    "hazard": (LED_INDICATOR_LEVEL, LED_INDICATOR_LEVEL, 0.0),
+}
+ALERT_ICON_COLORS = {
+    "warning": (255, 64, 64),
+    "watch": (255, 165, 0),
+    "hazard": (255, 215, 0),
+}
+
+
+def _normalise_alerts(weather: object) -> list:
+    alerts = []
+    if isinstance(weather, dict):
+        raw_alerts = weather.get("alerts")
+    else:
+        raw_alerts = None
+
+    if isinstance(raw_alerts, list):
+        alerts = [alert for alert in raw_alerts if isinstance(alert, dict)]
+    elif isinstance(raw_alerts, dict):
+        inner = raw_alerts.get("alerts")
+        if isinstance(inner, list):
+            alerts = [alert for alert in inner if isinstance(alert, dict)]
+        else:
+            alerts = [raw_alerts]
+    return alerts
+
+
+def _classify_alert(alert: dict) -> Optional[str]:
+    texts = []
+    for key in ("event", "title", "headline"):
+        value = alert.get(key)
+        if isinstance(value, str):
+            texts.append(value.lower())
+    tags = alert.get("tags")
+    if isinstance(tags, (list, tuple, set)):
+        texts.extend(str(tag).lower() for tag in tags if tag)
+    description = alert.get("description")
+    if isinstance(description, str):
+        texts.append(description.lower())
+
+    for text in texts:
+        if "warning" in text:
+            return "warning"
+    for text in texts:
+        if "watch" in text:
+            return "watch"
+    for text in texts:
+        if any(token in text for token in ("hazard", "alert", "advisory")):
+            return "hazard"
+    return None
+
+
+def _detect_weather_alert(weather: object) -> Tuple[Optional[str], Optional[Tuple[float, float, float]]]:
+    alerts = _normalise_alerts(weather)
+    severity: Optional[str] = None
+    for alert in alerts:
+        level = _classify_alert(alert)
+        if level is None:
+            continue
+        if severity is None or ALERT_PRIORITY[level] > ALERT_PRIORITY[severity]:
+            severity = level
+            if severity == "warning":
+                break
+    return severity, ALERT_LED_COLORS.get(severity)
+
+
+def _draw_alert_indicator(draw: ImageDraw.ImageDraw, severity: Optional[str]) -> None:
+    if not severity:
+        return
+    icon_color = ALERT_ICON_COLORS.get(severity, (255, 215, 0))
+    w_icon, h_icon = draw.textsize(ALERT_SYMBOL, font=FONT_EMOJI_SMALL)
+    x_icon = WIDTH - w_icon - 2
+    y_icon = HEIGHT - h_icon - 2
+    draw.text((x_icon, y_icon), ALERT_SYMBOL, font=FONT_EMOJI_SMALL, fill=icon_color)
 
 # ─── Screen 1: Basic weather + two-line Feels/Hi/Lo ────────────────────────────
 @log_call
 def draw_weather_screen_1(display, weather, transition=False):
     if not weather:
         return None
+
+    severity, led_color = _detect_weather_alert(weather)
 
     current = weather.get("current", {})
     daily   = weather.get("daily", [{}])[0]
@@ -225,11 +313,20 @@ def draw_weather_screen_1(display, weather, transition=False):
         draw.text((cx - vw//2, y_val), val, font=FONT_WEATHER_DETAILS,     fill=val_colors[idx])
         x += gw + SPACING_X
 
-    if transition:
-        return img
+    _draw_alert_indicator(draw, severity)
 
-    display.image(img)
-    display.show()
+    if transition:
+        return ScreenImage(img, displayed=False, led_override=led_color)
+
+    def _render_screen() -> None:
+        display.image(img)
+        display.show()
+
+    if led_color is not None:
+        with temporary_display_led(*led_color):
+            _render_screen()
+    else:
+        _render_screen()
     return None
 
 
@@ -237,6 +334,8 @@ def draw_weather_screen_1(display, weather, transition=False):
 def draw_weather_screen_2(display, weather, transition=False):
     if not weather:
         return None
+
+    severity, led_color = _detect_weather_alert(weather)
 
     current = weather.get("current", {})
     daily   = weather.get("daily", [{}])[0]
@@ -304,9 +403,18 @@ def draw_weather_screen_2(display, weather, transition=False):
         draw.text((x0 + lw + 4, y_val), val, font=FONT_WEATHER_DETAILS,      fill=color)
         y += row_h + space
 
-    if transition:
-        return img
+    _draw_alert_indicator(draw, severity)
 
-    display.image(img)
-    display.show()
+    if transition:
+        return ScreenImage(img, displayed=False, led_override=led_color)
+
+    def _render_screen() -> None:
+        display.image(img)
+        display.show()
+
+    if led_color is not None:
+        with temporary_display_led(*led_color):
+            _render_screen()
+    else:
+        _render_screen()
     return None
