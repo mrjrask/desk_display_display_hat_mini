@@ -53,7 +53,12 @@ from config import (
     HEIGHT,
 )
 from services.http_client import NHL_HEADERS, get_session, request_json
-from utils import standard_next_game_logo_height
+from utils import (
+    LED_INDICATOR_LEVEL,
+    ScreenImage,
+    standard_next_game_logo_height,
+    temporary_display_led,
+)
 
 TS_PATH = TIMES_SQUARE_FONT_PATH
 NHL_DIR = NHL_IMAGES_DIR
@@ -120,22 +125,36 @@ def _clear_display(display):
     except Exception:
         pass
 
-def _push(display, img: Optional[Image.Image], *, transition: bool=False):
+def _push(
+    display,
+    img: Optional[Image.Image],
+    *,
+    transition: bool = False,
+    led_override: Optional[Tuple[float, float, float]] = None,
+):
     if img is None or display is None:
-        return
+        return None
     if transition:
-        return img
-    try:
-        _clear_display(display)
-        if hasattr(display, "image"):
-            display.image(img)
-        elif hasattr(display, "ShowImage"):
-            buf = display.getbuffer(img) if hasattr(display, "getbuffer") else img
-            display.ShowImage(buf)
-        elif hasattr(display, "display"):
-            display.display(img)
-    except Exception as e:
-        logging.exception("Failed to push image to display: %s", e)
+        return ScreenImage(img, displayed=False, led_override=led_override)
+
+    def _show_image() -> None:
+        try:
+            _clear_display(display)
+            if hasattr(display, "image"):
+                display.image(img)
+            elif hasattr(display, "ShowImage"):
+                buf = display.getbuffer(img) if hasattr(display, "getbuffer") else img
+                display.ShowImage(buf)
+            elif hasattr(display, "display"):
+                display.display(img)
+        except Exception as e:
+            logging.exception("Failed to push image to display: %s", e)
+
+    if led_override is not None:
+        with temporary_display_led(*led_override):
+            _show_image()
+    else:
+        _show_image()
     return None
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1138,12 +1157,77 @@ def draw_last_hawks_game(display, game, transition: bool=False):
         bottom_reserved_px=reserve,
     )
 
+    def _as_int(value):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    hawks_tri = (TEAM_TRICODE or "").upper()
+    team_id = str(TEAM_ID or "")
+
+    home_score = _as_int(feed.get("homeScore"))
+    away_score = _as_int(feed.get("awayScore"))
+    home_tri = str(feed.get("homeTri") or "").upper()
+    away_tri = str(feed.get("awayTri") or "").upper()
+
+    hawks_score: Optional[int] = None
+    opponent_score: Optional[int] = None
+
+    if hawks_tri and hawks_tri == home_tri:
+        hawks_score, opponent_score = home_score, away_score
+    elif hawks_tri and hawks_tri == away_tri:
+        hawks_score, opponent_score = away_score, home_score
+
+    if hawks_score is None or opponent_score is None:
+        teams = last_final.get("teams") or {}
+        raw_home = teams.get("home") or last_final.get("homeTeam") or {}
+        raw_away = teams.get("away") or last_final.get("awayTeam") or {}
+
+        def _team_id(entry: Dict) -> str:
+            info = entry.get("team") if isinstance(entry.get("team"), dict) else entry
+            return str(
+                info.get("id")
+                or info.get("teamId")
+                or info.get("team_id")
+                or info.get("teamID")
+                or ""
+            )
+
+        if team_id and _team_id(raw_home) == team_id:
+            hawks_score = _as_int(raw_home.get("score"))
+            opponent_score = _as_int(raw_away.get("score"))
+        elif team_id and _team_id(raw_away) == team_id:
+            hawks_score = _as_int(raw_away.get("score"))
+            opponent_score = _as_int(raw_home.get("score"))
+
+    led_override: Optional[Tuple[float, float, float]] = None
+    if (
+        isinstance(hawks_score, int)
+        and isinstance(opponent_score, int)
+        and hawks_score != opponent_score
+    ):
+        if hawks_score > opponent_score:
+            led_override = (0.0, LED_INDICATOR_LEVEL, 0.0)
+        else:
+            result_label = _last_game_result_prefix(last_final, feed)
+            is_ot_loss = (
+                isinstance(result_label, str)
+                and "OT" in result_label.upper()
+                and "SO" not in result_label.upper()
+            )
+            led_override = (
+                (LED_INDICATOR_LEVEL, LED_INDICATOR_LEVEL, 0.0)
+                if is_ot_loss
+                else (LED_INDICATOR_LEVEL, 0.0, 0.0)
+            )
+
     # Bottom date (MLB bottom font)
     if bottom_str:
         by = HEIGHT - _text_h(d, FONT_BOTTOM) - 1
         _center_text(d, by, bottom_str, FONT_BOTTOM)
 
-    return _push(display, img, transition=transition)
+    return _push(display, img, transition=transition, led_override=led_override)
 
 def draw_live_hawks_game(display, game, transition: bool=False):
     """

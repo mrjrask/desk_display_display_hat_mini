@@ -26,7 +26,14 @@ from config import (
     CENTRAL_TIME,
 )
 
-from utils import clear_display, load_team_logo, standard_next_game_logo_height
+from utils import (
+    LED_INDICATOR_LEVEL,
+    ScreenImage,
+    clear_display,
+    load_team_logo,
+    standard_next_game_logo_height,
+    temporary_display_led,
+)
 
 TS_PATH = TIMES_SQUARE_FONT_PATH
 NBA_DIR = NBA_IMAGES_DIR
@@ -696,25 +703,39 @@ def _render_next_game(game: Dict, *, title: str) -> Image.Image:
     return img
 
 
-def _push(display, img: Optional[Image.Image], *, transition: bool = False) -> Optional[Image.Image]:
+def _push(
+    display,
+    img: Optional[Image.Image],
+    *,
+    transition: bool = False,
+    led_override: Optional[Tuple[float, float, float]] = None,
+) -> Optional[Image.Image]:
     if img is None or display is None:
         return None
     if transition:
-        return img
-    try:
-        clear_display(display)
-    except Exception:
-        pass
-    try:
-        if hasattr(display, "image"):
-            display.image(img)
-        elif hasattr(display, "ShowImage"):
-            buf = display.getbuffer(img) if hasattr(display, "getbuffer") else img
-            display.ShowImage(buf)
-        elif hasattr(display, "display"):
-            display.display(img)
-    except Exception as exc:
-        logging.exception("Failed to push Bulls screen: %s", exc)
+        return ScreenImage(img, displayed=False, led_override=led_override)
+
+    def _show_image() -> None:
+        try:
+            clear_display(display)
+        except Exception:
+            pass
+        try:
+            if hasattr(display, "image"):
+                display.image(img)
+            elif hasattr(display, "ShowImage"):
+                buf = display.getbuffer(img) if hasattr(display, "getbuffer") else img
+                display.ShowImage(buf)
+            elif hasattr(display, "display"):
+                display.display(img)
+        except Exception as exc:
+            logging.exception("Failed to push Bulls screen: %s", exc)
+
+    if led_override is not None:
+        with temporary_display_led(*led_override):
+            _show_image()
+    else:
+        _show_image()
     return None
 
 
@@ -727,7 +748,35 @@ def draw_last_bulls_game(display, game: Optional[Dict], transition: bool = False
     footer = _format_footer_last(game)
     status_line = _status_text(game) or "Final"
     img = _render_scoreboard(game, title="Last Bulls game:", footer=footer, status_line=status_line)
-    return _push(display, img, transition=transition)
+
+    away_entry = _team_entry(game, "away")
+    home_entry = _team_entry(game, "home")
+    led_override: Optional[Tuple[float, float, float]] = None
+
+    bulls_entry = None
+    opponent_entry = None
+    if _is_bulls_side(away_entry):
+        bulls_entry = away_entry
+        opponent_entry = home_entry
+    elif _is_bulls_side(home_entry):
+        bulls_entry = home_entry
+        opponent_entry = away_entry
+
+    bulls_score = bulls_entry.get("score") if bulls_entry else None
+    opponent_score = opponent_entry.get("score") if opponent_entry else None
+
+    if (
+        isinstance(bulls_score, int)
+        and isinstance(opponent_score, int)
+        and bulls_score != opponent_score
+    ):
+        led_override = (
+            (0.0, LED_INDICATOR_LEVEL, 0.0)
+            if bulls_score > opponent_score
+            else (LED_INDICATOR_LEVEL, 0.0, 0.0)
+        )
+
+    return _push(display, img, transition=transition, led_override=led_override)
 
 
 def draw_live_bulls_game(display, game: Optional[Dict], transition: bool = False):
