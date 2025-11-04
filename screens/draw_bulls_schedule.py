@@ -2,13 +2,12 @@
 """
 draw_bulls_schedule.py
 
-Bulls schedule cards styled to visually match the Blackhawks cards:
-- Last Bulls game: compact 2×3 scoreboard (logo+abbr | PTS) with title strip and relative-date footer.
+Bulls screens styled to match the Blackhawks cards:
+- Last Bulls game: compact 2-row scoreboard (logo+abbr | PTS) with title strip and relative-date footer.
 - Bulls Live: same scoreboard with live status line.
 - Next Bulls game / Next at home: centered matchup + two big logos, footer with relative date + local time.
 
-This module deliberately avoids changing draw_hawks_schedule.py and relies
-only on config/utils symbols that exist in the repo.
+No changes to draw_hawks_schedule.py.
 """
 
 from __future__ import annotations
@@ -20,14 +19,13 @@ from typing import Dict, Optional, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 
-# Import names that exist in this repo (mirrors Hawks)
+# Import only symbols that exist in repo config
 from config import (
     FONT_DATE_SPORTS,
     FONT_TEAM_SPORTS,
     FONT_TITLE_SPORTS,
-    NBA_IMAGES_DIR,         # e.g. images/nba/
-    NBA_TEAM_ID,
-    NBA_TEAM_TRICODE,
+    NBA_IMAGES_DIR,         # images/nba/
+    NBA_TEAM_TRICODE,       # e.g., "CHI"
     TIMES_SQUARE_FONT_PATH, # TimesSquare-m105.ttf
     WIDTH,
     HEIGHT,
@@ -35,6 +33,7 @@ from config import (
 )
 
 from utils import (
+    clear_display,
     LED_INDICATOR_LEVEL,
     ScreenImage,
     standard_next_game_logo_height,
@@ -42,50 +41,39 @@ from utils import (
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Fonts & layout helpers (mirror Hawks style)
+# Fonts & layout
 
 TS_PATH = TIMES_SQUARE_FONT_PATH
 NBA_DIR = NBA_IMAGES_DIR
-TEAM_ID = NBA_TEAM_ID
 TEAM_TRICODE = (NBA_TEAM_TRICODE or "CHI").upper()
 
 def _ts(size: int) -> ImageFont.ImageFont:
-    """TimesSquare font with DejaVu fallback (matches Hawks)."""
     try:
         return ImageFont.truetype(TS_PATH, size)
     except Exception:
-        logging.warning("TimesSquare font missing at %s; using default.", TS_PATH)
+        logging.warning("TimesSquare font missing at %s; using fallback.", TS_PATH)
         try:
             return ImageFont.truetype("DejaVuSans.ttf", size)
         except Exception:
             return ImageFont.load_default()
 
-# Font choices parallel Hawks file sizing (scaled for 320x240)
-FONT_ABBR   = _ts(33 if HEIGHT > 64 else 30)   # team label in table cell
-FONT_SCORE  = _ts(48 if HEIGHT > 64 else 37)   # score number
-FONT_SMALL  = _ts(22 if HEIGHT > 64 else 19)   # “PTS” header / status line
+# Local sizes (tuned for 320x240; scales okay for larger canvases in this project)
+FONT_ABBR   = _ts(33 if HEIGHT >= 240 else 28)  # team abbr in table
+FONT_SCORE  = _ts(48 if HEIGHT >= 240 else 38)  # score digits
+FONT_SMALL  = _ts(22 if HEIGHT >= 240 else 18)  # "PTS" header / status
 
-# Use the shared sports fonts exposed by config (same as Hawks)
-FONT_TITLE   = FONT_TITLE_SPORTS                # title strip font
-FONT_BOTTOM  = FONT_DATE_SPORTS                 # footer date line
-FONT_NEXT_OPP= FONT_TEAM_SPORTS                 # next-game “@/vs. OPPONENT”
+# Shared sports fonts from config (keeps Hawks look)
+FONT_TITLE    = FONT_TITLE_SPORTS                # title strip
+FONT_BOTTOM   = FONT_DATE_SPORTS                 # footer (date/time)
+FONT_NEXT_OPP = FONT_TEAM_SPORTS                 # opponent line in "next" cards
 
-# Colors (keep close to Hawks, but with a subtle Bulls red for highlight)
+# Colors
 BACKGROUND_COLOR = (0, 0, 0)
 TEXT_COLOR       = (255, 255, 255)
-HIGHLIGHT_COLOR  = (55, 14, 18)  # dark maroon to keep contrast high
+HIGHLIGHT_COLOR  = (55, 14, 18)  # dark maroon accent for Bulls row
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Title/date helpers: reuse MLB helpers when available, like Hawks does
-
-_MLB = None
-try:
-    import screens.mlb_schedule as _MLB  # noqa: N816
-except Exception:
-    _MLB = None
-
-_MLB_DRAW_TITLE    = getattr(_MLB, "_draw_title_with_bold_result", None) if _MLB else None
-_MLB_REL_DATE_ONLY = getattr(_MLB, "_rel_date_only", None) if _MLB else None
+# Text helpers
 
 def _measure(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont):
     try:
@@ -114,104 +102,44 @@ def _center_wrapped_text(draw, y, text, font, *, max_width: int, line_gap: int =
         return 0
     lines, cur = [], []
     for w in words:
-        candidate = " ".join(cur + [w])
-        if _text_w(draw, candidate, font) <= max_width or not cur:
+        cand = " ".join(cur + [w])
+        if _text_w(draw, cand, font) <= max_width or not cur:
             cur.append(w)
         else:
             lines.append(" ".join(cur))
             cur = [w]
     if cur:
         lines.append(" ".join(cur))
-
     total = 0
     for line in lines:
         total += _center_text(draw, y + total, line, font, fill=fill)
         total += line_gap
     return max(0, total - line_gap)
 
-def _draw_title_line(img: Image.Image, draw: ImageDraw.ImageDraw, y: int, text: str) -> int:
-    """Try to use MLB title strip helper (like Hawks); fall back to simple center."""
-    if callable(_MLB_DRAW_TITLE):
-        # Let MLB helper draw into a temporary strip so spacing matches Hawks exactly
-        strip_h = _text_h(draw, FONT_TITLE) + 4
-        strip   = Image.new("RGBA", (WIDTH, strip_h), (0, 0, 0, 0))
-        strip_d = ImageDraw.Draw(strip)
-        try:
-            _, used_h = _MLB_DRAW_TITLE(strip_d, text)
-        except Exception:
-            used_h = _center_text(strip_d, 0, text, FONT_TITLE)
-        img.paste(strip, (0, y), strip)
-        return max(strip_h, used_h)
-
-    # Fallback: centered title
-    return _center_text(draw, y, text, FONT_TITLE)
-
 # ─────────────────────────────────────────────────────────────────────────────
-# Logo loader (mirrors style from Hawks file)
+# Logos
 
 def _load_logo_png(abbr: str, height: int) -> Optional[Image.Image]:
-    """Load team logo from local repo PNG: images/nba/{ABBR}.png; fall back to images/nba/NBA.png."""
     abbr = (abbr or "NBA").upper()
-    png_path = os.path.join(NBA_DIR, f"{abbr}.png")
+    path = os.path.join(NBA_DIR, f"{abbr}.png")
     try:
-        if os.path.exists(png_path):
-            img = Image.open(png_path).convert("RGBA")
+        if os.path.exists(path):
+            img = Image.open(path).convert("RGBA")
             w0, h0 = img.size
             r = height / float(h0) if h0 else 1.0
             return img.resize((max(1, int(w0 * r)), height), Image.LANCZOS)
     except Exception:
         pass
-    # Generic fallback
+    # fallback
     try:
-        fallback = os.path.join(NBA_DIR, "NBA.png")
-        if os.path.exists(fallback):
-            img = Image.open(fallback).convert("RGBA")
+        generic = os.path.join(NBA_DIR, "NBA.png")
+        if os.path.exists(generic):
+            img = Image.open(generic).convert("RGBA")
             w0, h0 = img.size
             r = height / float(h0) if h0 else 1.0
             return img.resize((max(1, int(w0 * r)), height), Image.LANCZOS)
     except Exception:
         pass
-    return None
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Display helpers (mirror Hawks)
-
-def _clear_display(display):
-    try:
-        from utils import clear_display  # present in repo
-        clear_display(display)
-    except Exception:
-        pass
-
-def _push(
-    display,
-    img: Optional[Image.Image],
-    *,
-    transition: bool = False,
-    led_override: Optional[Tuple[float, float, float]] = None,
-):
-    if img is None or display is None:
-        return None
-    if transition:
-        return ScreenImage(img, displayed=False, led_override=led_override)
-
-    def _show_image() -> None:
-        try:
-            _clear_display(display)
-            if hasattr(display, "image"):
-                display.image(img)
-            elif hasattr(display, "ShowImage"):
-                buf = display.getbuffer(img) if hasattr(display, "getbuffer") else img
-                display.ShowImage(buf)
-            elif hasattr(display, "display"):
-                display.display(img)
-        except Exception as e:
-            logging.exception("Failed to push Bulls screen: %s", e)
-
-    if LED_INDICATOR_LEVEL and LED_INDICATOR_LEVEL > 0:
-        _show_image()
-    else:
-        _show_image()
     return None
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -250,15 +178,14 @@ def _official_date_from_str(s: str) -> Optional[dt.date]:
         return None
 
 def _official_date(game: Dict) -> Optional[dt.date]:
-    if "date" in game and game.get("date"):
+    if game.get("date"):
         d = _official_date_from_str(game["date"])
         if d:
             return d
-    if "officialDate" in game and game.get("officialDate"):
+    if game.get("officialDate"):
         d = _official_date_from_str(game["officialDate"])
         if d:
             return d
-    # fallback from start time
     start = _get_local_start(game)
     return start.date() if isinstance(start, dt.datetime) else None
 
@@ -279,9 +206,12 @@ def _relative_label(date_obj: Optional[dt.date]) -> str:
     if not isinstance(date_obj, dt.date):
         return ""
     today = dt.datetime.now(CENTRAL_TIME).date()
-    if date_obj == today:                     return "Today"
-    if date_obj == today + dt.timedelta(days=1): return "Tomorrow"
-    if date_obj == today - dt.timedelta(days=1): return "Yesterday"
+    if date_obj == today:
+        return "Today"
+    if date_obj == today + dt.timedelta(days=1):
+        return "Tomorrow"
+    if date_obj == today - dt.timedelta(days=1):
+        return "Yesterday"
     fmt = "%a %b %-d" if os.name != "nt" else "%a %b %#d"
     return date_obj.strftime(fmt)
 
@@ -293,13 +223,6 @@ def _format_time(start: Optional[dt.datetime]) -> str:
 
 def _format_footer_last(game: Dict) -> str:
     d = _official_date(game)
-    if callable(_MLB_REL_DATE_ONLY):
-        try:
-            txt = _MLB_REL_DATE_ONLY(d)
-            if txt:
-                return txt
-        except Exception:
-            pass
     return _relative_label(d)
 
 def _format_footer_next(game: Dict) -> str:
@@ -318,7 +241,11 @@ def _format_matchup_line(game: Dict) -> str:
     return f"{pre} {opp}".strip()
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Drawing primitives
+# Drawing
+
+def _draw_title_line(draw: ImageDraw.ImageDraw, y: int, text: str) -> int:
+    # Simple centered title line (keeps us independent of MLB helpers)
+    return _center_text(draw, y, text, FONT_TITLE)
 
 def _draw_scoreboard_table(
     img: Image.Image,
@@ -329,104 +256,80 @@ def _draw_scoreboard_table(
     score_label: Optional[str] = "PTS",
     bottom_reserved_px: int = 0,
 ) -> int:
+    """2-row compact table: team cell at left, score column at right, header label above score col."""
     if not rows:
         return top_y
 
-    header_h = _text_h(draw, FONT_SMALL) + 2
+    row_count = len(rows)
+    col1_w = min(WIDTH - 24, max(84, int(WIDTH * 0.72)))
+    col2_w = max(20, WIDTH - col1_w)
+    x0, x1, x2 = 0, col1_w, WIDTH
+
+    header_h = _text_h(draw, FONT_SMALL) + 4 if score_label else 0
     table_top = top_y
-    content_top = table_top + header_h
 
-    # Try to keep 2 rows visible with a slim header; mirror Hawks proportions
     total_available = max(0, HEIGHT - bottom_reserved_px - table_top)
-    row_h = 34
-    if total_available and total_available < (header_h + row_h * 2):
-        row_h = max(24, (total_available - header_h) // 2)
+    available_for_rows = max(0, total_available - header_h)
+    row_h = max(available_for_rows // max(1, row_count), 32)
+    row_h = min(row_h, 48)
+    if row_h * row_count > available_for_rows and available_for_rows > 0:
+        row_h = max(24, available_for_rows // max(1, row_count))
+    if row_h <= 0:
+        row_h = 32
 
-    # Column widths (logo/name | spacer | score), similar to Hawks
-    col0_w = WIDTH * 11 // 20  # ~55% for team cell
-    col2_w = WIDTH * 3  // 20  # ~15% for score
-    col1_w = WIDTH - (col0_w + col2_w)
-
-    x0 = 4
-    x1 = x0 + col0_w
-    x2 = x1 + col1_w
-    x3 = WIDTH - 4
-
-    table_height = min(header_h + (row_h * 2), total_available or (header_h + row_h * 2))
-    table_bottom = min(table_top + table_height, HEIGHT - bottom_reserved_px)
-    table_height = max(header_h + 2, table_bottom - table_top)
-    content_h    = max(2, table_height - header_h)
-
-    # Row slices
-    row1_h = max(1, content_h // 2)
-    row2_h = content_h - row1_h
-    row_slices = [(content_top, row1_h), (content_top + row1_h, row2_h)]
-
-    # Header label above score column (PTS)
-    if score_label and header_h:
-        header_y = table_top + (header_h - _text_h(draw, FONT_SMALL)) // 2
+    # Header label (e.g., "PTS") above score column
+    if score_label:
+        header_y = table_top + max(0, (header_h - _text_h(draw, FONT_SMALL)) // 2)
         label_w  = _text_w(draw, score_label, FONT_SMALL)
         label_x  = x1 + (col2_w - label_w) // 2
         draw.text((label_x, header_y), score_label, font=FONT_SMALL, fill=TEXT_COLOR)
 
-    specs = []
-    for row, (row_top, slice_h) in zip(rows, row_slices):
-        row_height = max(1, slice_h)
-        tri        = str(row.get("tri") or "")
-        base_h     = max(1, row_height - 4)
-        logo_h     = min(64, max(24, base_h))
-        logo       = _load_logo_png(tri, logo_h)
-        logo_w     = logo.width if logo else 0
-        text       = (str(row.get("label") or "").strip() or tri or "—").strip()
-        text_start = x0 + 6 + (logo_w + 6 if logo else 0)
-        max_width  = max(1, x1 - text_start - 4)
-        specs.append({
-            "top": row_top, "height": row_height, "tri": tri,
-            "score": row.get("score"), "text": text, "logo": logo,
-            "max_width": max_width, "highlight": bool(row.get("highlight")),
-        })
+    # Draw rows
+    y = table_top + header_h
+    for row in rows:
+        top = y
+        h = row_h
+        tri = (row.get("tri") or "").upper()
+        label = (row.get("label") or tri or "").strip() or tri
+        score = row.get("score")
+        highlight = bool(row.get("highlight"))
 
-    # Render rows
-    for spec in specs:
-        top = spec["top"]; h = spec["height"]
-        tri = spec["tri"]; score = spec["score"]; text = spec["text"]
-        logo = spec["logo"]; max_text_width = spec["max_width"]
-        highlight = spec["highlight"]
-
-        # Highlight Bulls row to mirror Hawks styling
+        # Team cell bg highlight for Bulls row
         if highlight:
-            draw.rectangle([x0, top, x1 - 1, top + h - 1], fill=HIGHLIGHT_COLOR)
+            draw.rectangle([0, top, x1 - 1, top + h - 1], fill=HIGHLIGHT_COLOR)
 
-        # Team cell with logo and label
-        px = x0 + 6
+        # Logo
+        base_h = max(1, h - 6)
+        logo_h = min(64, max(24, base_h))
+        logo   = _load_logo_png(tri, logo_h)
+        px = 6
         if logo:
             ly = top + (h - logo.height) // 2
             img.paste(logo, (px, ly), logo)
             px += logo.width + 6
 
-        # Prefer bold abbr if it fits; otherwise small font
-        if _text_w(draw, text, FONT_ABBR) <= max_text_width:
-            draw.text((px, top + (h - _text_h(draw, FONT_ABBR)) // 2), text, font=FONT_ABBR, fill=TEXT_COLOR)
-        else:
-            draw.text((px, top + (h - _text_h(draw, FONT_SMALL)) // 2), text, font=FONT_SMALL, fill=TEXT_COLOR)
+        # Team label (prefer ABR font if fits; else small)
+        max_text_w = max(1, x1 - 6 - px)
+        use_font = FONT_ABBR if _text_w(draw, label, FONT_ABBR) <= max_text_w else FONT_SMALL
+        draw.text((px, top + (h - _text_h(draw, use_font)) // 2), label, font=use_font, fill=TEXT_COLOR)
 
         # Score column
         if score is not None:
-            sw = _text_w(draw, str(score), FONT_SCORE)
+            s = str(score)
+            sw = _text_w(draw, s, FONT_SCORE)
             sx = x1 + (col2_w - sw) // 2
             sy = top + (h - _text_h(draw, FONT_SCORE)) // 2
-            draw.text((sx, sy), f"{score}", font=FONT_SCORE, fill=TEXT_COLOR)
+            draw.text((sx, sy), s, font=FONT_SCORE, fill=TEXT_COLOR)
 
-    return table_top + table_height
+        y += h
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Renderers
+    return y
 
 def _render_message(title: str, message: str) -> Image.Image:
     img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
     y = 2
-    y += _draw_title_line(img, draw, y, title)
+    y += _draw_title_line(draw, y, title)
     y += 6
     _center_wrapped_text(draw, y, message, FONT_NEXT_OPP, max_width=WIDTH - 12)
     return img
@@ -436,7 +339,7 @@ def _render_scoreboard(game: Dict, *, title: str, footer: str, status_line: str)
     draw = ImageDraw.Draw(img)
 
     y = 2
-    y += _draw_title_line(img, draw, y, title)
+    y += _draw_title_line(draw, y, title)
     y += 2
 
     away = _team_entry(game, "away")
@@ -463,7 +366,7 @@ def _render_next_game(game: Dict, *, title: str) -> Image.Image:
     draw = ImageDraw.Draw(img)
 
     y = 2
-    y += _draw_title_line(img, draw, y, title)
+    y += _draw_title_line(draw, y, title)
     y += 2
 
     matchup = _format_matchup_line(game)
@@ -503,7 +406,32 @@ def _render_next_game(game: Dict, *, title: str) -> Image.Image:
     return img
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Public entry points (called by screens/registry.py)
+# Display push
+
+def _push(display, img: Optional[Image.Image], *, transition: bool = False, led_override: Optional[Tuple[float, float, float]] = None):
+    if img is None or display is None:
+        return None
+    if transition:
+        return ScreenImage(img, displayed=False, led_override=led_override)
+
+    def _show_image() -> None:
+        try:
+            clear_display(display)
+            if hasattr(display, "image"):
+                display.image(img)
+            elif hasattr(display, "ShowImage"):
+                buf = display.getbuffer(img) if hasattr(display, "getbuffer") else img
+                display.ShowImage(buf)
+            elif hasattr(display, "display"):
+                display.display(img)
+        except Exception as e:
+            logging.exception("Failed to push Bulls screen: %s", e)
+
+    _show_image()
+    return None
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public entry points (used by screens/registry.py)
 
 def draw_last_bulls_game(display, game: Optional[Dict], transition: bool = False):
     if not game:
@@ -515,7 +443,7 @@ def draw_last_bulls_game(display, game: Optional[Dict], transition: bool = False
     status_line = _status_text(game) or "Final"
     img = _render_scoreboard(game, title="Last Bulls game:", footer=footer, status_line=status_line)
 
-    # Optional LED accent similar to Hawks result color
+    # Optional LED accent like Hawks: green on win, red on loss
     away = _team_entry(game, "away")
     home = _team_entry(game, "home")
     bulls = away if _is_bulls_side(away) else (home if _is_bulls_side(home) else None)
@@ -525,12 +453,12 @@ def draw_last_bulls_game(display, game: Optional[Dict], transition: bool = False
     if bulls and opp and bulls.get("score") is not None and opp.get("score") is not None:
         try:
             b, o = int(bulls["score"]), int(opp["score"])
-            if b > o: led_override = (0.0, 1.0, 0.0)  # green-ish for win
-            elif b < o: led_override = (1.0, 0.0, 0.0) # red for loss
+            if b > o: led_override = (0.0, 1.0, 0.0)
+            elif b < o: led_override = (1.0, 0.0, 0.0)
         except Exception:
             pass
 
-    if led_override is not None:
+    if led_override is not None and LED_INDICATOR_LEVEL and LED_INDICATOR_LEVEL > 0:
         with temporary_display_led(*led_override):
             return _push(display, img, transition=transition)
     return _push(display, img, transition=transition)
