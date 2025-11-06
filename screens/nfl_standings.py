@@ -1335,14 +1335,12 @@ def _render_overview_fallback(
 def _scroll_display(display, full_img: Image.Image):
     if full_img.height <= HEIGHT:
         display.image(full_img)
-        display.show()
         time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
         return
 
     max_offset = full_img.height - HEIGHT
     frame = full_img.crop((0, 0, WIDTH, HEIGHT))
     display.image(frame)
-    display.show()
     time.sleep(SCOREBOARD_SCROLL_PAUSE_TOP)
 
     for offset in range(
@@ -1350,7 +1348,6 @@ def _scroll_display(display, full_img: Image.Image):
     ):
         frame = full_img.crop((0, offset, WIDTH, offset + HEIGHT))
         display.image(frame)
-        display.show()
         time.sleep(SCOREBOARD_SCROLL_DELAY)
 
     time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)

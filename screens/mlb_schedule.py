@@ -10,7 +10,7 @@ import time
 import logging
 import datetime
 from typing import Optional, Tuple
-from PIL import Image, ImageDraw, Image
+from PIL import Image, ImageDraw, Image, ImageFont
 
 from config import (
     WIDTH, HEIGHT,
@@ -142,9 +142,12 @@ def _format_game_label(official_date: str, start_time: str) -> str:
         else:
             label = date_obj.strftime("%a %b %-d")
 
-    if label and time_display:
-        return f"{label} {time_display}".strip()
-    return label or time_display or ""
+    parts = []
+    if label:
+        parts.append(label)
+    if time_display:
+        parts.append(time_display)
+    return " • ".join(parts) if parts else ""
 
 def _rel_date_only(official_date: str) -> str:
     """'Today', 'Tomorrow', 'Yesterday', else 'Tue M/D' (no time)."""
@@ -177,6 +180,28 @@ def _draw_title_with_bold_result(draw: ImageDraw.ImageDraw, title: str) -> tuple
         draw.text((cx, cy), ch, font=FONT_TITLE_SPORTS, fill=(255,255,255))
         draw.text((cx+1, cy), ch, font=FONT_TITLE_SPORTS, fill=(255,255,255))
     return tw, th
+
+
+def _center_bottom_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.ImageFont,
+    *,
+    margin: int = BOTTOM_MARGIN,
+    fill=(255, 255, 255),
+) -> None:
+    if not text:
+        return
+    try:
+        l, t, r, b = draw.textbbox((0, 0), text, font=font)
+        tw, th = r - l, b - t
+        tx = (WIDTH - tw) // 2 - l
+        ty = HEIGHT - th - margin - t
+    except Exception:
+        tw, th = draw.textsize(text, font=font)
+        tx = (WIDTH - tw) // 2
+        ty = HEIGHT - th - margin
+    draw.text((tx, ty), text, font=font, fill=fill)
 
 def _bbox_center(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int,
                  text: str, font, *, fill=(255,255,255)):
@@ -268,8 +293,15 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
     # Title
     _, th = _draw_title_with_bold_result(draw, title)
 
-    # Bottom line position
-    bw, bh = draw.textsize(bottom_text, font=FONT_DATE_SPORTS)
+    # Bottom line position (reserve space using accurate text metrics)
+    if bottom_text:
+        try:
+            _, t, _, b = draw.textbbox((0, 0), bottom_text, font=FONT_DATE_SPORTS)
+            bh = b - t
+        except Exception:
+            bh = draw.textsize(bottom_text, font=FONT_DATE_SPORTS)[1]
+    else:
+        bh = 0
     bottom_y = HEIGHT - bh - BOTTOM_MARGIN
 
     # Geometry
@@ -349,7 +381,7 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
                 pass
 
     # Bottom label
-    draw.text(((WIDTH - bw)//2, bottom_y), bottom_text, font=FONT_DATE_SPORTS, fill=(255,255,255))
+    _center_bottom_text(draw, bottom_text, FONT_DATE_SPORTS)
 
 
 # ── Screens ─────────────────────────────────────────────────────────────────
@@ -507,9 +539,16 @@ def draw_sports_screen(display, game, title, transition=False):
 
     raw_date = game.get('officialDate','') or game.get('gameDate','')[:10]
     raw_time = game.get('startTimeCentral','TBD')
-    bottom   = _format_game_label(raw_date, raw_time)
-    bl_w, bl_h = draw.textsize(bottom, font=FONT_DATE_SPORTS)
-    bottom_y   = HEIGHT - bl_h - BOTTOM_MARGIN
+    bottom = _format_game_label(raw_date, raw_time)
+    if bottom:
+        try:
+            _, t, _, b = draw.textbbox((0, 0), bottom, font=FONT_DATE_SPORTS)
+            bl_h = b - t
+        except Exception:
+            bl_h = draw.textsize(bottom, font=FONT_DATE_SPORTS)[1]
+    else:
+        bl_h = 0
+    bottom_y = HEIGHT - bl_h - BOTTOM_MARGIN
 
     available_h = max(10, bottom_y - (y_text + 2))
     logo_h = min(desired_logo_h, available_h)
@@ -546,7 +585,7 @@ def draw_sports_screen(display, game, title, transition=False):
             draw.text((x, y_o), obj, font=FONT_TEAM_SPORTS, fill=(255,255,255))
             x += w_t + spacing
 
-    draw.text(((WIDTH - bl_w)//2, bottom_y), bottom, font=FONT_DATE_SPORTS, fill=(255,255,255))
+    _center_bottom_text(draw, bottom, FONT_DATE_SPORTS)
 
     if transition:
         return img

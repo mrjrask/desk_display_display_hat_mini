@@ -23,6 +23,22 @@ from utils import (
     wrap_text,
 )
 
+
+def _center_bottom_text(draw, text, *, font, margin):
+    if not text:
+        return 0
+    try:
+        l, t, r, b = draw.textbbox((0, 0), text, font=font)
+        tw, th = r - l, b - t
+        tx = (config.WIDTH - tw) // 2 - l
+        ty = config.HEIGHT - th - margin - t
+    except Exception:
+        tw, th = draw.textsize(text, font=font)
+        tx = (config.WIDTH - tw) // 2
+        ty = config.HEIGHT - th - margin
+    draw.text((tx, ty), text, font=font, fill=(255, 255, 255))
+    return ty
+
 NFL_LOGO_DIR = os.path.join(config.IMAGES_DIR, "nfl")
 def show_bears_next_game(display, transition=False):
     game = next_game_from_schedule(BEARS_SCHEDULE)
@@ -69,8 +85,15 @@ def show_bears_next_game(display, transition=False):
             date_txt = game["date"]
         t_txt = game["time"].strip()
         bottom = f"{wk.replace('0.', 'Pre')}-{date_txt} {t_txt}"
-        bw, bh = draw.textsize(bottom, font=config.FONT_DATE_SPORTS)
-        bottom_y = config.HEIGHT - bh - BEARS_BOTTOM_MARGIN  # keep on-screen
+        if bottom:
+            try:
+                _, t, _, b = draw.textbbox((0, 0), bottom, font=config.FONT_DATE_SPORTS)
+                bottom_h = b - t
+            except Exception:
+                bottom_h = draw.textsize(bottom, font=config.FONT_DATE_SPORTS)[1]
+        else:
+            bottom_h = 0
+        bottom_y = config.HEIGHT - bottom_h - BEARS_BOTTOM_MARGIN  # keep on-screen
 
         desired_logo_h = standard_next_game_logo_height(config.HEIGHT)
         available_h = max(10, bottom_y - (y_txt + 2))
@@ -107,8 +130,13 @@ def show_bears_next_game(display, transition=False):
                 x += w_sy + spacing
 
         # Draw bottom text
-        draw.text(((config.WIDTH - bw)//2, bottom_y),
-                  bottom, font=config.FONT_DATE_SPORTS, fill=(255,255,255))
+        if bottom:
+            _center_bottom_text(
+                draw,
+                bottom,
+                font=config.FONT_DATE_SPORTS,
+                margin=BEARS_BOTTOM_MARGIN,
+            )
 
     if transition:
         return img

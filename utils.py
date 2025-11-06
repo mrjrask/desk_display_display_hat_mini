@@ -19,7 +19,7 @@ import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import functools
 import logging
@@ -120,6 +120,7 @@ class Display:
         self._buffer = Image.new("RGB", (self.width, self.height), "black")
         self._display = None
         self._button_pins: Dict[str, Optional[int]] = {name: None for name in self._BUTTON_NAMES}
+        self._button_callback: Optional[Callable[[str], None]] = None
         self._backlight_level = 1.0
         self._backlight_lock = threading.Lock()
 
@@ -140,6 +141,11 @@ class Display:
                 for name in self._BUTTON_NAMES:
                     pin_name = f"BUTTON_{name}"
                     self._button_pins[name] = getattr(self._display, pin_name, None)
+                if hasattr(self._display, "on_button_pressed"):
+                    try:
+                        self._display.on_button_pressed(self._handle_hw_button_event)
+                    except Exception as exc:  # pragma: no cover - hardware import
+                        logging.debug("Failed to register hardware button callback: %s", exc)
             except Exception as exc:  # pragma: no cover - hardware import
                 logging.warning(
                     "Failed to initialize Display HAT Mini hardware; running headless (%s)",
@@ -263,6 +269,46 @@ class Display:
             return raw_state == 0
 
         return bool(raw_state)
+
+    def set_button_callback(self, callback: Optional[Callable[[str], None]]) -> None:
+        """Register a callable invoked when a hardware button is pressed."""
+
+        self._button_callback = callback
+
+    def _handle_hw_button_event(self, pin) -> None:  # pragma: no cover - hardware import
+        name = None
+        for button_name, button_pin in self._button_pins.items():
+            if button_pin == pin:
+                name = button_name
+                break
+
+        if not name or self._display is None:
+            return
+
+        try:
+            state = self._display.read_button(pin)
+        except Exception as exc:
+            logging.debug("Hardware button callback read failed: %s", exc)
+            return
+
+        if isinstance(state, bool):
+            pressed = state
+        elif isinstance(state, (int, float)):
+            pressed = state == 0
+        else:
+            pressed = bool(state)
+
+        if not pressed:
+            return
+
+        callback = self._button_callback
+        if callback is None:
+            return
+
+        try:
+            callback(name)
+        except Exception as exc:
+            logging.debug("Button callback raised %s", exc)
 
 
 def get_active_display() -> Optional["Display"]:

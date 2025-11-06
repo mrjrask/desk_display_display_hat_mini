@@ -111,6 +111,46 @@ _button_monitor_thread: Optional[threading.Thread] = None
 BRIGHTNESS_STEP = 0.1
 
 
+def _handle_button_down(name: str) -> bool:
+    """React to a newly pressed control button."""
+
+    global _skip_request_pending
+
+    name = name.upper()
+    if name == "X":
+        logging.info("⏭️  X button pressed – skipping to next screen.")
+        _skip_request_pending = True
+        _manual_skip_event.set()
+        return True
+    if name == "Y":
+        logging.info("🔁 Y button pressed – restarting desk_display service…")
+        _restart_desk_display_service()
+        return False
+    if name == "A":
+        new_level = display.adjust_backlight(-BRIGHTNESS_STEP)
+        logging.info("🅰️  A button pressed – dimming to %.0f%%.", new_level * 100)
+        return False
+    if name == "B":
+        new_level = display.adjust_backlight(BRIGHTNESS_STEP)
+        logging.info("🅱️  B button pressed – brightening to %.0f%%.", new_level * 100)
+        return False
+    return False
+
+
+def _button_event_callback(name: str) -> None:
+    """Hardware callback fired when a control button is pressed."""
+
+    upper = name.upper()
+    if upper not in _BUTTON_STATE:
+        return
+
+    if _BUTTON_STATE[upper]:
+        return
+
+    _BUTTON_STATE[upper] = True
+    _handle_button_down(upper)
+
+
 def _load_scheduler_from_config() -> Optional[ScreenScheduler]:
     try:
         config_data = load_schedule_config(CONFIG_PATH)
@@ -152,6 +192,10 @@ def refresh_schedule_if_needed(force: bool = False) -> None:
 
 # ─── Display & Wi-Fi monitor ─────────────────────────────────────────────────
 display = Display()
+try:
+    display.set_button_callback(_button_event_callback)
+except Exception:
+    logging.debug("Button callback registration unavailable.")
 if ENABLE_WIFI_MONITOR:
     logging.info("🔌 Starting Wi-Fi monitor…")
     wifi_utils.start_monitor()
@@ -227,21 +271,8 @@ def _check_control_buttons() -> bool:
         previously_pressed = _BUTTON_STATE[name]
 
         if pressed and not previously_pressed:
-            if name == "X":
-                logging.info("⏭️  X button pressed – skipping to next screen.")
-                global _skip_request_pending
-                _skip_request_pending = True
-                _manual_skip_event.set()
+            if _handle_button_down(name):
                 skip_requested = True
-            elif name == "Y":
-                logging.info("🔁 Y button pressed – restarting desk_display service…")
-                _restart_desk_display_service()
-            elif name == "A":
-                new_level = display.adjust_backlight(-BRIGHTNESS_STEP)
-                logging.info("🅰️  A button pressed – dimming to %.0f%%.", new_level * 100)
-            elif name == "B":
-                new_level = display.adjust_backlight(BRIGHTNESS_STEP)
-                logging.info("🅱️  B button pressed – brightening to %.0f%%.", new_level * 100)
         elif not pressed and previously_pressed:
             logging.debug("Button %s released.", name)
 

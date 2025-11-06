@@ -160,13 +160,69 @@ def _score_from_team_entry(entry: Dict) -> Optional[int]:
     except (TypeError, ValueError):
         return None
 
+
+def _extract_first(entry: Optional[Dict], candidates: Tuple[str, ...]) -> str:
+    if not isinstance(entry, dict):
+        return ""
+    for key in candidates:
+        value = entry.get(key)
+        if isinstance(value, str):
+            value = value.strip()
+        if value:
+            return str(value)
+    return ""
+
+
 def _team_entry(game: Dict, side: str) -> Dict[str, Optional[str]]:
     teams = game.get("teams") or {}
     entry = teams.get(side) or {}
-    tri   = (entry.get("tri") or "").upper()
-    full  = entry.get("name") or entry.get("teamName") or entry.get("fullName") or tri
+    team_info = entry.get("team") if isinstance(entry.get("team"), dict) else None
+
+    tri_candidates = (
+        "tri",
+        "triCode",
+        "tricode",
+        "teamTricode",
+        "teamTriCode",
+        "abbreviation",
+        "abbr",
+        "teamAbbreviation",
+        "teamAbbrev",
+    )
+    name_candidates = (
+        "name",
+        "teamName",
+        "fullName",
+        "displayName",
+        "shortName",
+        "nickname",
+    )
+    label_candidates = (
+        "label",
+        "shortName",
+        "abbr",
+        "displayName",
+        "nickname",
+    )
+
+    tri = _extract_first(entry, tri_candidates)
+    if not tri and team_info:
+        tri = _extract_first(team_info, tri_candidates)
+    tri = (tri or "").upper()
+
+    full = _extract_first(entry, name_candidates)
+    if not full and team_info:
+        full = _extract_first(team_info, name_candidates)
+    if not full:
+        full = tri
+
+    label = _extract_first(entry, label_candidates)
+    if not label and team_info:
+        label = _extract_first(team_info, label_candidates)
+    label = (label or tri or full or "").strip()
+
     score = _score_from_team_entry(entry)
-    return {"tri": tri, "name": full, "score": score, "label": tri}
+    return {"tri": tri, "name": full or None, "score": score, "label": label or tri}
 
 def _is_bulls_side(entry: Dict) -> bool:
     return ((entry or {}).get("tri") or "").upper() == TEAM_TRICODE
