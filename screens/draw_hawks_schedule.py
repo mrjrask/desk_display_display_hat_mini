@@ -425,8 +425,42 @@ def _text_w(d: ImageDraw.ImageDraw, s: str, font: ImageFont.ImageFont) -> int:
     return r - l
 
 def _center_text(d: ImageDraw.ImageDraw, y: int, s: str, font: ImageFont.ImageFont):
-    x = (WIDTH - _text_w(d, s, font)) // 2
-    d.text((x, y), s, font=font, fill="white")
+    if not s:
+        return 0
+    try:
+        l, t, r, b = d.textbbox((0, 0), s, font=font)
+        tw, th = r - l, b - t
+        tx = (WIDTH - tw) // 2 - l
+        ty = y - t
+    except Exception:
+        tw, th = d.textsize(s, font=font)
+        tx = (WIDTH - tw) // 2
+        ty = y
+    d.text((tx, ty), s, font=font, fill="white")
+    return th
+
+
+def _center_bottom_text(
+    d: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.ImageFont,
+    *,
+    margin: int = 2,
+    fill: str = "white",
+):
+    if not text:
+        return 0
+    try:
+        l, t, r, b = d.textbbox((0, 0), text, font=font)
+        tw, th = r - l, b - t
+        tx = (WIDTH - tw) // 2 - l
+        ty = HEIGHT - th - margin - t
+    except Exception:
+        tw, th = d.textsize(text, font=font)
+        tx = (WIDTH - tw) // 2
+        ty = HEIGHT - th - margin
+    d.text((tx, ty), text, font=font, fill=fill)
+    return th
 
 
 def _center_wrapped_text(
@@ -923,9 +957,8 @@ def _format_last_bottom_line(game: Dict, feed: Optional[Dict] = None) -> str:
     else:
         date_str = _format_last_date_bottom(game.get("gameDate", ""))
 
-    if date_str:
-        return f"{prefix} {date_str}"
-    return prefix
+    parts = [p for p in (prefix, date_str) if p]
+    return " • ".join(parts)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Next-game helpers (names, local PNG logos, centered bigger logos)
@@ -977,7 +1010,8 @@ def _format_next_bottom(
             start = ""
 
     if callable(_MLB_FORMAT_GAME_LABEL):
-        return _MLB_FORMAT_GAME_LABEL(official, start)
+        formatted = (_MLB_FORMAT_GAME_LABEL(official, start) or "").strip()
+        return formatted
 
     if local is None and official:
         try:
@@ -989,18 +1023,26 @@ def _format_next_bottom(
     if not local:
         return ""
 
-    today    = dt.datetime.now().astimezone()
-    today_d  = today.date()
-    game_d   = local.date()
-    time_str = local.strftime("%-I:%M %p") if os.name != "nt" else local.strftime("%#I:%M %p")
+    today = dt.datetime.now().astimezone()
+    today_d = today.date()
+    game_d = local.date()
+    time_str = (
+        local.strftime("%-I:%M %p") if os.name != "nt" else local.strftime("%#I:%M %p")
+    )
 
     if game_d == today_d:
-        return f"Tonight {time_str}" if local.hour >= 18 else f"Today {time_str}"
-    if game_d == (today_d + dt.timedelta(days=1)):
-        return f"Tomorrow {time_str}"
-    # For later dates, include weekday+date **and** time
-    date_str = local.strftime("%a %b %-d") if os.name != "nt" else local.strftime("%a %b %#d")
-    return f"{date_str} {time_str}"
+        label = "Tonight" if local.hour >= 18 else "Today"
+    elif game_d == (today_d + dt.timedelta(days=1)):
+        label = "Tomorrow"
+    else:
+        label = (
+            local.strftime("%a %b %-d")
+            if os.name != "nt"
+            else local.strftime("%a %b %#d")
+        )
+
+    parts = [p for p in (label, time_str) if p]
+    return " • ".join(parts)
 
 def _draw_next_card(display, game: Dict, *, title: str, transition: bool=False, log_label: str="hawks next"):
     """
@@ -1045,9 +1087,9 @@ def _draw_next_card(display, game: Dict, *, title: str, transition: bool=False, 
     official_date = game.get("officialDate") or ""
     game_date_iso = game.get("gameDate") or ""
     start_time_central = game.get("startTimeCentral")
-    bottom_text   = _format_next_bottom(official_date, game_date_iso, start_time_central)
-    bottom_h      = _text_h(d, FONT_BOTTOM) if bottom_text else 0
-    bottom_y      = HEIGHT - (bottom_h + 2) if bottom_text else HEIGHT
+    bottom_text = _format_next_bottom(official_date, game_date_iso, start_time_central)
+    bottom_h = _text_h(d, FONT_BOTTOM) if bottom_text else 0
+    bottom_y = HEIGHT - (bottom_h + 2) if bottom_text else HEIGHT
 
     # Desired logo height (bigger on 128px; adapt if smaller/other displays)
     desired_logo_h = standard_next_game_logo_height(HEIGHT)
@@ -1102,7 +1144,7 @@ def _draw_next_card(display, game: Dict, *, title: str, transition: bool=False, 
 
     # Bottom label (always includes time)
     if bottom_text:
-        _center_text(d, bottom_y, bottom_text, FONT_BOTTOM)
+        _center_bottom_text(d, bottom_text, FONT_BOTTOM)
 
     return _push(display, img, transition=transition)
 
@@ -1224,8 +1266,7 @@ def draw_last_hawks_game(display, game, transition: bool=False):
 
     # Bottom date (MLB bottom font)
     if bottom_str:
-        by = HEIGHT - _text_h(d, FONT_BOTTOM) - 1
-        _center_text(d, by, bottom_str, FONT_BOTTOM)
+        _center_bottom_text(d, bottom_str, FONT_BOTTOM)
 
     return _push(display, img, transition=transition, led_override=led_override)
 
@@ -1285,8 +1326,7 @@ def draw_live_hawks_game(display, game, transition: bool=False):
     )
 
     if dateline:
-        by = HEIGHT - _text_h(d, FONT_BOTTOM) - 1
-        _center_text(d, by, dateline, FONT_BOTTOM)
+        _center_bottom_text(d, dateline, FONT_BOTTOM)
 
     return _push(display, img, transition=transition)
 
