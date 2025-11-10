@@ -1,6 +1,6 @@
 import pytest
 
-from schedule import build_scheduler
+from schedule import KNOWN_SCREENS, build_scheduler
 from screens.registry import ScreenDefinition
 
 
@@ -40,6 +40,10 @@ def test_build_scheduler_from_config():
     scheduler = build_scheduler(config)
     assert scheduler.node_count == 4
     assert scheduler.requested_ids == {"date", "travel", "inside", "sensors"}
+
+
+def test_sensors_screen_is_known():
+    assert "sensors" in KNOWN_SCREENS
 
 
 def test_scheduler_with_alternate_screen():
