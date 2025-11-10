@@ -48,7 +48,12 @@ SUB = (172, 182, 196)
 ACCENT = (130, 160, 255)
 STAMP = (140, 160, 180)
 
-CARD_OUTLINES = [ (210,180,110,255), (110,150,210,255), (160,120,200,255), (100,170,160,255) ]
+CARD_OUTLINES = [
+    (210, 180, 110, 255),  # amber
+    (110, 150, 210, 255),  # blue
+    (160, 120, 200, 255),  # purple
+    (100, 170, 160, 255),  # teal
+]
 
 TITLE = "Sensor Stick"
 SUBTITLE = "Pimoroni Multi-Sensor (LTR559 • LSM6DS3)"
@@ -75,7 +80,7 @@ class LTR559Reader:
         if ltr559:
             try:
                 self.dev = ltr559.LTR559()
-                _ = self.dev.get_lux()  # wake
+                _ = self.dev.get_lux()  # wake some units
                 self.ok = True
             except Exception as e:
                 logging.warning(f"draw_sensors: LTR559 init failed: {e}")
@@ -149,7 +154,7 @@ def label(draw, xy, text, font, fill):
 
 def center_text(draw, box, text, font, fill, dy=0):
     x0, y0, x1, y1 = box
-    w, h = draw.textbbox((0,0), text, font=font)[2:]
+    w, h = draw.textbbox((0, 0), text, font=font)[2:]
     cx = (x0 + x1 - w) // 2
     cy = (y0 + y1 - h) // 2 + dy
     draw.text((cx, cy), text, font=font, fill=fill)
@@ -211,17 +216,18 @@ def render_frame(light_lux: Optional[float],
 
     # Stamp
     stamp = time.strftime("Updated %I:%M:%S %p", time.localtime(now_ts)).lstrip("0")
-    tw, th = d.textbbox((0,0), stamp, font=FONT_STAMP)[2:]
+    tw, th = d.textbbox((0, 0), stamp, font=FONT_STAMP)[2:]
     d.text((W - PADDING - tw, H - PADDING - th), stamp, font=FONT_STAMP, fill=STAMP)
 
     return img
 
 
 # ---------- Public API for screen runner ----------
-def draw(context) -> Optional[Image.Image]:
+def draw(context, **kwargs) -> Optional[Image.Image]:
     """
     Main entrypoint called by the screen registry.
     Keeps this screen up for 12 seconds, updating ~4×/sec.
+    Accepts and ignores extra kwargs (e.g., transition, duration) for compatibility.
     If `context.present_frame(img)` exists, pushes live frames.
     Otherwise returns the last frame and requests a 12s duration if supported.
     """
@@ -265,8 +271,8 @@ def draw(context) -> Optional[Image.Image]:
 
 
 # Back-compat for registries importing `draw_sensors`
-def draw_sensors(context) -> Optional[Image.Image]:
-    return draw(context)
+def draw_sensors(context, **kwargs) -> Optional[Image.Image]:
+    return draw(context, **kwargs)
 
 
 __all__ = ["draw", "draw_sensors"]
