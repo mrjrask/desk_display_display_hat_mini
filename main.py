@@ -565,6 +565,7 @@ signal.signal(signal.SIGTERM, _handle_sigterm)
 # ─── Logos ───────────────────────────────────────────────────────────────────
 IMAGES_DIR = os.path.join(SCRIPT_DIR, "images")
 LOGO_SCREEN_HEIGHT = 148  # 80px base increased by ~85%
+TEAM_LOGO_HEIGHT   = 128  # tuned to match Bears animation scale
 
 
 def load_logo(fn, height=LOGO_SCREEN_HEIGHT):
@@ -584,10 +585,10 @@ def load_logo(fn, height=LOGO_SCREEN_HEIGHT):
         logging.warning(f"Logo load failed '{fn}': {e}")
         return None
 
-cubs_logo   = load_logo("cubs.jpg")
-hawks_logo  = load_logo("hawks.jpg")
-bulls_logo  = load_logo("nba/CHI.png")
-sox_logo    = load_logo("sox.jpg")
+cubs_logo   = load_logo("cubs.jpg", height=TEAM_LOGO_HEIGHT)
+hawks_logo  = load_logo("hawks.jpg", height=TEAM_LOGO_HEIGHT)
+bulls_logo  = load_logo("nba/CHI.png", height=TEAM_LOGO_HEIGHT)
+sox_logo    = load_logo("sox.jpg", height=TEAM_LOGO_HEIGHT)
 weather_img = load_logo("weather.jpg")
 mlb_logo    = load_logo("mlb.jpg")
 nba_logo    = load_logo("nba/NBA.png")

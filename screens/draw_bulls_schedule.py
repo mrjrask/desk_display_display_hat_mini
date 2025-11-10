@@ -240,7 +240,7 @@ def _team_entry(game: Dict, side: str) -> Dict[str, Optional[str]]:
                 name = str(entry.get(k))
                 break
 
-    label = (tri or name or "").strip() or "NBA"
+    label = (name or tri or "").strip() or "NBA"
     return {"tri": tri or label, "name": name or label, "label": label, "score": score}
 
 def _is_bulls_side(entry: Dict[str, Optional[str]]) -> bool:
@@ -306,8 +306,12 @@ def _status_text(game: Dict) -> str:
     return s
 
 def _format_footer_last(game: Dict) -> str:
+    status = _status_text(game).strip()
+    if not status:
+        status = "Final"
     date_label = _relative_label(_official_date(game))
-    return f"{date_label}".strip()
+    parts = [part for part in (status, date_label) if part]
+    return " • ".join(parts)
 
 def _format_footer_next(game: Dict) -> str:
     # Date + local time (e.g., "Fri, Nov 8 · 7:00 PM")
@@ -315,6 +319,15 @@ def _format_footer_next(game: Dict) -> str:
     if not isinstance(start, dt.datetime):
         return _relative_label(_official_date(game))
     return start.strftime("%a, %b %-d · %-I:%M %p")
+
+
+def _format_footer_live(game: Dict) -> str:
+    status = _status_text(game).strip()
+    if not status:
+        status = "Live"
+    date_label = _relative_label(_official_date(game))
+    parts = [part for part in (status, date_label) if part]
+    return " • ".join(parts)
 
 def _format_matchup_line(game: Dict) -> str:
     away = _team_entry(game, "away")
@@ -452,7 +465,7 @@ def _render_next_game(game: Dict, *, title: str) -> Image.Image:
     footer = _format_footer_next(game)
 
     # Two large logos with '@' between them
-    logo_h = standard_next_game_logo_height(WIDTH, HEIGHT)
+    logo_h = standard_next_game_logo_height(HEIGHT)
     logo_left  = _load_logo_png(away["tri"], logo_h) if away else None
     logo_right = _load_logo_png(home["tri"], logo_h) if home else None
 
@@ -550,7 +563,7 @@ def draw_live_bulls_game(display, game: Optional[Dict], transition: bool = False
         img = _render_message("Bulls Live:", "Not in progress")
         return _push(display, img, transition=transition)
 
-    footer = _relative_label(_official_date(game))
+    footer = _format_footer_live(game)
     status = _status_text(game) or "Live"
     img = _render_scoreboard(game, title="Bulls Live:", footer=footer, status_line=status)
     return _push(display, img, transition=transition)
