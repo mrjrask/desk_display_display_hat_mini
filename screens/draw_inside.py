@@ -259,7 +259,27 @@ def _probe_pimoroni_bme280(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
 
     import bme280  # type: ignore
 
-    dev = bme280.BME280()
+    # Prefer the addresses we actually saw on the bus so we don't try the
+    # wrong default. Fallback to the library defaults if we could not scan.
+    candidate_addresses: Sequence[int]
+    if addresses:
+        candidate_addresses = tuple(sorted(addresses.intersection({0x76, 0x77})))
+    else:
+        candidate_addresses = (0x76, 0x77)
+
+    dev = None
+    last_error: Optional[Exception] = None
+    for addr in candidate_addresses:
+        try:
+            dev = bme280.BME280(i2c_addr=addr)  # type: ignore[call-arg]
+            break
+        except Exception as exc:  # pragma: no cover - relies on hardware
+            last_error = exc
+
+    if dev is None:
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("Pimoroni BME280 sensor not found")
 
     def read() -> SensorReadings:
         temp_f = float(dev.get_temperature()) * 9 / 5 + 32
@@ -267,7 +287,8 @@ def _probe_pimoroni_bme280(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
         pres = float(dev.get_pressure()) * 0.02953
         return dict(temp_f=temp_f, humidity=hum, pressure_inhg=pres, voc_ohms=None)
 
-    return "Pimoroni BME280", read
+    label = f"Pimoroni BME280 (0x{getattr(dev, 'i2c_addr', candidate_addresses[0]):02X})"
+    return label, read
 
 
 def _probe_adafruit_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProbeResult]:
