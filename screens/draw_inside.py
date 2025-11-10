@@ -257,7 +257,28 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
     if addresses and not addresses.intersection({0x76, 0x77}):
         return None
 
-    import bme280  # type: ignore
+    from importlib import import_module
+
+    module = None
+    last_import_error: Optional[Exception] = None
+    for name in ("pimoroni_bme280", "bme280"):
+        try:
+            module = import_module(name)  # type: ignore[assignment]
+            break
+        except ModuleNotFoundError as exc:
+            last_import_error = exc
+        except Exception as exc:  # pragma: no cover - depends on environment
+            logging.debug("draw_inside: error importing %s: %s", name, exc)
+            last_import_error = exc
+
+    if module is None:
+        if last_import_error is not None:
+            raise last_import_error
+        raise RuntimeError("Pimoroni BME280 driver not available")
+
+    sensor_cls = getattr(module, "BME280", None)
+    if sensor_cls is None:
+        raise RuntimeError(f"{module.__name__} is missing the BME280 class")
 
     # Prefer the addresses we actually saw on the bus so we don't try the
     # wrong default. Fallback to the library defaults if we could not scan.
@@ -272,7 +293,7 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
     last_error: Optional[Exception] = None
     for addr in candidate_addresses:
         try:
-            candidate = bme280.BME280(i2c_addr=addr)  # type: ignore[call-arg]
+            candidate = sensor_cls(i2c_addr=addr)  # type: ignore[call-arg]
             try:
                 # Force an initial reading to validate connectivity. The Pimoroni
                 # driver raises a RuntimeError with a helpful message if the bus
