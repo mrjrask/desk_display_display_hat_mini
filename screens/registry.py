@@ -179,7 +179,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         available=bool(weather_data),
     )
     register("inside", lambda: draw_inside(context.display, transition=True))
-    register("sensors", lambda: draw_sensors(context.display, transition=True))
+    register("sensors", lambda: draw_sensors(context, transition=True))
 
     verano_logo = context.logos.get("verano logo")
     if verano_logo is not None:
@@ -228,6 +228,123 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             travel_state = "inactive"
     metadata["travel_state"] = travel_state
 
+    def _is_live_game_today(game: Any) -> bool:
+        """Return True when *game* appears to be in progress today."""
+
+        if not isinstance(game, dict):
+            return False
+
+        status_parts: list[str] = []
+        status_blob = game.get("status")
+        if isinstance(status_blob, dict):
+            for key in (
+                "detailedState",
+                "abstractGameState",
+                "gameStatus",
+                "gameStatusText",
+                "state",
+                "gameState",
+            ):
+                value = status_blob.get(key)
+                if value:
+                    status_parts.append(str(value))
+            coded = str(status_blob.get("codedGameState") or "").upper()
+            status_code = str(status_blob.get("statusCode") or "").upper()
+        else:
+            coded = str(game.get("codedGameState") or "").upper()
+            status_code = str(game.get("statusCode") or "").upper()
+
+        for key in (
+            "gameStatusText",
+            "gameStatus",
+            "detailedState",
+            "abstractGameState",
+            "status",
+            "gameState",
+        ):
+            value = game.get(key)
+            if value:
+                status_parts.append(str(value))
+
+        status_text = " ".join(
+            part.strip().lower() for part in status_parts if str(part).strip()
+        )
+
+        if not status_text and not coded and not status_code:
+            return False
+
+        negative_keywords = (
+            "final",
+            "postponed",
+            "suspend",
+            "cancel",
+            "delay",
+            "preview",
+            "schedule",
+            "pregame",
+        )
+        if any(word in status_text for word in negative_keywords):
+            return False
+
+        positive = any(
+            token in status_text
+            for token in (
+                "live",
+                "in progress",
+                "in-progress",
+                "playing",
+                "1st",
+                "2nd",
+                "3rd",
+                "4th",
+                "5th",
+                "6th",
+                "7th",
+                "8th",
+                "9th",
+                "ot",
+                "quarter",
+                "period",
+                "half",
+                "top",
+                "bottom",
+            )
+        )
+
+        if not positive:
+            if coded == "I":
+                positive = True
+            elif status_code == "2":
+                positive = True
+
+        if not positive:
+            return False
+
+        today = context.now.date()
+        date_candidates: list[str] = []
+        for key in (
+            "officialDate",
+            "official_date",
+            "gameDate",
+            "game_date",
+            "date",
+        ):
+            value = game.get(key)
+            if isinstance(value, str) and value.strip():
+                date_candidates.append(value.strip())
+
+        for text in date_candidates:
+            candidate = text[:10]
+            try:
+                game_date = _dt.date.fromisoformat(candidate)
+            except ValueError:
+                continue
+            if game_date == today:
+                return True
+            return False
+
+        return True
+
     def register_logo(screen_id: str):
         image = context.logos.get(screen_id)
         if image is None:
@@ -263,7 +380,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             lambda data=hawks.get("live"): draw_live_hawks_game(
                 context.display, data, transition=True
             ),
-            available=bool(hawks.get("live")),
+            available=_is_live_game_today(hawks.get("live")),
         )
         register(
             "hawks next",
@@ -350,7 +467,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 "Cubs Live...",
                 transition=True,
             ),
-            available=bool(cubs.get("live")),
+            available=_is_live_game_today(cubs.get("live")),
         )
         register(
             "cubs next",
@@ -420,7 +537,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 "Sox Live...",
                 transition=True,
             ),
-            available=bool(sox.get("live")),
+            available=_is_live_game_today(sox.get("live")),
         )
         register(
             "sox next",
@@ -477,7 +594,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             lambda data=bulls.get("live"): draw_live_bulls_game(
                 context.display, data, transition=True
             ),
-            available=bool(bulls.get("live")),
+            available=_is_live_game_today(bulls.get("live")),
         )
         register(
             "bulls next",

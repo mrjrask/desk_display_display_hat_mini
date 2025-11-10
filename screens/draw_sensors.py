@@ -17,6 +17,7 @@ import logging
 from typing import Optional, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
+from utils import ScreenImage
 
 # Optional sensor modules: only used if available.
 try:
@@ -45,7 +46,6 @@ CARD_RADIUS = 18
 BG = (10, 16, 24)
 FG = (230, 236, 244)
 SUB = (172, 182, 196)
-ACCENT = (130, 160, 255)
 STAMP = (140, 160, 180)
 
 CARD_OUTLINES = [
@@ -69,7 +69,6 @@ FONT_TITLE = _try_font("DejaVuSans.ttf", 22)
 FONT_SUBTITLE = _try_font("DejaVuSans.ttf", 12)
 FONT_CARD_LABEL = _try_font("DejaVuSans.ttf", 13)
 FONT_CARD_VALUE = _try_font("DejaVuSansMono.ttf", 22)
-FONT_CARD_HINT  = _try_font("DejaVuSans.ttf", 11)
 FONT_STAMP = _try_font("DejaVuSans.ttf", 11)
 
 # ---------- Sensor wrappers ----------
@@ -193,26 +192,23 @@ def render_frame(light_lux: Optional[float],
     round_rect(d, c1, CARD_RADIUS, outline=CARD_OUTLINES[0], width=3)
     label(d, (c1[0]+12, c1[1]+10), "Ambient light", FONT_CARD_LABEL, SUB)
     center_text(d, c1, _fmt(light_lux, "{:.1f}") + " lx", FONT_CARD_VALUE, FG, dy=8)
-    label(d, (c1[0]+12, c1[3]-24), "lower ⟶ higher = brighter", FONT_CARD_HINT, ACCENT)
+    # Guidance text removed for a cleaner presentation
 
     # Card 2: Proximity
     round_rect(d, c2, CARD_RADIUS, outline=CARD_OUTLINES[1], width=3)
     label(d, (c2[0]+12, c2[1]+10), "Proximity", FONT_CARD_LABEL, SUB)
     prox_str = "—" if prox is None else str(prox)
     center_text(d, c2, prox_str, FONT_CARD_VALUE, FG, dy=8)
-    label(d, (c2[0]+12, c2[3]-24), "farther 0 ⟶ higher = closer", FONT_CARD_HINT, ACCENT)
 
     # Card 3: Motion force (accel magnitude)
     round_rect(d, c3, CARD_RADIUS, outline=CARD_OUTLINES[2], width=3)
     label(d, (c3[0]+12, c3[1]+10), "Motion force", FONT_CARD_LABEL, SUB)
     center_text(d, c3, _fmt(accel_g, "{:.2f}") + " g", FONT_CARD_VALUE, FG, dy=8)
-    label(d, (c3[0]+12, c3[3]-24), "≈ |ax,ay,az|", FONT_CARD_HINT, ACCENT)
 
     # Card 4: Rotation (gyro Z)
     round_rect(d, c4, CARD_RADIUS, outline=CARD_OUTLINES[3], width=3)
     label(d, (c4[0]+12, c4[1]+10), "Rotation", FONT_CARD_LABEL, SUB)
     center_text(d, c4, _fmt(rot_z, "{:.1f}") + " °/s", FONT_CARD_VALUE, FG, dy=8)
-    label(d, (c4[0]+12, c4[3]-24), "yaw rate (Z)", FONT_CARD_HINT, ACCENT)
 
     # Stamp
     stamp = time.strftime("Updated %I:%M:%S %p", time.localtime(now_ts)).lstrip("0")
@@ -223,6 +219,15 @@ def render_frame(light_lux: Optional[float],
 
 
 # ---------- Public API for screen runner ----------
+def _extract_display(context):
+    display = getattr(context, "display", None)
+    if display is None and hasattr(context, "image"):
+        candidate = getattr(context, "image")
+        if callable(candidate):
+            display = context
+    return display
+
+
 def draw(context, **kwargs) -> Optional[Image.Image]:
     """
     Main entrypoint called by the screen registry.
@@ -234,9 +239,10 @@ def draw(context, **kwargs) -> Optional[Image.Image]:
     duration_s = 12.0
     interval_s = 0.25  # ~4 Hz
 
-    if hasattr(context, "set_duration"):
+    set_duration = getattr(context, "set_duration", None)
+    if callable(set_duration):
         try:
-            context.set_duration(int(duration_s))
+            set_duration(int(duration_s))
         except Exception:
             pass
 
@@ -245,6 +251,9 @@ def draw(context, **kwargs) -> Optional[Image.Image]:
 
     t_end = time.time() + duration_s
     last_img: Optional[Image.Image] = None
+
+    display = _extract_display(context)
+    present_frame = getattr(context, "present_frame", None)
 
     while True:
         now = time.time()
@@ -257,16 +266,28 @@ def draw(context, **kwargs) -> Optional[Image.Image]:
         img = render_frame(lux, prox, accel_g, rot_z, now)
         last_img = img
 
-        if hasattr(context, "present_frame"):
+        if callable(present_frame):
             try:
-                context.present_frame(img)
+                present_frame(img)
+            except Exception:
+                pass
+        elif display is not None:
+            try:
+                display.image(img)
+                if hasattr(display, "show"):
+                    display.show()
             except Exception:
                 pass
 
-        time.sleep(interval_s)
+        remaining = t_end - time.time()
+        if remaining <= 0:
+            break
+        time.sleep(min(interval_s, max(remaining, 0)))
 
-    if hasattr(context, "present_frame"):
+    if callable(present_frame):
         return None
+    if display is not None and last_img is not None:
+        return ScreenImage(last_img, displayed=True)
     return last_img
 
 
