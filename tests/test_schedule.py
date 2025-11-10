@@ -34,11 +34,12 @@ def test_build_scheduler_from_config():
             "date": 1,
             "travel": 2,
             "inside": 1,
+            "sensors": 1,
         }
     }
     scheduler = build_scheduler(config)
-    assert scheduler.node_count == 3
-    assert scheduler.requested_ids == {"date", "travel", "inside"}
+    assert scheduler.node_count == 4
+    assert scheduler.requested_ids == {"date", "travel", "inside", "sensors"}
 
 
 def test_scheduler_with_alternate_screen():
