@@ -71,6 +71,7 @@ def _sanitize_filename_prefix(name: str) -> str:
 
 
 LOGO_SCREEN_HEIGHT = 148  # 80px base increased by ~85%
+TEAM_LOGO_HEIGHT   = 128  # tuned to match Bears animation scale
 
 
 def load_logo(filename: str, height: int = LOGO_SCREEN_HEIGHT) -> Optional[Image.Image]:
@@ -97,13 +98,13 @@ def build_logo_map() -> Dict[str, Optional[Image.Image]]:
         "verano logo": load_logo("verano.jpg"),
         "bears logo": load_logo("bears.png"),
         "nfl logo": load_logo("nfl/nfl.png"),
-        "hawks logo": load_logo("hawks.jpg"),
+        "hawks logo": load_logo("hawks.jpg", height=TEAM_LOGO_HEIGHT),
         "nhl logo": load_logo("nhl/nhl.png") or load_logo("nhl/NHL.png"),
-        "cubs logo": load_logo("cubs.jpg"),
-        "sox logo": load_logo("sox.jpg"),
+        "cubs logo": load_logo("cubs.jpg", height=TEAM_LOGO_HEIGHT),
+        "sox logo": load_logo("sox.jpg", height=TEAM_LOGO_HEIGHT),
         "mlb logo": load_logo("mlb.jpg"),
         "nba logo": load_logo("nba/NBA.png"),
-        "bulls logo": load_logo("nba/CHI.png"),
+        "bulls logo": load_logo("nba/CHI.png", height=TEAM_LOGO_HEIGHT),
     }
 
 
