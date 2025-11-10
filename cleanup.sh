@@ -10,9 +10,20 @@ echo "⏱  Running cleanup at $(date +%Y%m%d_%H%M%S)…"
 dir="$(dirname "$0")"
 cd "$dir"
 
+# Prefer the repo's virtualenv interpreter when available so optional
+# dependencies such as Pillow are on the path even during shutdown.
+python_bin="python3"
+if [[ -x "${dir}/venv/bin/python" ]]; then
+  python_bin="${dir}/venv/bin/python"
+elif command -v python3 >/dev/null 2>&1; then
+  python_bin="$(command -v python3)"
+elif command -v python >/dev/null 2>&1; then
+  python_bin="$(command -v python)"
+fi
+
 # 1) Clear the display before touching the filesystem
 echo "    → Clearing display…"
-python3 - <<'PY'
+"${python_bin}" - <<'PY'
 import logging
 
 try:
