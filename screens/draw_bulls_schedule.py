@@ -50,6 +50,49 @@ TS_PATH = TIMES_SQUARE_FONT_PATH
 NBA_DIR = NBA_IMAGES_DIR
 TEAM_TRICODE = (NBA_TEAM_TRICODE or "CHI").upper()
 
+NBA_TEAM_NICKNAMES = {
+    "ATL": "Hawks",
+    "BOS": "Celtics",
+    "BKN": "Nets",
+    "BRK": "Nets",
+    "CHA": "Hornets",
+    "CHO": "Hornets",
+    "CHI": "Bulls",
+    "CLE": "Cavaliers",
+    "DAL": "Mavericks",
+    "DEN": "Nuggets",
+    "DET": "Pistons",
+    "GSW": "Warriors",
+    "GS": "Warriors",
+    "HOU": "Rockets",
+    "IND": "Pacers",
+    "LAC": "Clippers",
+    "LAL": "Lakers",
+    "MEM": "Grizzlies",
+    "MIA": "Heat",
+    "MIL": "Bucks",
+    "MIN": "Timberwolves",
+    "NOP": "Pelicans",
+    "NO": "Pelicans",
+    "NYK": "Knicks",
+    "NY": "Knicks",
+    "OKC": "Thunder",
+    "ORL": "Magic",
+    "PHI": "76ers",
+    "PHL": "76ers",
+    "PHX": "Suns",
+    "PHO": "Suns",
+    "POR": "Trail Blazers",
+    "SAC": "Kings",
+    "SAS": "Spurs",
+    "SA": "Spurs",
+    "TOR": "Raptors",
+    "UTA": "Jazz",
+    "UTAH": "Jazz",
+    "WAS": "Wizards",
+    "WSH": "Wizards",
+}
+
 def _ts(size: int) -> ImageFont.ImageFont:
     try:
         return ImageFont.truetype(TS_PATH, size)
@@ -185,6 +228,25 @@ def _str_or_blank(value: object) -> str:
         pass
     return ""
 
+def _strip_location_prefix(name: str, locations: Sequence[str]) -> str:
+    if not name:
+        return ""
+    candidate = name.strip()
+    if not candidate:
+        return ""
+    locs = [loc.strip() for loc in locations if isinstance(loc, str) and loc.strip()]
+    for loc in sorted(set(locs), key=len, reverse=True):
+        loc_lower = loc.lower()
+        cand_lower = candidate.lower()
+        if cand_lower.startswith(loc_lower):
+            idx = len(loc)
+            if idx < len(candidate) and candidate[idx] not in " -–—,:":
+                continue
+            remainder = candidate[len(loc):].lstrip(" -–—,:")
+            if remainder:
+                return remainder
+    return candidate
+
 def _team_entry(game: Dict, side: str) -> Dict[str, Optional[str]]:
     teams = game.get("teams") or {}
     entry = teams.get(side) or {}
@@ -202,12 +264,25 @@ def _team_entry(game: Dict, side: str) -> Dict[str, Optional[str]]:
         "teamAbbrev",
     )
     name_candidates = (
-        "name",
-        "teamName",
-        "fullName",
-        "displayName",
-        "shortName",
         "nickname",
+        "teamNickname",
+        "shortName",
+        "teamShortName",
+        "teamName",
+        "name",
+        "displayName",
+        "fullName",
+        "clubName",
+        "clubNickname",
+    )
+    location_candidates = (
+        "city",
+        "teamCity",
+        "teamLocation",
+        "cityName",
+        "market",
+        "location",
+        "homeCity",
     )
 
     score = entry.get("score")
@@ -228,20 +303,54 @@ def _team_entry(game: Dict, side: str) -> Dict[str, Optional[str]]:
                 tri = str(entry[k])
                 break
 
-    name = ""
-    if team_info and isinstance(team_info, dict):
-        for k in name_candidates:
-            if team_info.get(k):
-                name = str(team_info[k])
-                break
-    if not name:
-        for k in name_candidates:
-            if entry.get(k):
-                name = str(entry.get(k))
-                break
+    names: List[str] = []
+    locations: List[str] = []
 
-    label = (name or tri or "").strip() or "NBA"
-    return {"tri": tri or label, "name": name or label, "label": label, "score": score}
+    if team_info and isinstance(team_info, dict):
+        for key in name_candidates:
+            value = team_info.get(key)
+            if isinstance(value, str) and value.strip():
+                names.append(value.strip())
+        for key in location_candidates:
+            value = team_info.get(key)
+            if isinstance(value, str) and value.strip():
+                locations.append(value.strip())
+
+    for key in name_candidates:
+        value = entry.get(key)
+        if isinstance(value, str) and value.strip():
+            names.append(value.strip())
+
+    for key in location_candidates:
+        value = entry.get(key)
+        if isinstance(value, str) and value.strip():
+            locations.append(value.strip())
+
+    tri_upper = (tri or "").upper()
+    nickname = NBA_TEAM_NICKNAMES.get(tri_upper)
+
+    cleaned_name = ""
+    if not nickname and names:
+        for candidate in names:
+            stripped = _strip_location_prefix(candidate, locations)
+            if stripped and stripped.lower() != candidate.lower():
+                cleaned_name = stripped
+                break
+        if not cleaned_name:
+            for candidate in names:
+                stripped = _strip_location_prefix(candidate, locations)
+                if stripped:
+                    cleaned_name = stripped
+                    break
+
+    label = (nickname or cleaned_name or (names[0] if names else "") or tri or "").strip() or "NBA"
+
+    if not nickname and tri_upper:
+        nickname = NBA_TEAM_NICKNAMES.get(tri_upper)
+
+    name_value = (nickname or cleaned_name or (names[0] if names else label) or label).strip()
+
+    return {"tri": tri or label, "name": name_value, "label": label, "score": score}
 
 def _is_bulls_side(entry: Dict[str, Optional[str]]) -> bool:
     tri = (entry.get("tri") or "").upper()
@@ -302,8 +411,32 @@ def _relative_label(date_obj: Optional[dt.date]) -> str:
     return date_obj.strftime("%b %-d")
 
 def _status_text(game: Dict) -> str:
-    s = _str_or_blank(game.get("gameStatusText") or game.get("status") or game.get("gameStatus"))
-    return s
+    raw_status = game.get("gameStatusText") or game.get("statusText") or game.get("status") or game.get("gameStatus")
+
+    def _from_mapping(status_obj: Dict) -> str:
+        for key in ("detailedState", "shortDetail", "detail", "description", "state", "name", "text"):
+            value = status_obj.get(key)
+            if isinstance(value, dict):
+                nested = _from_mapping(value)
+                if nested:
+                    return nested
+            elif isinstance(value, str):
+                candidate = value.strip()
+                if candidate:
+                    return candidate
+        type_obj = status_obj.get("type")
+        if isinstance(type_obj, dict):
+            return _from_mapping(type_obj)
+        return ""
+
+    if isinstance(raw_status, dict):
+        extracted = _from_mapping(raw_status)
+        if extracted:
+            return extracted
+        # Fall back to generic string conversion if nothing useful found.
+        return ""
+
+    return _str_or_blank(raw_status)
 
 def _format_footer_last(game: Dict) -> str:
     status = _status_text(game).strip()
@@ -465,7 +598,9 @@ def _render_next_game(game: Dict, *, title: str) -> Image.Image:
     footer = _format_footer_next(game)
 
     # Two large logos with '@' between them
-    logo_h = standard_next_game_logo_height(HEIGHT)
+    base_logo_h = standard_next_game_logo_height(HEIGHT)
+    max_logo_h = int(HEIGHT * 0.5) if HEIGHT > 0 else base_logo_h
+    logo_h = min(base_logo_h, max(72, max_logo_h))
     logo_left  = _load_logo_png(away["tri"], logo_h) if away else None
     logo_right = _load_logo_png(home["tri"], logo_h) if home else None
 
@@ -475,12 +610,12 @@ def _render_next_game(game: Dict, *, title: str) -> Image.Image:
 
     lw = logo_left.width if logo_left else 0
     rw = logo_right.width if logo_right else 0
-    at_w = _text_w(draw, at_symbol, at_font)
+    at_w, at_h, at_l, at_t = _measure(draw, at_symbol, at_font)
     total_w = lw + gap_between_logos + at_w + gap_between_logos + rw
 
     x = max(0, (WIDTH - total_w) // 2)
     y2 = y + 6
-    baseline_y = y2 + max(0, (logo_h - _text_h(draw, at_font)) // 2)
+    baseline_y = y2 + max(0, (logo_h - at_h) // 2) - at_t
 
     # Left logo
     cur_x = x

@@ -226,7 +226,7 @@ def _same_game(a, b):
 _BULLS_TEAM_ID = str(NBA_TEAM_ID)
 _BULLS_TRICODE = (NBA_TEAM_TRICODE or "CHI").upper()
 _NBA_LOOKBACK_DAYS = 7
-_NBA_LOOKAHEAD_DAYS = 14
+_NBA_LOOKAHEAD_DAYS = 30
 
 
 def _parse_nba_datetime(value):
@@ -368,10 +368,18 @@ def fetch_bulls_next_game():
 
 def fetch_bulls_next_home_game():
     try:
+        fallback_game = None
         for game in _future_bulls_games(_NBA_LOOKAHEAD_DAYS):
             teams = game.get("teams") or {}
-            if _is_bulls_team(teams.get("home")) and _nba_game_state(game) in {"preview", "scheduled", "pregame"}:
+            if not _is_bulls_team(teams.get("home")):
+                continue
+
+            state = _nba_game_state(game)
+            if state in {"preview", "scheduled", "pregame"}:
                 return game
+            if fallback_game is None and state not in {"final", "postponed"}:
+                fallback_game = game
+        return fallback_game
     except Exception as exc:
         logging.error("Error fetching next Bulls home game: %s", exc)
     return None
