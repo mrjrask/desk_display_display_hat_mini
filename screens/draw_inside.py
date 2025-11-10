@@ -253,7 +253,7 @@ def _probe_pimoroni_bme680(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
     return "Pimoroni BME68X", read
 
 
-def _probe_pimoroni_bme280(_i2c: Any, addresses: Set[int]) -> Optional[SensorProbeResult]:
+def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProbeResult]:
     if addresses and not addresses.intersection({0x76, 0x77}):
         return None
 
@@ -268,26 +268,77 @@ def _probe_pimoroni_bme280(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
         candidate_addresses = (0x76, 0x77)
 
     dev = None
+    successful_addr: Optional[int] = None
     last_error: Optional[Exception] = None
     for addr in candidate_addresses:
         try:
-            dev = bme280.BME280(i2c_addr=addr)  # type: ignore[call-arg]
+            candidate = bme280.BME280(i2c_addr=addr)  # type: ignore[call-arg]
+            try:
+                # Force an initial reading to validate connectivity. The Pimoroni
+                # driver raises a RuntimeError with a helpful message if the bus
+                # is not responding.
+                _ = float(candidate.get_temperature())
+            except Exception as exc:  # pragma: no cover - relies on hardware
+                last_error = exc
+                continue
+            dev = candidate
+            successful_addr = addr
             break
         except Exception as exc:  # pragma: no cover - relies on hardware
             last_error = exc
 
+    fallback_dev = None
     if dev is None:
+        try:
+            import adafruit_bme280  # type: ignore
+        except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
+            last_error = exc
+        else:
+            for addr in candidate_addresses:
+                try:
+                    candidate = adafruit_bme280.Adafruit_BME280_I2C(i2c, address=addr)
+                    # Trigger a measurement; attribute access will perform I2C IO
+                    _ = float(candidate.temperature)
+                except Exception as exc:  # pragma: no cover - relies on hardware
+                    last_error = exc
+                    continue
+                fallback_dev = candidate
+                successful_addr = addr
+                logging.debug(
+                    "draw_inside: falling back to Adafruit BME280 driver for Pimoroni sensor at 0x%02X",
+                    addr,
+                )
+                break
+
+    if dev is None and fallback_dev is None:
         if last_error is not None:
             raise last_error
         raise RuntimeError("Pimoroni BME280 sensor not found")
 
+    addr_for_label = successful_addr if successful_addr is not None else candidate_addresses[0]
+    label = f"Pimoroni BME280 (0x{addr_for_label:02X})"
+
+    if dev is not None:
+
+        def read() -> SensorReadings:
+            temp_f = float(dev.get_temperature()) * 9 / 5 + 32
+            hum = float(dev.get_humidity())
+            pres = float(dev.get_pressure()) * 0.02953
+            return dict(temp_f=temp_f, humidity=hum, pressure_inhg=pres, voc_ohms=None)
+
+        return label, read
+
+    assert fallback_dev is not None
+
     def read() -> SensorReadings:
-        temp_f = float(dev.get_temperature()) * 9 / 5 + 32
-        hum = float(dev.get_humidity())
-        pres = float(dev.get_pressure()) * 0.02953
+        temp_c = float(fallback_dev.temperature)
+        hum_raw = getattr(fallback_dev, "humidity", None)
+        pres_raw = getattr(fallback_dev, "pressure", None)
+        hum = float(hum_raw) if hum_raw is not None else None
+        pres = float(pres_raw) * 0.02953 if pres_raw is not None else None
+        temp_f = temp_c * 9 / 5 + 32
         return dict(temp_f=temp_f, humidity=hum, pressure_inhg=pres, voc_ohms=None)
 
-    label = f"Pimoroni BME280 (0x{getattr(dev, 'i2c_addr', candidate_addresses[0]):02X})"
     return label, read
 
 
