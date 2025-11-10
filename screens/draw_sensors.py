@@ -6,7 +6,7 @@ draw_sensors.py — clean 2×2 sensor dashboard for Pimoroni Multi-Sensor Stick.
 - Shows: Ambient light (lux), Proximity, Motion force (|accel| g), Rotation (gyro Z °/s).
 - Holds the screen for 12 seconds and updates ~4×/sec.
 - If ctx.present_frame(img) exists, pushes live frames during the hold.
-- Otherwise returns the last frame and sets duration to 12s if ctx.set_duration exists.
+- Otherwise returns the last frame and requests a 12s duration if supported.
 """
 
 from __future__ import annotations
@@ -41,20 +41,14 @@ PADDING = 8
 GAP = 8
 CARD_RADIUS = 18
 
-# Colors (ARGB with alpha on the rounded rects looks nice on dark themes)
-BG = (10, 16, 24)               # page background
-FG = (230, 236, 244)            # main foreground text
-SUB = (172, 182, 196)           # subtext
-ACCENT = (130, 160, 255)        # divider/labels
-STAMP = (140, 160, 180)         # updated-at stamp
+# Colors
+BG = (10, 16, 24)
+FG = (230, 236, 244)
+SUB = (172, 182, 196)
+ACCENT = (130, 160, 255)
+STAMP = (140, 160, 180)
 
-CARD_OUTLINES = [
-    (210, 180, 110),  # amber
-    (110, 150, 210),  # blue
-    (160, 120, 200),  # purple
-    (100, 170, 160),  # teal
-]
-CARD_OUTLINES = [(*c, 255) for c in CARD_OUTLINES]
+CARD_OUTLINES = [ (210,180,110,255), (110,150,210,255), (160,120,200,255), (100,170,160,255) ]
 
 TITLE = "Sensor Stick"
 SUBTITLE = "Pimoroni Multi-Sensor (LTR559 • LSM6DS3)"
@@ -81,14 +75,12 @@ class LTR559Reader:
         if ltr559:
             try:
                 self.dev = ltr559.LTR559()
-                # One dummy read to “wake” some units
-                _ = self.dev.get_lux()
+                _ = self.dev.get_lux()  # wake
                 self.ok = True
             except Exception as e:
                 logging.warning(f"draw_sensors: LTR559 init failed: {e}")
 
     def sample(self) -> Tuple[Optional[float], Optional[int]]:
-        """Return (lux, proximity). None values if unavailable this tick."""
         if not self.ok:
             return None, None
         lux = prox = None
@@ -104,39 +96,23 @@ class LTR559Reader:
 
 
 class IMUReader:
-    """
-    Thin wrapper for LSM6D* devices. We read:
-      - accel magnitude in g
-      - gyro z in deg/s
-    """
+    """Read accel magnitude (g) and gyro Z (deg/s) if an LSM6D* is available."""
     def __init__(self):
         self.ok = False
         self.dev = None
         if _IMU:
             try:
-                # Library constructor names differ slightly; try the common one.
                 ctor = getattr(_IMU, "LSM6DSOX", None) or getattr(_IMU, "LSM6DS3", None) or getattr(_IMU, "IMU", None)
-                if ctor is None:
-                    # Some builds expose functions directly (rare)
-                    self.dev = _IMU
-                else:
-                    self.dev = ctor()
+                self.dev = ctor() if callable(ctor) else _IMU
                 self.ok = True
             except Exception as e:
                 logging.warning(f"draw_sensors: IMU init failed: {e}")
 
     def sample(self) -> Tuple[Optional[float], Optional[float]]:
-        """
-        Return (accel_g, gyro_z_dps). None if not available.
-        Tries common attribute/function names across variants.
-        """
         if not self.ok or self.dev is None:
             return None, None
 
         ax = ay = az = gz = None
-
-        # Many libs expose read_accelerometer() -> (x,y,z) in g
-        # and read_gyroscope() -> (x,y,z) in deg/s
         try:
             if hasattr(self.dev, "read_accelerometer"):
                 ax, ay, az = self.dev.read_accelerometer()
@@ -178,10 +154,9 @@ def center_text(draw, box, text, font, fill, dy=0):
     cy = (y0 + y1 - h) // 2 + dy
     draw.text((cx, cy), text, font=font, fill=fill)
 
-def layout_cards() -> Tuple[Tuple[int,int,int,int], ...]:
-    # 2x2 grid with consistent padding
+def layout_cards():
     inner_w = W - 2 * PADDING
-    inner_h = H - 2 * PADDING - 48  # leave room for titles
+    inner_h = H - 2 * PADDING - 48  # room for titles
     col = (inner_w - GAP) // 2
     row = (inner_h - GAP) // 2
     x0 = PADDING
@@ -192,10 +167,8 @@ def layout_cards() -> Tuple[Tuple[int,int,int,int], ...]:
     c4 = (x0 + col + GAP, y0 + row + GAP, x0 + 2*col+GAP, y0 + 2*row+GAP)
     return c1, c2, c3, c4
 
-
 def _fmt(value: Optional[float], fmt: str = "{:.1f}") -> str:
     return "—" if value is None else fmt.format(value)
-
 
 def render_frame(light_lux: Optional[float],
                  prox: Optional[int],
@@ -255,14 +228,12 @@ def draw(context) -> Optional[Image.Image]:
     duration_s = 12.0
     interval_s = 0.25  # ~4 Hz
 
-    # Try to tell the host to keep us visible for 12s
     if hasattr(context, "set_duration"):
         try:
             context.set_duration(int(duration_s))
         except Exception:
             pass
 
-    # Init sensors (best effort)
     light = LTR559Reader()
     imu = IMUReader()
 
@@ -280,19 +251,22 @@ def draw(context) -> Optional[Image.Image]:
         img = render_frame(lux, prox, accel_g, rot_z, now)
         last_img = img
 
-        # If runner supports live presentation, stream the frame
         if hasattr(context, "present_frame"):
             try:
                 context.present_frame(img)
             except Exception:
-                # If present_frame fails once, fall back to returning a frame at the end
                 pass
 
-        # sleep until next tick (keep loop timing reasonable)
         time.sleep(interval_s)
 
-    # If we streamed frames, returning None lets some runners skip a redraw;
-    # otherwise return the last image so the host can display something.
     if hasattr(context, "present_frame"):
         return None
     return last_img
+
+
+# Back-compat for registries importing `draw_sensors`
+def draw_sensors(context) -> Optional[Image.Image]:
+    return draw(context)
+
+
+__all__ = ["draw", "draw_sensors"]
