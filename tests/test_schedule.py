@@ -59,12 +59,37 @@ def test_scheduler_with_alternate_screen():
     assert scheduler.requested_ids == {"date", "travel"}
 
     registry = make_registry({"date": True, "travel": True})
-    sequence = [scheduler.next_available(registry).id for _ in range(6)]
+    sequence = collect_sequence(scheduler, registry, 6)
     assert sequence == [
         "date",
         "travel",
         "date",
         "travel",
+        "date",
+        "travel",
+    ]
+
+
+def test_scheduler_with_multiple_alternates():
+    config = {
+        "screens": {
+            "date": {
+                "frequency": 1,
+                "alt": {"screen": ["travel", "inside"], "frequency": 2},
+            }
+        }
+    }
+
+    scheduler = build_scheduler(config)
+    assert scheduler.requested_ids == {"date", "travel", "inside"}
+
+    registry = make_registry({"date": True, "travel": True, "inside": True})
+    sequence = collect_sequence(scheduler, registry, 6)
+    assert sequence == [
+        "date",
+        "travel",
+        "date",
+        "inside",
         "date",
         "travel",
     ]
@@ -135,6 +160,28 @@ def test_invalid_configuration_shapes():
                     "date": {
                         "frequency": 1,
                         "alt": {"screen": "travel", "frequency": 0},
+                    }
+                }
+            }
+        )
+    with pytest.raises(ValueError):
+        build_scheduler(
+            {
+                "screens": {
+                    "date": {
+                        "frequency": 1,
+                        "alt": {"screen": [], "frequency": 2},
+                    }
+                }
+            }
+        )
+    with pytest.raises(ValueError):
+        build_scheduler(
+            {
+                "screens": {
+                    "date": {
+                        "frequency": 1,
+                        "alt": {"screen": ["travel", 99], "frequency": 2},
                     }
                 }
             }
