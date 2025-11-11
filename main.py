@@ -263,6 +263,7 @@ def _check_control_buttons() -> bool:
     if _shutdown_event.is_set():
         return False
 
+    new_presses = []
     skip_requested = False
 
     for name in _BUTTON_NAMES:
@@ -275,12 +276,24 @@ def _check_control_buttons() -> bool:
         previously_pressed = _BUTTON_STATE[name]
 
         if pressed and not previously_pressed:
-            if _handle_button_down(name):
-                skip_requested = True
+            new_presses.append(name)
         elif not pressed and previously_pressed:
             logging.debug("Button %s released.", name)
 
         _BUTTON_STATE[name] = pressed
+
+    if len(new_presses) > 1:
+        logging.warning(
+            "Ignoring simultaneous button presses (%s); treating as noise.",
+            ", ".join(new_presses),
+        )
+        for name in new_presses:
+            _BUTTON_STATE[name] = False
+        return False
+
+    for name in new_presses:
+        if _handle_button_down(name):
+            skip_requested = True
 
     if skip_requested or _manual_skip_event.is_set():
         return True
