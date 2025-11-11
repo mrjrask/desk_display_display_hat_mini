@@ -88,6 +88,18 @@ def test_next_screen_skips_previous_screen_when_possible(main_module):
     assert entry.id == "inside"
 
 
+def test_next_screen_uses_first_candidate_when_only_avoided_options(main_module):
+    registry = _build_registry("date", "time")
+    main_module.screen_scheduler = _FakeScheduler(["time", "date"])
+    main_module._skip_request_pending = True
+    main_module._last_screen_id = "date"
+
+    entry = main_module._next_screen_from_registry(registry)
+
+    assert entry is not None
+    assert entry.id == "time"
+
+
 def test_next_screen_falls_back_when_no_alternative_available(main_module):
     registry = _build_registry("date")
     main_module.screen_scheduler = _FakeScheduler(["date"])

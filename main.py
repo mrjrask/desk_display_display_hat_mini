@@ -383,6 +383,7 @@ def _next_screen_from_registry(
     if not _skip_request_pending:
         return entry
 
+    first_entry = entry
     avoided = set(_SKIP_BUTTON_SCREEN_IDS)
     if _last_screen_id:
         avoided.add(_last_screen_id)
@@ -401,6 +402,7 @@ def _next_screen_from_registry(
             "Manual skip fallback to '%s' (no alternative available).",
             entry.id,
         )
+        entry = first_entry
 
     _skip_request_pending = False
     return entry
