@@ -45,10 +45,12 @@
     "NHL Standings Overview": {
       "frequency": 2,
       "alt": {
-        "screen": "NHL Standings West", "NHL Standings East",
+        "screen": [
+          "NHL Standings West",
+          "NHL Standings East"
+        ],
         "frequency": 4
-      }
-    },
+      },
     "NHL Standings West": 0,
     "NHL Standings East": 0,
     "cubs logo": 0,
