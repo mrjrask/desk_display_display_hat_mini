@@ -249,6 +249,13 @@ scripts:
 - `GOOGLE_MAPS_API_KEY` for travel-time requests (leave unset to disable that screen).
 - `TRAVEL_TO_HOME_ORIGIN`, `TRAVEL_TO_HOME_DESTINATION`, `TRAVEL_TO_WORK_ORIGIN`,
   and `TRAVEL_TO_WORK_DESTINATION` to override the default travel addresses.
+- `DARK_HOURS` (optional) to blank the display during quiet hours. For example, place the
+  following line in your `.env` file to keep the screen dark overnight Monday–Thursday
+  and all day Friday through Sunday:
+
+  ```env
+  DARK_HOURS="Mon-Thu 19:00-07:00; Fri-Sun 00:00-24:00"
+  ```
 
 You can export the variables in your shell session:
 

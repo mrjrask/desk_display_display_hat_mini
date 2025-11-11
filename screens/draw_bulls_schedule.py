@@ -113,6 +113,8 @@ FONT_TITLE    = FONT_TITLE_SPORTS                # title strip
 FONT_BOTTOM   = FONT_DATE_SPORTS                 # footer (date/time)
 FONT_NEXT_OPP = FONT_TEAM_SPORTS                 # opponent line in "next" cards
 
+BOTTOM_LINE_MARGIN = 3
+
 # Colors
 BACKGROUND_COLOR = (0, 0, 0)
 TEXT_COLOR       = (255, 255, 255)
@@ -465,9 +467,17 @@ def _format_footer_live(game: Dict) -> str:
 def _format_matchup_line(game: Dict) -> str:
     away = _team_entry(game, "away")
     home = _team_entry(game, "home")
-    pre = "Bulls vs." if _is_bulls_side(home) else "Bulls at"
-    opp  = (away.get("name") if _is_bulls_side(home) else home.get("name")) or ""
-    return f"{pre} {opp}".strip()
+    bulls_home = _is_bulls_side(home)
+    opponent = away if bulls_home else home
+    opponent_name = _str_or_blank(
+        opponent.get("name")
+        or opponent.get("label")
+        or opponent.get("tri")
+    )
+    if not opponent_name:
+        return ""
+    prefix = "vs." if bulls_home else "@"
+    return f"{prefix} {opponent_name}".strip()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Drawing primitives
@@ -563,7 +573,9 @@ def _render_scoreboard(game: Dict, *, title: str, footer: Optional[str] = "", st
     home = _team_entry(game, "home")
 
     bottom_line = footer or ""
-    bottom_reserved = _text_h(draw, FONT_BOTTOM) + 2 if bottom_line else 0
+    bottom_reserved = (
+        _text_h(draw, FONT_BOTTOM) + BOTTOM_LINE_MARGIN if bottom_line else 0
+    )
 
     rows = (
         {"tri": away["tri"], "label": away["label"], "score": away["score"]},
@@ -572,7 +584,7 @@ def _render_scoreboard(game: Dict, *, title: str, footer: Optional[str] = "", st
     _draw_scoreboard_table(img, draw, y, rows, bottom_reserved_px=bottom_reserved)
 
     if bottom_line:
-        by = HEIGHT - _text_h(draw, FONT_BOTTOM) - 1
+        by = HEIGHT - _text_h(draw, FONT_BOTTOM) - BOTTOM_LINE_MARGIN
         _center_text(draw, by, bottom_line, FONT_BOTTOM, fill=TEXT_COLOR)
 
     return img
@@ -633,7 +645,7 @@ def _render_next_game(game: Dict, *, title: str) -> Image.Image:
         img.paste(logo_right, (cur_x, y2), logo_right)
 
     if footer:
-        by = HEIGHT - _text_h(draw, FONT_BOTTOM) - 1
+        by = HEIGHT - _text_h(draw, FONT_BOTTOM) - BOTTOM_LINE_MARGIN
         _center_text(draw, by, footer, FONT_BOTTOM, fill=TEXT_COLOR)
 
     return img

@@ -46,6 +46,8 @@ from config import (
     ENABLE_WIFI_MONITOR,
     CENTRAL_TIME,
     TRAVEL_ACTIVE_WINDOW,
+    DARK_HOURS_ENABLED,
+    is_within_dark_hours,
 )
 from utils import (
     Display,
@@ -107,6 +109,8 @@ _BUTTON_NAMES = ("A", "B", "X", "Y")
 _BUTTON_STATE = {name: False for name in _BUTTON_NAMES}
 _manual_skip_event = threading.Event()
 _button_monitor_thread: Optional[threading.Thread] = None
+
+_dark_hours_active = False
 
 BRIGHTNESS_STEP = 0.1
 
@@ -671,7 +675,7 @@ loop_count = 0
 _travel_schedule_state: Optional[str] = None
 
 def main_loop():
-    global loop_count, _travel_schedule_state, _last_screen_id
+    global loop_count, _travel_schedule_state, _last_screen_id, _dark_hours_active
 
     refresh_schedule_if_needed(force=True)
 
@@ -685,6 +689,34 @@ def main_loop():
 
             if _check_control_buttons():
                 continue
+
+            current_time = datetime.datetime.now(CENTRAL_TIME)
+
+            if DARK_HOURS_ENABLED and is_within_dark_hours(current_time):
+                if not _dark_hours_active:
+                    logging.info("🌙 Entering configured dark hours; blanking display.")
+                    try:
+                        resume_display_updates()
+                        clear_display(display)
+                        display.show()
+                    except Exception:
+                        pass
+                    suspend_display_updates()
+                _dark_hours_active = True
+
+                if _shutdown_event.is_set():
+                    break
+
+                if _wait_with_button_checks(SCREEN_DELAY):
+                    continue
+
+                gc.collect()
+                continue
+
+            if _dark_hours_active:
+                logging.info("🌅 Leaving dark hours; resuming screen rotation.")
+                _dark_hours_active = False
+                resume_display_updates()
 
             # Wi-Fi outage handling
             if ENABLE_WIFI_MONITOR:

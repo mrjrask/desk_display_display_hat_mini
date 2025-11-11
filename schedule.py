@@ -20,8 +20,17 @@ KNOWN_SCREENS.add("sensors")
 
 @dataclass
 class _AlternateSchedule:
-    screen_id: str
+    screen_ids: tuple[str, ...]
     frequency: int
+    cursor: int = 0
+
+    def next_screen_id(self) -> str:
+        if not self.screen_ids:
+            raise ValueError("Alternate schedule requires at least one screen id")
+
+        screen_id = self.screen_ids[self.cursor]
+        self.cursor = (self.cursor + 1) % len(self.screen_ids)
+        return screen_id
 
 
 @dataclass
@@ -43,7 +52,7 @@ class ScreenScheduler:
         for entry in self._entries:
             requested.add(entry.screen_id)
             if entry.alternate is not None:
-                requested.add(entry.alternate.screen_id)
+                requested.update(entry.alternate.screen_ids)
         self._requested = requested
 
     @property
@@ -82,9 +91,12 @@ class ScreenScheduler:
             candidate_id = entry.screen_id
             if entry.alternate and entry.alternate.frequency > 0:
                 if entry.play_count % entry.alternate.frequency == 0:
-                    alt_def = registry.get(entry.alternate.screen_id)
-                    if alt_def and alt_def.available:
-                        return alt_def
+                    alternate = entry.alternate
+                    for _ in range(len(alternate.screen_ids)):
+                        alt_id = alternate.next_screen_id()
+                        alt_def = registry.get(alt_id)
+                        if alt_def and alt_def.available:
+                            return alt_def
 
             definition = registry.get(candidate_id)
             if definition and definition.available:
@@ -133,16 +145,35 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
                     raise ValueError(
                         f"Alternate configuration for '{screen_id}' must be an object"
                     )
-                alt_screen = alt_spec.get("screen")
+                alt_screen_value = alt_spec.get("screen")
                 alt_frequency = alt_spec.get("frequency")
-                if not isinstance(alt_screen, str):
+
+                if isinstance(alt_screen_value, str):
+                    alt_screen_ids = [alt_screen_value]
+                elif isinstance(alt_screen_value, (list, tuple)):
+                    alt_screen_ids = []
+                    for alt_item in alt_screen_value:
+                        if not isinstance(alt_item, str):
+                            raise ValueError(
+                                f"Alternate screen ids for '{screen_id}' must be strings"
+                            )
+                        alt_screen_ids.append(alt_item)
+                else:
                     raise ValueError(
-                        f"Alternate screen id for '{screen_id}' must be a string"
+                        f"Alternate screen id for '{screen_id}' must be a string or list of strings"
                     )
-                if alt_screen not in KNOWN_SCREENS:
+
+                if not alt_screen_ids:
                     raise ValueError(
-                        f"Unknown alternate screen id '{alt_screen}' for '{screen_id}'"
+                        f"Alternate screen list for '{screen_id}' cannot be empty"
                     )
+
+                for alt_screen in alt_screen_ids:
+                    if alt_screen not in KNOWN_SCREENS:
+                        raise ValueError(
+                            f"Unknown alternate screen id '{alt_screen}' for '{screen_id}'"
+                        )
+
                 try:
                     alt_frequency_int = int(alt_frequency)
                 except (TypeError, ValueError) as exc:
@@ -153,7 +184,7 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
                     raise ValueError(
                         f"Alternate frequency for '{screen_id}' must be greater than zero"
                     )
-                alternate = _AlternateSchedule(alt_screen, alt_frequency_int)
+                alternate = _AlternateSchedule(tuple(alt_screen_ids), alt_frequency_int)
         else:
             try:
                 frequency = int(raw)
