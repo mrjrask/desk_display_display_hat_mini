@@ -42,9 +42,15 @@
     "bulls next home": 1,
     "nhl logo": 0,
     "NHL Scoreboard": 1,
-    "NHL Standings Overview": 2,
-    "NHL Standings West": 3,
-    "NHL Standings East": 3,
+    "NHL Standings Overview": {
+      "frequency": 2,
+      "alt": {
+        "screen": "NHL Standings West" & "NHL Standings East",
+        "frequency": 4
+      }
+    },
+    "NHL Standings West": 0,
+    "NHL Standings East": 0,
     "cubs logo": 0,
     "cubs stand1": 0,
     "cubs stand2": 0,
