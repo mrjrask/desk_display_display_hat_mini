@@ -51,6 +51,13 @@ except (ImportError, RuntimeError) as _displayhat_exc:  # pragma: no cover - har
 else:  # pragma: no cover - hardware import
     _DISPLAY_HAT_ERROR = None
 
+_FORCE_HEADLESS = os.environ.get("DESK_DISPLAY_FORCE_HEADLESS", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+
 _ACTIVE_DISPLAY: Optional["Display"] = None
 _GITHUB_LED_ANIMATOR: Optional["_GithubLedAnimator"] = None
 _GITHUB_LED_STATE: bool = False
@@ -124,7 +131,11 @@ class Display:
         self._backlight_level = 1.0
         self._backlight_lock = threading.Lock()
 
-        if DisplayHATMini is None:  # pragma: no cover - hardware import
+        if _FORCE_HEADLESS:
+            logging.info(
+                "Display initialization skipped; running headless via DESK_DISPLAY_FORCE_HEADLESS."
+            )
+        elif DisplayHATMini is None:  # pragma: no cover - hardware import
             if _DISPLAY_HAT_ERROR:
                 logging.warning(
                     "Display HAT Mini driver unavailable; running headless (%s)",
