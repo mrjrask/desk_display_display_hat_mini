@@ -352,7 +352,36 @@ def _team_entry(game: Dict, side: str) -> Dict[str, Optional[str]]:
 
     name_value = (nickname or cleaned_name or (names[0] if names else label) or label).strip()
 
-    return {"tri": tri or label, "name": name_value, "label": label, "score": score}
+    location_value = ""
+    if locations:
+        location_value = locations[0]
+    elif names and cleaned_name:
+        # Try to derive the location from the first full name entry.
+        for candidate in names:
+            candidate_clean = candidate.strip()
+            idx = candidate_clean.lower().find(cleaned_name.lower())
+            if idx > 0:
+                prefix = candidate_clean[:idx].strip(" -–—,:")
+                if prefix:
+                    location_value = prefix
+                    break
+
+    full_name = ""
+    if location_value and cleaned_name:
+        full_name = f"{location_value} {cleaned_name}".strip()
+    elif names:
+        full_name = names[0].strip()
+    else:
+        full_name = label
+
+    return {
+        "tri": tri or label,
+        "name": name_value,
+        "label": label,
+        "score": score,
+        "location": location_value,
+        "full_name": full_name,
+    }
 
 def _is_bulls_side(entry: Dict[str, Optional[str]]) -> bool:
     tri = (entry.get("tri") or "").upper()
@@ -469,15 +498,23 @@ def _format_matchup_line(game: Dict) -> str:
     home = _team_entry(game, "home")
     bulls_home = _is_bulls_side(home)
     opponent = away if bulls_home else home
-    opponent_name = _str_or_blank(
-        opponent.get("name")
-        or opponent.get("label")
-        or opponent.get("tri")
-    )
-    if not opponent_name:
+    if not opponent:
+        return ""
+    opponent_city = _str_or_blank(opponent.get("location"))
+    opponent_name = _str_or_blank(opponent.get("name"))
+    opponent_full = _str_or_blank(opponent.get("full_name"))
+
+    if opponent_city and opponent_name:
+        opponent_display = f"{opponent_city} {opponent_name}".strip()
+    elif opponent_full:
+        opponent_display = opponent_full
+    else:
+        opponent_display = _str_or_blank(opponent.get("label") or opponent.get("tri"))
+
+    if not opponent_display:
         return ""
     prefix = "vs." if bulls_home else "@"
-    return f"{prefix} {opponent_name}".strip()
+    return f"{prefix} {opponent_display}".strip()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Drawing primitives
