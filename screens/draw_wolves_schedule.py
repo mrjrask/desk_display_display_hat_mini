@@ -188,6 +188,7 @@ def draw_sports_screen_wolves(display, game, transition: bool = False):
             title="Next Wolves game:",
             transition=transition,
             log_label="wolves next",
+            logo_scale=0.8,
         )
 
 
@@ -203,4 +204,5 @@ def draw_wolves_next_home_game(display, game, transition: bool = False):
             title="Next at home...",
             transition=transition,
             log_label="wolves next home",
+            logo_scale=0.8,
         )
