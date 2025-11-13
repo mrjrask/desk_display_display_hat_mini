@@ -7,6 +7,7 @@ with resilient retries via a shared requests.Session.
 """
 
 import datetime
+import json
 import logging
 import os
 from typing import Dict, List, Optional
@@ -704,6 +705,29 @@ def fetch_sox_standings():
 _AHL_SEASON_CACHE: Optional[str] = None
 
 
+def _sanitize_ahl_payload(raw_text: str) -> str:
+    """Remove common HockeyTech JSON padding and whitespace guards."""
+    if not isinstance(raw_text, str):
+        return ""
+
+    cleaned = raw_text.lstrip("\ufeff\r\n\t ")
+
+    # Some HockeyTech responses start with "while(1);" or similar guards.
+    guards = ("while(1);", "while(1){", "while(1){;", "while(1) {", "while(1) { }")
+    for guard in guards:
+        if cleaned.startswith(guard):
+            cleaned = cleaned[len(guard) :].lstrip(";\r\n\t ")
+            cleaned = cleaned.lstrip("\ufeff")
+            break
+
+    if cleaned.startswith("/*"):
+        end = cleaned.find("*/")
+        if end != -1:
+            cleaned = cleaned[end + 2 :].lstrip()
+
+    return cleaned
+
+
 def _ahl_request(view: str, **extra_params):
     if not AHL_API_KEY:
         logging.warning("AHL API key missing; cannot fetch Wolves schedule")
@@ -723,11 +747,37 @@ def _ahl_request(view: str, **extra_params):
         if value is not None:
             params[key] = value
 
-    headers = {"User-Agent": "desk-display/1.0"}
+    headers = {
+        "User-Agent": "desk-display/1.0",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://theahl.com/stats/",
+        "X-Requested-With": "XMLHttpRequest",
+    }
     try:
         resp = _session.get(AHL_API_BASE_URL, params=params, headers=headers, timeout=10)
         resp.raise_for_status()
-        return resp.json()
+        payload = _sanitize_ahl_payload(resp.text)
+        if not payload:
+            logging.error(
+                "Empty response when fetching AHL %s data (status %s)",
+                view,
+                resp.status_code,
+            )
+            return None
+        try:
+            return json.loads(payload)
+        except json.JSONDecodeError as exc:  # pragma: no cover - depends on upstream
+            snippet = payload[:200].replace("\n", " ").replace("\r", " ")
+            logging.error(
+                "Error parsing AHL %s data (status %s, content-type %s): %s",  # noqa: B950
+                view,
+                resp.status_code,
+                resp.headers.get("content-type"),
+                snippet,
+            )
+            logging.debug("Full AHL %s payload: %s", view, payload)
+            return None
     except Exception as exc:
         logging.error("Error fetching AHL %s data: %s", view, exc)
         return None
