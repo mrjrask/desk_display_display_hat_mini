@@ -110,26 +110,6 @@ def _wolves_led_override(game: Dict) -> Optional[Tuple[float, float, float]]:
     return (LED_INDICATOR_LEVEL, 0.0, 0.0)
 
 
-def _wolves_live_dateline(game: Dict) -> str:
-    status = game.get("status") or {}
-    detail = str(status.get("detail") or status.get("note") or "").strip()
-    if detail:
-        return detail
-    period = str(status.get("period") or "").strip()
-    clock = str(status.get("clock") or "").strip()
-    if period and clock:
-        return f"{period} {clock}".strip()
-    return period or clock
-
-
-def _wolves_live_inline(game: Dict) -> str:
-    status = game.get("status") or {}
-    period = str(status.get("period") or "").strip()
-    clock = str(status.get("clock") or "").strip()
-    parts = [p for p in (period, clock) if p]
-    return " ".join(parts)
-
-
 def _prepare_next_payload(game: Dict) -> Optional[Dict]:
     if not isinstance(game, dict):
         return None
@@ -194,53 +174,6 @@ def draw_last_wolves_game(display, game, transition: bool = False):
 
     led_override = _wolves_led_override(game)
     return _hawks._push(display, img, transition=transition, led_override=led_override)
-
-
-def draw_live_wolves_game(display, game, transition: bool = False):
-    if not isinstance(game, dict):
-        logging.info("wolves live: no active game")
-        return None
-
-    img = Image.new("RGB", (WIDTH, HEIGHT), "black")
-    draw = ImageDraw.Draw(img)
-
-    dateline = _wolves_live_dateline(game)
-
-    y = 2
-    y += _hawks._draw_title_line(img, draw, y, "Wolves Live:", _hawks.FONT_TITLE)
-
-    if not dateline:
-        inline = _wolves_live_inline(game)
-        if inline:
-            _hawks._center_text(draw, y, inline, _hawks.FONT_SMALL)
-            y += _hawks._text_h(draw, _hawks.FONT_SMALL)
-
-    reserve = (_hawks._text_h(draw, _hawks.FONT_BOTTOM) + 2) if dateline else 0
-    away_tri, away_score, away_sog, home_tri, home_score, home_sog = _scoreboard_values(game)
-    away_payload = _team_payload(game.get("away"))
-    home_payload = _team_payload(game.get("home"))
-
-    with _wolves_assets():
-        _hawks._draw_scoreboard(
-            img,
-            draw,
-            y,
-            away_tri,
-            away_score,
-            away_sog,
-            home_tri,
-            home_score,
-            home_sog,
-            away_label=_hawks._team_scoreboard_label(away_payload, away_tri),
-            home_label=_hawks._team_scoreboard_label(home_payload, home_tri),
-            put_sog_label=True,
-            bottom_reserved_px=reserve,
-        )
-
-    if dateline:
-        _hawks._center_bottom_text(draw, dateline, _hawks.FONT_BOTTOM)
-
-    return _hawks._push(display, img, transition=transition)
 
 
 def draw_sports_screen_wolves(display, game, transition: bool = False):

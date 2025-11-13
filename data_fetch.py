@@ -10,6 +10,7 @@ import datetime
 import json
 import logging
 import os
+import re
 import time
 from typing import Any, Dict, List, Optional
 
@@ -38,9 +39,11 @@ from config import (
     AHL_API_KEY,
     AHL_CLIENT_CODE,
     AHL_LEAGUE_ID,
+    AHL_SCHEDULE_ICS_URL,
     AHL_SEASON_ID,
     AHL_SITE_ID,
     AHL_TEAM_ID,
+    AHL_TEAM_NAME,
     AHL_TEAM_TRICODE,
 )
 
@@ -1209,6 +1212,255 @@ def _classify_wolves_games(games: List[Dict]) -> Dict[str, Optional[Dict]]:
     }
 
 
+def _wolves_schedule_url() -> Optional[str]:
+    url = (AHL_SCHEDULE_ICS_URL or "").strip()
+    if not url:
+        return None
+    if url.startswith("webcal://"):
+        return "https://" + url[len("webcal://") :].lstrip("/")
+    return url
+
+
+def _unfold_ics_lines(text: str) -> List[str]:
+    lines: List[str] = []
+    buffer: List[str] = []
+    for raw_line in text.splitlines():
+        if raw_line.startswith((" ", "\t")) and buffer:
+            buffer[-1] += raw_line[1:]
+        else:
+            buffer.append(raw_line.rstrip())
+    lines.extend(buffer)
+    return lines
+
+
+def _parse_ics_events(text: str) -> List[Dict[str, Any]]:
+    events: List[Dict[str, Any]] = []
+    current: Dict[str, Any] = {}
+    params: Dict[str, Dict[str, str]] = {}
+    for line in _unfold_ics_lines(text):
+        if not line:
+            continue
+        upper = line.upper()
+        if upper == "BEGIN:VEVENT":
+            current = {}
+            params = {}
+            continue
+        if upper == "END:VEVENT":
+            if current:
+                if params:
+                    current["__params__"] = params
+                events.append(current)
+            current = {}
+            params = {}
+            continue
+        if ":" not in line:
+            continue
+        key_part, value = line.split(":", 1)
+        key_bits = key_part.split(";")
+        key = key_bits[0].upper()
+        param_map: Dict[str, str] = {}
+        for bit in key_bits[1:]:
+            if "=" in bit:
+                p_key, p_val = bit.split("=", 1)
+                param_map[p_key.upper()] = p_val
+        if param_map:
+            params[key] = param_map
+        current[key] = value
+    return events
+
+
+def _parse_ics_datetime(value: Optional[str], meta: Dict[str, str]) -> Optional[datetime.datetime]:
+    if not value:
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    tzid = meta.get("TZID") if isinstance(meta, dict) else None
+    val_type = (meta.get("VALUE") or "").upper() if isinstance(meta, dict) else ""
+    fmts = ["%Y%m%dT%H%M%SZ", "%Y%m%dT%H%M%S", "%Y%m%dT%H%M"]
+    if val_type == "DATE" or ("T" not in text and len(text) == 8):
+        fmts = ["%Y%m%d"]
+    last_error: Optional[Exception] = None
+    for fmt in fmts:
+        try:
+            dt = datetime.datetime.strptime(text, fmt)
+            if fmt.endswith("Z") or text.endswith("Z"):
+                return pytz.UTC.localize(dt)
+            if tzid:
+                try:
+                    tz = pytz.timezone(tzid)
+                except Exception:
+                    tz = CENTRAL_TIME
+                return tz.localize(dt)
+            return CENTRAL_TIME.localize(dt)
+        except Exception as exc:
+            last_error = exc
+            continue
+    logging.debug("Unable to parse ICS datetime '%s': %s", text, last_error)
+    return None
+
+
+def _derive_team_abbr(name: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9 ]+", "", name or "").strip()
+    if not cleaned:
+        return "TBD"
+    parts = cleaned.split()
+    if len(parts) == 1:
+        return parts[0][:3].upper()
+    abbr = "".join(part[0] for part in parts[:3])
+    return (abbr or cleaned[:3]).upper()
+
+
+def _nickname_from_name(name: str) -> str:
+    cleaned = re.sub(r"\s+", " ", name or "").strip()
+    if not cleaned:
+        return ""
+    parts = cleaned.split(" ")
+    if len(parts) == 1:
+        return cleaned
+    return parts[-1]
+
+
+def _ics_team_payload(name: str, is_wolves: bool) -> Dict[str, Any]:
+    if is_wolves:
+        abbr = (AHL_TEAM_TRICODE or _derive_team_abbr(name)).upper()
+        team_id: Optional[int] = AHL_TEAM_ID
+    else:
+        abbr = _derive_team_abbr(name)
+        team_id = None
+    return {
+        "id": team_id,
+        "abbr": abbr,
+        "name": name,
+        "nickname": _nickname_from_name(name),
+        "score": None,
+        "shots": None,
+    }
+
+
+def _split_wolves_summary(summary: str) -> Optional[Dict[str, Any]]:
+    if not summary:
+        return None
+    clean = summary.strip()
+    if not clean:
+        return None
+    wolves = (AHL_TEAM_NAME or "Chicago Wolves").lower()
+    patterns = [
+        (r"(.+?)\s+at\s+(.+)", False),
+        (r"(.+?)\s+@\s+(.+)", False),
+        (r"(.+?)\s+vs\.?\s+(.+)", True),
+        (r"(.+?)\s+v\.?\s+(.+)", True),
+    ]
+    for pattern, first_is_home in patterns:
+        match = re.match(pattern, clean, re.IGNORECASE)
+        if not match:
+            continue
+        first = match.group(1).strip()
+        second = match.group(2).strip()
+        if first_is_home:
+            home_name, away_name = first, second
+        else:
+            away_name, home_name = first, second
+        home_lower = home_name.lower()
+        away_lower = away_name.lower()
+        wolves_home = wolves in home_lower
+        wolves_away = wolves in away_lower
+        if not (wolves_home or wolves_away):
+            continue
+        return {
+            "home_name": home_name,
+            "away_name": away_name,
+            "wolves_is_home": wolves_home,
+            "wolves_is_away": wolves_away,
+        }
+    return None
+
+
+def _normalize_wolves_ics_game(event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    if event.get("STATUS", "CONFIRMED").upper() == "CANCELLED":
+        return None
+    params = (event.get("__params__") or {}).get("DTSTART") or {}
+    start = _parse_ics_datetime(event.get("DTSTART"), params)
+    if not start:
+        return None
+    summary = event.get("SUMMARY")
+    parsed = _split_wolves_summary(summary or "")
+    if not parsed:
+        return None
+    home_name = parsed["home_name"]
+    away_name = parsed["away_name"]
+    wolves_is_home = bool(parsed.get("wolves_is_home"))
+    wolves_is_away = bool(parsed.get("wolves_is_away"))
+    if not (wolves_is_home or wolves_is_away):
+        return None
+    home_team = _ics_team_payload(home_name, wolves_is_home)
+    away_team = _ics_team_payload(away_name, wolves_is_away)
+    start_utc = start.astimezone(pytz.UTC)
+    start_central = start.astimezone(CENTRAL_TIME)
+    return {
+        "game_id": event.get("UID"),
+        "home": home_team,
+        "away": away_team,
+        "start": start,
+        "start_utc": start_utc,
+        "start_iso": start_utc.isoformat(),
+        "start_time_central": _format_local_time(start_central),
+        "official_date": start.date().isoformat(),
+        "status": {
+            "state": "FUT",
+            "detail": "Scheduled",
+            "period": None,
+            "clock": None,
+            "note": None,
+        },
+        "venue": event.get("LOCATION"),
+        "is_home": wolves_is_home,
+    }
+
+
+def _fetch_wolves_ics_games() -> List[Dict[str, Any]]:
+    url = _wolves_schedule_url()
+    if not url:
+        logging.warning("AHL schedule ICS URL not configured")
+        return []
+    headers = {
+        "User-Agent": "desk-display/1.0",
+        "Accept": "text/calendar, text/plain;q=0.9, */*;q=0.8",
+        "Referer": "https://stanzacal.com/",
+    }
+    try:
+        resp = _session.get(url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        events = _parse_ics_events(resp.text)
+    except Exception as exc:
+        logging.error("Error fetching Wolves ICS schedule: %s", exc)
+        return []
+    games: List[Dict[str, Any]] = []
+    for event in events:
+        normalized = _normalize_wolves_ics_game(event)
+        if normalized:
+            games.append(normalized)
+    games.sort(key=lambda g: g.get("start_utc"))
+    return games
+
+
+def _classify_wolves_ics_games(games: List[Dict[str, Any]]) -> Dict[str, Optional[Dict]]:
+    now = datetime.datetime.now(pytz.UTC)
+    upcoming: List[Dict[str, Any]] = []
+    for game in games:
+        start = game.get("start_utc")
+        if isinstance(start, datetime.datetime) and start >= now - datetime.timedelta(hours=1):
+            upcoming.append(game)
+    upcoming.sort(key=lambda g: g.get("start_utc"))
+    next_game = upcoming[0] if upcoming else None
+    next_home = None
+    for game in upcoming:
+        if game.get("is_home"):
+            next_home = game
+            break
+    return {"next_game": next_game, "next_home_game": next_home}
+
+
 _WOLVES_CACHE_TTL = 15 * 60  # seconds
 _wolves_cache: Dict[str, Any] = {"expires": 0.0, "data": None}
 
@@ -1225,25 +1477,35 @@ def fetch_wolves_games(force_refresh: bool = False) -> Dict[str, Optional[Dict]]
     ):
         return cached
 
+    last_game: Optional[Dict] = None
+    live_game: Optional[Dict] = None
+    next_game: Optional[Dict] = None
+    next_home: Optional[Dict] = None
+
     try:
         games = _fetch_ahl_schedule()
-        if not games:
-            payload = {
-                "last_game": None,
-                "live_game": None,
-                "next_game": None,
-                "next_home_game": None,
-            }
-        else:
-            payload = _classify_wolves_games(games)
-        _wolves_cache["data"] = payload
-        _wolves_cache["expires"] = now + _WOLVES_CACHE_TTL
-        return payload
+        if games:
+            classified = _classify_wolves_games(games)
+            last_game = classified.get("last_game")
+            live_game = classified.get("live_game")
     except Exception as exc:
-        logging.error("Error fetching Chicago Wolves data: %s", exc)
-        return {
-            "last_game": None,
-            "live_game": None,
-            "next_game": None,
-            "next_home_game": None,
-        }
+        logging.error("Error fetching Chicago Wolves score data: %s", exc)
+
+    try:
+        ics_games = _fetch_wolves_ics_games()
+        if ics_games:
+            classified_ics = _classify_wolves_ics_games(ics_games)
+            next_game = classified_ics.get("next_game")
+            next_home = classified_ics.get("next_home_game")
+    except Exception as exc:
+        logging.error("Error parsing Wolves ICS schedule: %s", exc)
+
+    payload = {
+        "last_game": last_game,
+        "live_game": live_game,
+        "next_game": next_game,
+        "next_home_game": next_home,
+    }
+    _wolves_cache["data"] = payload
+    _wolves_cache["expires"] = now + _WOLVES_CACHE_TTL
+    return payload
