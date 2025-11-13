@@ -13,19 +13,19 @@
     "bears logo": 1,
     "bears next": 1,
     "nfl logo": 0,
-    "NFL Scoreboard": 1,
+    "NFL Scoreboard": 3,
     "NFL Overview NFC": {
-      "frequency": 2,
+      "frequency": 3,
       "alt": {
         "screen": "NFL Standings NFC",
-        "frequency": 4
+        "frequency": 6
       }
     },
     "NFL Overview AFC": {
-      "frequency": 2,
+      "frequency": 3,
       "alt": {
         "screen": "NFL Standings AFC",
-        "frequency": 4
+        "frequency": 6
       }
     },
     "NFL Standings NFC": 0,
