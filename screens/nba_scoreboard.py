@@ -944,7 +944,7 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
             if response.status_code == 403:
                 now = datetime.datetime.now()
                 if not _last_forbidden or (now - _last_forbidden) >= _FORBIDDEN_CACHE_TTL:
-                    logging.warning(
+                    logging.debug(
                         "NBA scoreboard returned HTTP 403 for %s; suppressing further attempts for %s",
                         url,
                         _FORBIDDEN_CACHE_TTL,
