@@ -7,7 +7,7 @@ SCREEN_IDS = [
     "verano logo", "vrnof", "travel",
     "bears logo", "bears next", "nfl logo", "NFL Scoreboard", "NFL Overview NFC", "NFL Overview AFC", "NFL Standings NFC", "NFL Standings AFC", "nba logo", "NBA Scoreboard", "bulls logo", "bulls last", "bulls live", "bulls next", "bulls next home",
     "hawks logo", "hawks last", "hawks live", "hawks next", "hawks next home", "nhl logo", "NHL Scoreboard", "NHL Standings Overview", "NHL Standings West", "NHL Standings East",
-    "wolves logo", "wolves last", "wolves live", "wolves next", "wolves next home",
+    "wolves logo", "wolves last", "wolves next", "wolves next home",
     "cubs logo", "cubs stand1", "cubs stand2",
     "cubs last", "cubs result", "cubs live", "cubs next", "cubs next home",
     "sox logo", "sox stand1", "sox stand2",

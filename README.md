@@ -141,7 +141,7 @@ Most runtime behavior is controlled in `config.py`:
 - **Weather:** `ENABLE_WEATHER`, `LATITUDE/LONGITUDE`
 - **Travel:** `TRAVEL_MODE` (`to_home` or `to_work`)
 - **MLB:** constants and timezone `CENTRAL_TIME`
-- **AHL:** `AHL_TEAM_ID`, `AHL_TEAM_TRICODE`, and HockeyTech feed overrides (API base/key/site). Wolves screens automatically cache schedule data and fall back to the modulekit feed when the primary endpoint replies with "Invalid key".
+- **AHL:** `AHL_TEAM_ID`, `AHL_TEAM_TRICODE`, HockeyTech feed overrides (API base/key/site), and `AHL_SCHEDULE_ICS_URL`. Wolves last-game cards keep using HockeyTech scores while the next/next-home cards now read from the published Stanza ICS schedule URL (defaults to the Chicago Wolves feed).
 - **Fonts:** make sure `fonts/` contains the TTFs above
 
 ### Screen sequencing
