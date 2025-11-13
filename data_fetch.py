@@ -703,6 +703,24 @@ def fetch_sox_standings():
 # AHL — Chicago Wolves schedule + scores (HockeyTech / AHL stats feed)
 # -----------------------------------------------------------------------------
 _AHL_SEASON_CACHE: Optional[str] = None
+_AHL_DEFAULT_BASE = "https://lscluster.hockeytech.com/feed/index.php"
+
+
+def _ahl_endpoint() -> str:
+    base = (AHL_API_BASE_URL or "").strip()
+    if not base:
+        return _AHL_DEFAULT_BASE
+
+    if not base.startswith(("http://", "https://")):
+        base = f"https://{base.lstrip('/')}"
+
+    if "?" in base or base.endswith(".php"):
+        return base
+
+    trimmed = base.rstrip("/")
+    if trimmed.endswith("/feed"):
+        return f"{trimmed}/index.php"
+    return f"{trimmed}/index.php"
 
 
 def _sanitize_ahl_payload(raw_text: str) -> str:
@@ -729,23 +747,25 @@ def _sanitize_ahl_payload(raw_text: str) -> str:
 
 
 def _ahl_request(view: str, *, feed: str = "statviewfeed", **extra_params):
-    if not AHL_API_KEY:
-        logging.warning("AHL API key missing; cannot fetch Wolves schedule")
-        return None
-
     params: Dict[str, object] = {
         "feed": feed,
         "view": view,
         "client_code": AHL_CLIENT_CODE,
         "site_id": AHL_SITE_ID,
         "league_id": AHL_LEAGUE_ID,
-        "key": AHL_API_KEY,
         "format": "json",
         "lang": "en",
     }
     for key, value in extra_params.items():
         if value is not None:
             params[key] = value
+
+    use_key = bool(AHL_API_KEY)
+    no_key_attempted = False
+    if not use_key:
+        logging.warning("AHL API key missing; attempting request without authentication")
+
+    endpoint = _ahl_endpoint()
 
     headers = {
         "User-Agent": "desk-display/1.0",
@@ -754,33 +774,48 @@ def _ahl_request(view: str, *, feed: str = "statviewfeed", **extra_params):
         "Referer": "https://theahl.com/stats/",
         "X-Requested-With": "XMLHttpRequest",
     }
-    try:
-        resp = _session.get(AHL_API_BASE_URL, params=params, headers=headers, timeout=10)
-        resp.raise_for_status()
-        payload = _sanitize_ahl_payload(resp.text)
-        if not payload:
-            logging.error(
-                "Empty response when fetching AHL %s data (status %s)",
-                view,
-                resp.status_code,
-            )
-            return None
+    while True:
+        attempt_params = dict(params)
+        if use_key:
+            attempt_params["key"] = AHL_API_KEY
+        else:
+            if not no_key_attempted:
+                no_key_attempted = True
+
         try:
-            return json.loads(payload)
-        except json.JSONDecodeError as exc:  # pragma: no cover - depends on upstream
-            snippet = payload[:200].replace("\n", " ").replace("\r", " ")
-            logging.error(
-                "Error parsing AHL %s data (status %s, content-type %s): %s",  # noqa: B950
-                view,
-                resp.status_code,
-                resp.headers.get("content-type"),
-                snippet,
-            )
-            logging.debug("Full AHL %s payload: %s", view, payload)
+            resp = _session.get(endpoint, params=attempt_params, headers=headers, timeout=10)
+            resp.raise_for_status()
+            payload = _sanitize_ahl_payload(resp.text)
+            if not payload:
+                logging.error(
+                    "Empty response when fetching AHL %s data (status %s)",
+                    view,
+                    resp.status_code,
+                )
+                return None
+            try:
+                return json.loads(payload)
+            except json.JSONDecodeError:  # pragma: no cover - depends on upstream
+                snippet = payload[:200].replace("\n", " ").replace("\r", " ")
+                if use_key and "invalid key" in snippet.lower() and not no_key_attempted:
+                    logging.warning(
+                        "AHL API rejected the configured key for %s; retrying without a key",
+                        view,
+                    )
+                    use_key = False
+                    continue
+                logging.error(
+                    "Error parsing AHL %s data (status %s, content-type %s): %s",  # noqa: B950
+                    view,
+                    resp.status_code,
+                    resp.headers.get("content-type"),
+                    snippet,
+                )
+                logging.debug("Full AHL %s payload: %s", view, payload)
+                return None
+        except Exception as exc:
+            logging.error("Error fetching AHL %s data: %s", view, exc)
             return None
-    except Exception as exc:
-        logging.error("Error fetching AHL %s data: %s", view, exc)
-        return None
 
 
 def _dict_rows(value) -> List[Dict]:
