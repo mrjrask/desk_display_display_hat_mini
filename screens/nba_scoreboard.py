@@ -93,6 +93,12 @@ _SESSION = get_session()
 _NBA_HEADERS = {
     "Origin": "https://www.nba.com",
     "Referer": "https://www.nba.com/",
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
 }
 _NBA_SCOREBOARD_BASES: tuple[tuple[str, bool], ...] = (
     ("https://cdn.nba.com/static/json/liveData/scoreboard", True),

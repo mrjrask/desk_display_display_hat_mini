@@ -728,13 +728,13 @@ def _sanitize_ahl_payload(raw_text: str) -> str:
     return cleaned
 
 
-def _ahl_request(view: str, **extra_params):
+def _ahl_request(view: str, *, feed: str = "statviewfeed", **extra_params):
     if not AHL_API_KEY:
         logging.warning("AHL API key missing; cannot fetch Wolves schedule")
         return None
 
     params: Dict[str, object] = {
-        "feed": "statviewfeed",
+        "feed": feed,
         "view": view,
         "client_code": AHL_CLIENT_CODE,
         "site_id": AHL_SITE_ID,
@@ -863,6 +863,9 @@ def _current_ahl_season_id() -> Optional[str]:
 
     data = _ahl_request("season")
     rows = _extract_rows(data, "Seasons", "Season")
+    if not rows:
+        alt = _ahl_request("season", feed="modulekit")
+        rows = _extract_rows(alt, "Seasons", "Season")
     for row in rows:
         flag = row.get("is_current") or row.get("isCurrent") or row.get("current")
         if str(flag).lower() in {"1", "true", "yes"}:
