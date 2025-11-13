@@ -1091,12 +1091,29 @@ def _normalize_ahl_game(row: Dict) -> Optional[Dict]:
 
 
 def _fetch_ahl_schedule() -> List[Dict]:
-    season_id = _current_ahl_season_id()
-    if not season_id:
+    def _fetch_rows(season_id: Optional[str]) -> List[Dict]:
+        params: Dict[str, Optional[str]] = {"team_id": AHL_TEAM_ID}
+        if season_id:
+            params["season_id"] = season_id
+        data = _ahl_request("schedule", **params)
+        return _extract_rows(data, "Schedule", "TeamSchedule")
+
+    rows: List[Dict] = []
+
+    if AHL_SEASON_ID:
+        rows = _fetch_rows(str(AHL_SEASON_ID))
+
+    if not rows:
+        rows = _fetch_rows(None)
+
+    if not rows:
+        season_id = _current_ahl_season_id()
+        if season_id:
+            rows = _fetch_rows(season_id)
+
+    if not rows:
         return []
 
-    data = _ahl_request("schedule", team_id=AHL_TEAM_ID, season_id=season_id)
-    rows = _extract_rows(data, "Schedule", "TeamSchedule")
     games: List[Dict] = []
     for row in rows:
         normalized = _normalize_ahl_game(row)
