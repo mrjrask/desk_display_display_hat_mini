@@ -1044,13 +1044,24 @@ def _format_next_bottom(
     parts = [p for p in (label, time_str) if p]
     return " • ".join(parts)
 
-def _draw_next_card(display, game: Dict, *, title: str, transition: bool=False, log_label: str="hawks next"):
+def _draw_next_card(
+    display,
+    game: Dict,
+    *,
+    title: str,
+    transition: bool = False,
+    log_label: str = "hawks next",
+    logo_scale: float = 1.0,
+):
     """
     Next-game card with:
       - Title (MLB font)
       - Opponent line: "@ FULLNAME" or "vs. FULLNAME"
       - Logos row (AWAY @ HOME) centered vertically and larger (local PNGs)
       - Bottom line that always includes game time
+
+    ``logo_scale`` allows callers (like the Wolves wrapper) to shrink or enlarge
+    the computed standard logo height without changing the MLB/NHL helpers.
     """
     if not isinstance(game, dict):
         logging.warning("%s: missing payload", log_label)
@@ -1092,7 +1103,8 @@ def _draw_next_card(display, game: Dict, *, title: str, transition: bool=False, 
     bottom_y = HEIGHT - (bottom_h + 2) if bottom_text else HEIGHT
 
     # Desired logo height (bigger on 128px; adapt if smaller/other displays)
-    desired_logo_h = standard_next_game_logo_height(HEIGHT)
+    clamped_scale = max(0.5, min(float(logo_scale or 1.0), 1.2))
+    desired_logo_h = max(1, int(round(standard_next_game_logo_height(HEIGHT) * clamped_scale)))
 
     # Compute max logo height to fit between the top content and bottom line
     available_h = max(10, bottom_y - (y_top + 2))  # space for logos row

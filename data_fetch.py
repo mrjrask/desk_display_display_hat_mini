@@ -12,7 +12,7 @@ import logging
 import os
 import re
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import pytz
 import requests
@@ -1338,6 +1338,58 @@ def _ics_team_payload(name: str, is_wolves: bool) -> Dict[str, Any]:
     }
 
 
+_RESULT_SUFFIX_RE = re.compile(r"\s*\(([WL]|WIN|LOSS)\)\s*$", re.IGNORECASE)
+_SCORE_PAIR_RE = re.compile(r"([^()]+?)\s*\((\d+)\)")
+
+
+def _clean_ics_team_fragment(text: str) -> str:
+    cleaned = (text or "").strip()
+    cleaned = _RESULT_SUFFIX_RE.sub("", cleaned)
+    return cleaned.strip(" \t-–—✔✓✖✕•")
+
+
+def _extract_ics_score_line(description: Optional[str]) -> Optional[str]:
+    if not description:
+        return None
+    for raw_line in description.replace("\r", "").splitlines():
+        line = raw_line.strip()
+        if not line or "(" not in line or ")" not in line:
+            continue
+        if any(ch.isdigit() for ch in line):
+            return line.lstrip("✔✓✖✕•-–— ").strip()
+    return None
+
+
+def _parse_ics_note_scores(description: Optional[str]) -> Optional[Dict[str, Any]]:
+    line = _extract_ics_score_line(description)
+    if not line:
+        return None
+    entries: List[Tuple[str, int]] = []
+    for raw_name, score_text in _SCORE_PAIR_RE.findall(line):
+        name = _clean_ics_team_fragment(raw_name)
+        if not name:
+            continue
+        try:
+            score = int(score_text)
+        except ValueError:
+            continue
+        entries.append((name, score))
+    if len(entries) < 2:
+        return None
+    return {"line": line, "entries": entries}
+
+
+def _match_score_for_team(name: str, entries: List[Tuple[str, int]]) -> Optional[int]:
+    if not name:
+        return None
+    name_lower = name.lower()
+    for entry_name, score in entries:
+        entry_lower = entry_name.lower()
+        if name_lower in entry_lower or entry_lower in name_lower:
+            return score
+    return None
+
+
 def _split_wolves_summary(summary: str) -> Optional[Dict[str, Any]]:
     if not summary:
         return None
@@ -1361,6 +1413,8 @@ def _split_wolves_summary(summary: str) -> Optional[Dict[str, Any]]:
             home_name, away_name = first, second
         else:
             away_name, home_name = first, second
+        home_name = _clean_ics_team_fragment(home_name)
+        away_name = _clean_ics_team_fragment(away_name)
         home_lower = home_name.lower()
         away_lower = away_name.lower()
         wolves_home = wolves in home_lower
@@ -1395,6 +1449,23 @@ def _normalize_wolves_ics_game(event: Dict[str, Any]) -> Optional[Dict[str, Any]
         return None
     home_team = _ics_team_payload(home_name, wolves_is_home)
     away_team = _ics_team_payload(away_name, wolves_is_away)
+    description = event.get("DESCRIPTION") or event.get("X-ALT-DESC")
+    note_scores = _parse_ics_note_scores(description)
+    status_state = "FUT"
+    status_detail = "Scheduled"
+    status_note: Optional[str] = None
+    if note_scores:
+        entries = note_scores["entries"]
+        home_score = _match_score_for_team(home_name, entries)
+        away_score = _match_score_for_team(away_name, entries)
+        if home_score is not None:
+            home_team["score"] = home_score
+        if away_score is not None:
+            away_team["score"] = away_score
+        if home_score is not None and away_score is not None:
+            status_state = "FINAL"
+            status_detail = "Final"
+            status_note = note_scores.get("line")
     start_utc = start.astimezone(pytz.UTC)
     start_central = start.astimezone(CENTRAL_TIME)
     return {
@@ -1407,11 +1478,11 @@ def _normalize_wolves_ics_game(event: Dict[str, Any]) -> Optional[Dict[str, Any]
         "start_time_central": _format_local_time(start_central),
         "official_date": start.date().isoformat(),
         "status": {
-            "state": "FUT",
-            "detail": "Scheduled",
+            "state": status_state,
+            "detail": status_detail,
             "period": None,
             "clock": None,
-            "note": None,
+            "note": status_note,
         },
         "venue": event.get("LOCATION"),
         "is_home": wolves_is_home,
@@ -1444,11 +1515,25 @@ def _fetch_wolves_ics_games() -> List[Dict[str, Any]]:
     return games
 
 
+def _ics_game_has_scores(game: Dict[str, Any]) -> bool:
+    home = game.get("home") or {}
+    away = game.get("away") or {}
+    return isinstance(home.get("score"), int) and isinstance(away.get("score"), int)
+
+
 def _classify_wolves_ics_games(games: List[Dict[str, Any]]) -> Dict[str, Optional[Dict]]:
     now = datetime.datetime.now(pytz.UTC)
     upcoming: List[Dict[str, Any]] = []
+    last_final: Optional[Dict[str, Any]] = None
     for game in games:
         start = game.get("start_utc")
+        status_state = ((game.get("status") or {}).get("state") or "").upper()
+        has_scores = _ics_game_has_scores(game)
+        if has_scores and isinstance(start, datetime.datetime):
+            if status_state.startswith("FIN") or start <= now:
+                if not last_final or start > last_final.get("start_utc", start):
+                    last_final = game
+                continue
         if isinstance(start, datetime.datetime) and start >= now - datetime.timedelta(hours=1):
             upcoming.append(game)
     upcoming.sort(key=lambda g: g.get("start_utc"))
@@ -1458,7 +1543,7 @@ def _classify_wolves_ics_games(games: List[Dict[str, Any]]) -> Dict[str, Optiona
         if game.get("is_home"):
             next_home = game
             break
-    return {"next_game": next_game, "next_home_game": next_home}
+    return {"last_game": last_final, "next_game": next_game, "next_home_game": next_home}
 
 
 _WOLVES_CACHE_TTL = 15 * 60  # seconds
@@ -1497,6 +1582,8 @@ def fetch_wolves_games(force_refresh: bool = False) -> Dict[str, Optional[Dict]]
             classified_ics = _classify_wolves_ics_games(ics_games)
             next_game = classified_ics.get("next_game")
             next_home = classified_ics.get("next_home_game")
+            if not last_game:
+                last_game = classified_ics.get("last_game")
     except Exception as exc:
         logging.error("Error parsing Wolves ICS schedule: %s", exc)
 
