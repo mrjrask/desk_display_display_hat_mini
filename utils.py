@@ -83,7 +83,8 @@ def display_updates_enabled() -> bool:
 
     return _DISPLAY_UPDATE_GATE.is_set()
 
-LED_INDICATOR_LEVEL = 1 / 255.0
+# Use the dimmest still-visible LED brightness.
+LED_INDICATOR_LEVEL = 1 / 1024.0
 
 # Project config
 from config import WIDTH, HEIGHT, CENTRAL_TIME, DISPLAY_ROTATION
