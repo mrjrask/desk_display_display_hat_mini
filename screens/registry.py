@@ -23,6 +23,12 @@ from screens.draw_hawks_schedule import (
     draw_live_hawks_game,
     draw_sports_screen_hawks,
 )
+from screens.draw_wolves_schedule import (
+    draw_last_wolves_game,
+    draw_live_wolves_game,
+    draw_sports_screen_wolves,
+    draw_wolves_next_home_game,
+)
 from screens.draw_inside import draw_inside
 from screens.draw_sensors import draw_sensors
 from screens.draw_travel_time import draw_travel_time_screen
@@ -412,6 +418,43 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             "NHL Standings East",
             lambda: draw_nhl_standings_east(context.display, transition=True),
         )
+
+    wolves = context.cache.get("wolves") or {}
+    if any(wolves.values()):
+        register_logo("wolves logo")
+        wolves_next = wolves.get("next")
+        wolves_next_home = wolves.get("next_home")
+        if _games_match(wolves_next_home, wolves_next):
+            wolves_next_home = None
+        register(
+            "wolves last",
+            lambda data=wolves.get("last"): draw_last_wolves_game(
+                context.display, data, transition=True
+            ),
+            available=bool(wolves.get("last")),
+        )
+        register(
+            "wolves live",
+            lambda data=wolves.get("live"): draw_live_wolves_game(
+                context.display, data, transition=True
+            ),
+            available=_is_live_game_today(wolves.get("live")),
+        )
+        register(
+            "wolves next",
+            lambda data=wolves_next: draw_sports_screen_wolves(
+                context.display, data, transition=True
+            ),
+            available=bool(wolves_next),
+        )
+        if wolves_next_home:
+            register(
+                "wolves next home",
+                lambda data=wolves_next_home: draw_wolves_next_home_game(
+                    context.display, data, transition=True
+                ),
+                available=True,
+            )
 
     cubs = context.cache.get("cubs") or {}
     if any(cubs.values()):

@@ -45,7 +45,17 @@ def list_screens(script_dir, namespace):
 
 def invoke_screen(entry, display, namespace):
     if entry["type"]=="scroll":
-        for var in ["weather_img","verano_img","hawks_logo","bulls_logo","cubs_logo","sox_logo","mlb_logo","bears_logo"]:
+        for var in [
+            "weather_img",
+            "verano_img",
+            "hawks_logo",
+            "wolves_logo",
+            "bulls_logo",
+            "cubs_logo",
+            "sox_logo",
+            "mlb_logo",
+            "bears_logo",
+        ]:
             img = namespace.get(var)
             if img:
                 utils.animate_scroll(display, img)

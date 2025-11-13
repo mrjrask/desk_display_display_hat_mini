@@ -100,6 +100,10 @@ def build_logo_map() -> Dict[str, Optional[Image.Image]]:
         "nfl logo": load_logo("nfl/nfl.png"),
         "hawks logo": load_logo("hawks.jpg", height=TEAM_LOGO_HEIGHT),
         "nhl logo": load_logo("nhl/nhl.png") or load_logo("nhl/NHL.png"),
+        "wolves logo": (
+            load_logo("ahl/CHI.png", height=TEAM_LOGO_HEIGHT)
+            or load_logo("wolves.jpg", height=TEAM_LOGO_HEIGHT)
+        ),
         "cubs logo": load_logo("cubs.jpg", height=TEAM_LOGO_HEIGHT),
         "sox logo": load_logo("sox.jpg", height=TEAM_LOGO_HEIGHT),
         "mlb logo": load_logo("mlb.jpg"),
@@ -113,6 +117,7 @@ def build_cache() -> Dict[str, object]:
     cache: Dict[str, object] = {
         "weather": None,
         "hawks": {"last": None, "live": None, "next": None, "next_home": None},
+        "wolves": {"last": None, "live": None, "next": None, "next_home": None},
         "bulls": {"last": None, "live": None, "next": None, "next_home": None},
         "cubs": {
             "stand": None,
@@ -137,6 +142,15 @@ def build_cache() -> Dict[str, object]:
             "live": data_fetch.fetch_blackhawks_live_game(),
             "next": data_fetch.fetch_blackhawks_next_game(),
             "next_home": data_fetch.fetch_blackhawks_next_home_game(),
+        }
+    )
+    wolves_games = data_fetch.fetch_wolves_games() or {}
+    cache["wolves"].update(
+        {
+            "last": wolves_games.get("last_game"),
+            "live": wolves_games.get("live_game"),
+            "next": wolves_games.get("next_game"),
+            "next_home": wolves_games.get("next_home_game"),
         }
     )
     cache["bulls"].update(
