@@ -6,6 +6,7 @@ A tiny, always‑on scoreboard and info display that runs on a Raspberry Pi and 
 > - Smooth animations: scroll and fade‑in
 > - Rich MLB views: last/live/next game, standings (divisions, overview, wild card)
 > - **Cubs W/L result** full‑screen flag (animated WebP supported; PNG fallback)
+> - **Chicago Wolves** screens that mirror the Hawks layouts and reuse cached HockeyTech data for fast redraws
 > - **Smart screenshots** auto‑archived in batches when the live folder reaches 500 images
 > - **GitHub update dot** on date/time screens when new commits are available
 > - Screen sequencing via `screens_config.json`
@@ -140,6 +141,7 @@ Most runtime behavior is controlled in `config.py`:
 - **Weather:** `ENABLE_WEATHER`, `LATITUDE/LONGITUDE`
 - **Travel:** `TRAVEL_MODE` (`to_home` or `to_work`)
 - **MLB:** constants and timezone `CENTRAL_TIME`
+- **AHL:** `AHL_TEAM_ID`, `AHL_TEAM_TRICODE`, and HockeyTech feed overrides (API base/key/site). Wolves screens automatically cache schedule data and fall back to the modulekit feed when the primary endpoint replies with "Invalid key".
 - **Fonts:** make sure `fonts/` contains the TTFs above
 
 ### Screen sequencing
@@ -287,24 +289,26 @@ Or copy `.env.example` to `.env` and load it with your preferred process manager
 
 ## Screens
 
-- **Date/Time:** both screens display date & time in bright/legible colors with a red dot when updates are available.
-- **Weather (1/2):** Open‑Meteo + OWM configuration.
-- **Inside:** BME sensor summary (labels/values) if wired.
+- **Date/Time:** legible, high‑contrast text with the GitHub update dot when upstream commits are available.
+- **Weather (1/2):** Open‑Meteo + OWM snapshots and extended forecasts.
+- **Inside:** BME688/BME280/LTR559/SHT41 summaries when sensors are wired.
 - **VRNOF:** stock mini‑panel.
 - **Travel:** Maps ETA using your configured mode.
-- **Bears Next:** opponent and logos row, formatted bottom line.
-- **Blackhawks:** last/live/next based on schedule feed, logos included.
-- **Bulls:** last/live/next/home powered by the NBA live scoreboard feed with team logos.
+- **Bears:** opponent card, logo splash, standings, and NFL scoreboard tie‑ins.
+- **Blackhawks:** last/live/next based on the NHL schedule feed, logos included.
+- **Wolves:** last/live/next/next‑home cards that inherit the Hawks art direction and now use cached HockeyTech data so a single API pull feeds multiple screens without repeated network calls.
+- **Bulls:** last/live/next/home powered by the NBA live scoreboard feed with team logos and ESPN fallback.
 - **MLB (Cubs/Sox):**
   - **Last Game:** box score with **bold W/L** in the title.
   - **Live Game:** box score with inning/state as the bottom label.
   - **Next Game:** AWAY @ HOME logos row with day/date/time label using **Today / Tonight / Tomorrow / Yesterday** logic.
   - **Cubs Result:** full‑screen **W/L flag** (animated WebP 100×100 centered; PNG fallback).
-
 - **MLB Standings:**
   - **Overview (AL/NL):** 3 columns of division logos (East/Central/West) with **drop‑in** animation (last place drops first).
   - **Divisions (AL/NL East/Central/West):** scrolling list with W‑L, GB.
   - **Wild Card (AL/NL):** bottom→top scroll with WCGB formatting and separator line.
+- **NHL Scoreboard/Standings:** resilient DNS‑aware scoreboard that automatically swaps to the `api-web` endpoint when `statsapi` lookup fails (warnings are suppressed in favor of the informational fallback log).
+- **NBA Scoreboard:** rotating marquee of live/final games with throttled 403 logging and ESPN fallback when the CDN blocks scripted traffic.
 
 ---
 
@@ -395,8 +399,11 @@ The checker now logs **which files have diverged** when updates exist, for easie
 - **Missing logos:** you’ll see a warning like `Logo file missing: CUBS.png`. Add the correct file into `images/mlb/`.
 - **No WebP animation:** ensure your Pillow build supports WebP (`pip3 show pillow`). PNG fallback will still work.
 - **Network/API errors:** MLB/OWM requests are time‑bounded; transient timeouts are logged and screens are skipped gracefully.
-- **NHL statsapi DNS warning:** run `python3 nhl_scoreboard.py --diagnose-dns` to print resolver details, `/etc/resolv.conf`, and
-  quick HTTP checks for both the statsapi and api-web fallbacks. Attach the JSON output when filing an issue.
+- **NHL statsapi diagnostics:** run `python3 nhl_scoreboard.py --diagnose-dns` to print resolver details, `/etc/resolv.conf`, and
+  quick HTTP checks for both the statsapi and api-web fallbacks. DNS hiccups are now logged at `DEBUG`, so look for the INFO log
+  that announces the api-web fallback instead of a warning storm.
+- **NBA CDN blocks:** the scoreboard automatically throttles further NBA CDN calls for 30 minutes after a 403 and logs the ESPN
+  fallback at INFO level.
 - **Font not found:** the code falls back to `ImageFont.load_default()` so the app keeps running; install the missing TTFs to restore look.
 
 ---

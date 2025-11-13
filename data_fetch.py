@@ -10,7 +10,8 @@ import datetime
 import json
 import logging
 import os
-from typing import Dict, List, Optional
+import time
+from typing import Any, Dict, List, Optional
 
 import pytz
 import requests
@@ -797,13 +798,21 @@ def _ahl_request(view: str, *, feed: str = "statviewfeed", **extra_params):
                 return json.loads(payload)
             except json.JSONDecodeError:  # pragma: no cover - depends on upstream
                 snippet = payload[:200].replace("\n", " ").replace("\r", " ")
-                if use_key and "invalid key" in snippet.lower() and not no_key_attempted:
-                    logging.warning(
-                        "AHL API rejected the configured key for %s; retrying without a key",
+                snippet_lower = snippet.lower()
+                if "invalid key" in snippet_lower:
+                    if use_key and not no_key_attempted:
+                        logging.info(
+                            "AHL API rejected the configured key for %s; retrying without a key",
+                            view,
+                        )
+                        use_key = False
+                        continue
+                    logging.debug(
+                        "AHL feed for %s responded with 'Invalid key' (feed=%s); skipping",
                         view,
+                        feed,
                     )
-                    use_key = False
-                    continue
+                    return None
                 logging.error(
                     "Error parsing AHL %s data (status %s, content-type %s): %s",  # noqa: B950
                     view,
@@ -1131,7 +1140,11 @@ def _fetch_ahl_schedule() -> List[Dict]:
         if season_id:
             params["season_id"] = season_id
         data = _ahl_request("schedule", **params)
-        return _extract_rows(data, "Schedule", "TeamSchedule")
+        rows = _extract_rows(data, "Schedule", "TeamSchedule")
+        if not rows:
+            alt = _ahl_request("schedule", feed="modulekit", **params)
+            rows = _extract_rows(alt, "Schedule", "TeamSchedule")
+        return rows
 
     rows: List[Dict] = []
 
@@ -1196,17 +1209,36 @@ def _classify_wolves_games(games: List[Dict]) -> Dict[str, Optional[Dict]]:
     }
 
 
-def fetch_wolves_games() -> Dict[str, Optional[Dict]]:
+_WOLVES_CACHE_TTL = 15 * 60  # seconds
+_wolves_cache: Dict[str, Any] = {"expires": 0.0, "data": None}
+
+
+def fetch_wolves_games(force_refresh: bool = False) -> Dict[str, Optional[Dict]]:
+    now = time.time()
+    cached = _wolves_cache.get("data")
+    expires = _wolves_cache.get("expires", 0.0)
+    if (
+        not force_refresh
+        and isinstance(expires, (int, float))
+        and isinstance(cached, dict)
+        and now < float(expires)
+    ):
+        return cached
+
     try:
         games = _fetch_ahl_schedule()
         if not games:
-            return {
+            payload = {
                 "last_game": None,
                 "live_game": None,
                 "next_game": None,
                 "next_home_game": None,
             }
-        return _classify_wolves_games(games)
+        else:
+            payload = _classify_wolves_games(games)
+        _wolves_cache["data"] = payload
+        _wolves_cache["expires"] = now + _WOLVES_CACHE_TTL
+        return payload
     except Exception as exc:
         logging.error("Error fetching Chicago Wolves data: %s", exc)
         return {

@@ -743,7 +743,7 @@ def _statsapi_available() -> bool:
             proto=socket.IPPROTO_TCP,
         )
     except socket.gaierror as exc:
-        logging.warning("NHL statsapi DNS lookup failed: %s", exc)
+        logging.debug("NHL statsapi DNS lookup failed: %s", exc)
         _dns_block_until = now + _DNS_RETRY_INTERVAL
         return False
     except Exception as exc:  # defensive guard against unexpected errors
