@@ -36,6 +36,7 @@ def main_module(monkeypatch):
     monkeypatch.setattr(data_fetch, "fetch_blackhawks_live_game", lambda: None)
     monkeypatch.setattr(data_fetch, "fetch_blackhawks_next_game", lambda: None)
     monkeypatch.setattr(data_fetch, "fetch_blackhawks_next_home_game", lambda: None)
+    monkeypatch.setattr(data_fetch, "fetch_wolves_games", lambda: {})
     monkeypatch.setattr(data_fetch, "fetch_bulls_last_game", lambda: None)
     monkeypatch.setattr(data_fetch, "fetch_bulls_live_game", lambda: None)
     monkeypatch.setattr(data_fetch, "fetch_bulls_next_game", lambda: None)

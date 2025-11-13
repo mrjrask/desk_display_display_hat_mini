@@ -615,6 +615,9 @@ nhl_logo    = load_logo("nhl/nhl.png") or load_logo("nhl/NHL.png")
 nfl_logo    = load_logo("nfl/nfl.png")
 verano_img  = load_logo("verano.jpg")
 bears_logo  = load_logo("bears.png")
+wolves_logo = load_logo("ahl/CHI.png", height=TEAM_LOGO_HEIGHT) or load_logo(
+    "wolves.jpg", height=TEAM_LOGO_HEIGHT
+)
 
 LOGOS = {
     "weather logo": weather_img,
@@ -623,6 +626,7 @@ LOGOS = {
     "nfl logo": nfl_logo,
     "hawks logo": hawks_logo,
     "nhl logo": nhl_logo,
+    "wolves logo": wolves_logo,
     "cubs logo": cubs_logo,
     "sox logo": sox_logo,
     "mlb logo": mlb_logo,
@@ -634,6 +638,7 @@ LOGOS = {
 cache = {
     "weather": None,
     "hawks":   {"last":None, "live":None, "next":None, "next_home":None},
+    "wolves":  {"last":None, "live":None, "next":None, "next_home":None},
     "bulls":   {"last":None, "live":None, "next":None, "next_home":None},
     "cubs":    {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
     "sox":     {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
@@ -647,6 +652,13 @@ def refresh_all():
         "live": data_fetch.fetch_blackhawks_live_game(),
         "next": data_fetch.fetch_blackhawks_next_game(),
         "next_home": data_fetch.fetch_blackhawks_next_home_game(),
+    })
+    wolves_games = data_fetch.fetch_wolves_games() or {}
+    cache["wolves"].update({
+        "last": wolves_games.get("last_game"),
+        "live": wolves_games.get("live_game"),
+        "next": wolves_games.get("next_game"),
+        "next_home": wolves_games.get("next_home_game"),
     })
     cache["bulls"].update({
         "last": data_fetch.fetch_bulls_last_game(),

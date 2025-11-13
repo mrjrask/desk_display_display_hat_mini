@@ -737,8 +737,10 @@ VRNOF_LOTS = [
 
 # Hockey assets
 NHL_IMAGES_DIR = os.path.join(IMAGES_DIR, "nhl")
+AHL_IMAGES_DIR = os.path.join(IMAGES_DIR, "ahl")
 TIMES_SQUARE_FONT_PATH = os.path.join(FONTS_DIR, "TimesSquare-m105.ttf")
 os.makedirs(NHL_IMAGES_DIR, exist_ok=True)
+os.makedirs(AHL_IMAGES_DIR, exist_ok=True)
 
 NHL_API_ENDPOINTS = {
     "team_month_now": "https://api-web.nhle.com/v1/club-schedule/{tric}/month/now",
@@ -752,3 +754,18 @@ NHL_API_ENDPOINTS = {
 NHL_TEAM_ID      = 16
 NHL_TEAM_TRICODE = "CHI"
 NHL_FALLBACK_LOGO = os.path.join(NHL_IMAGES_DIR, "NHL.jpg")
+
+AHL_API_BASE_URL   = os.environ.get("AHL_API_BASE_URL", "https://lscluster.hockeytech.com/feed/")
+AHL_API_KEY        = os.environ.get("AHL_API_KEY", "50c4cd9b5df2e390")
+AHL_CLIENT_CODE    = os.environ.get("AHL_CLIENT_CODE", "ahl")
+AHL_LEAGUE_ID      = os.environ.get("AHL_LEAGUE_ID", "4")
+AHL_SITE_ID        = os.environ.get("AHL_SITE_ID", "1")
+AHL_SEASON_ID      = os.environ.get("AHL_SEASON_ID")
+try:
+    AHL_TEAM_ID = int(os.environ.get("AHL_TEAM_ID", "624"))
+except (TypeError, ValueError):
+    logging.warning("Invalid AHL_TEAM_ID value; defaulting to 624")
+    AHL_TEAM_ID = 624
+AHL_TEAM_TRICODE   = os.environ.get("AHL_TEAM_TRICODE", "CHI")
+AHL_FALLBACK_LOGO  = os.path.join(AHL_IMAGES_DIR, "AHL.png")
+AHL_TEAM_NAME      = os.environ.get("AHL_TEAM_NAME", "Chicago Wolves")

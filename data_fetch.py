@@ -8,6 +8,8 @@ with resilient retries via a shared requests.Session.
 
 import datetime
 import logging
+import os
+from typing import Dict, List, Optional
 
 import pytz
 import requests
@@ -30,6 +32,14 @@ from config import (
     OPEN_METEO_PARAMS,
     NBA_TEAM_ID,
     NBA_TEAM_TRICODE,
+    AHL_API_BASE_URL,
+    AHL_API_KEY,
+    AHL_CLIENT_CODE,
+    AHL_LEAGUE_ID,
+    AHL_SEASON_ID,
+    AHL_SITE_ID,
+    AHL_TEAM_ID,
+    AHL_TEAM_TRICODE,
 )
 
 # ─── Shared HTTP session ─────────────────────────────────────────────────────
@@ -686,3 +696,417 @@ def fetch_cubs_standings():
 
 def fetch_sox_standings():
     return _fetch_mlb_standings(103, 202, MLB_SOX_TEAM_ID)
+
+
+# -----------------------------------------------------------------------------
+# AHL — Chicago Wolves schedule + scores (HockeyTech / AHL stats feed)
+# -----------------------------------------------------------------------------
+_AHL_SEASON_CACHE: Optional[str] = None
+
+
+def _ahl_request(view: str, **extra_params):
+    if not AHL_API_KEY:
+        logging.warning("AHL API key missing; cannot fetch Wolves schedule")
+        return None
+
+    params: Dict[str, object] = {
+        "feed": "statviewfeed",
+        "view": view,
+        "client_code": AHL_CLIENT_CODE,
+        "site_id": AHL_SITE_ID,
+        "league_id": AHL_LEAGUE_ID,
+        "key": AHL_API_KEY,
+        "format": "json",
+        "lang": "en",
+    }
+    for key, value in extra_params.items():
+        if value is not None:
+            params[key] = value
+
+    headers = {"User-Agent": "desk-display/1.0"}
+    try:
+        resp = _session.get(AHL_API_BASE_URL, params=params, headers=headers, timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as exc:
+        logging.error("Error fetching AHL %s data: %s", view, exc)
+        return None
+
+
+def _dict_rows(value) -> List[Dict]:
+    rows: List[Dict] = []
+    if isinstance(value, list):
+        for item in value:
+            if isinstance(item, dict):
+                rows.append(item)
+    elif isinstance(value, dict):
+        inner = value.get("rows") or value.get("data") or value.get("schedule")
+        if isinstance(inner, list):
+            for item in inner:
+                if isinstance(item, dict):
+                    rows.append(item)
+        elif isinstance(inner, dict):
+            maybe_rows = inner.get("rows")
+            if isinstance(maybe_rows, list):
+                for item in maybe_rows:
+                    if isinstance(item, dict):
+                        rows.append(item)
+    return rows
+
+
+def _rows_from_table(table: Dict) -> List[Dict]:
+    columns: List[str] = []
+    for col in table.get("columns", []):
+        if isinstance(col, dict):
+            name = col.get("name") or col.get("field") or col.get("key")
+            if name:
+                columns.append(str(name))
+        elif isinstance(col, str):
+            columns.append(col)
+
+    rows: List[Dict] = []
+    for raw_row in table.get("rows", []):
+        if isinstance(raw_row, dict):
+            rows.append(raw_row)
+            continue
+        if not isinstance(raw_row, list):
+            continue
+        entry: Dict[str, object] = {}
+        for idx, value in enumerate(raw_row):
+            if idx < len(columns):
+                entry[columns[idx]] = value
+        if entry:
+            rows.append(entry)
+    return rows
+
+
+def _extract_rows(payload: Optional[Dict], *keys: str) -> List[Dict]:
+    rows: List[Dict] = []
+    if not isinstance(payload, dict):
+        return rows
+
+    site = payload.get("SiteKit") or payload
+    for key in keys:
+        block = site.get(key)
+        rows.extend(_dict_rows(block))
+        if isinstance(block, dict):
+            table = block.get("table")
+            if isinstance(table, dict):
+                rows.extend(_rows_from_table(table))
+
+    if not rows:
+        rows.extend(_dict_rows(site))
+        table = site.get("table") if isinstance(site, dict) else None
+        if isinstance(table, dict):
+            rows.extend(_rows_from_table(table))
+
+    return rows
+
+
+def _current_ahl_season_id() -> Optional[str]:
+    if AHL_SEASON_ID:
+        return str(AHL_SEASON_ID)
+
+    global _AHL_SEASON_CACHE
+    if _AHL_SEASON_CACHE:
+        return _AHL_SEASON_CACHE
+
+    data = _ahl_request("season")
+    rows = _extract_rows(data, "Seasons", "Season")
+    for row in rows:
+        flag = row.get("is_current") or row.get("isCurrent") or row.get("current")
+        if str(flag).lower() in {"1", "true", "yes"}:
+            season_id = row.get("season_id") or row.get("seasonId") or row.get("id")
+            if season_id:
+                _AHL_SEASON_CACHE = str(season_id)
+                return _AHL_SEASON_CACHE
+
+    if rows:
+        season_id = rows[0].get("season_id") or rows[0].get("seasonId") or rows[0].get("id")
+        if season_id:
+            _AHL_SEASON_CACHE = str(season_id)
+            return _AHL_SEASON_CACHE
+
+    logging.warning("Unable to determine current AHL season id from feed")
+    return None
+
+
+def _first_value(entry: Dict, *keys: str):
+    for key in keys:
+        if not key:
+            continue
+        if key in entry and entry[key] not in (None, ""):
+            return entry[key]
+    return None
+
+
+def _extract_team_info(row: Dict, prefix: str) -> Optional[Dict]:
+    base = (
+        row.get(f"{prefix}_team")
+        or row.get(f"{prefix}Team")
+        or row.get(prefix)
+        or {}
+    )
+    if not isinstance(base, dict):
+        base = {}
+
+    def _get(*candidates):
+        for cand in candidates:
+            val = base.get(cand)
+            if val not in (None, ""):
+                return val
+        return None
+
+    team_id = _first_value(
+        {**row, **base},
+        f"{prefix}_team_id",
+        f"{prefix}_teamid",
+        f"{prefix}TeamID",
+        "team_id",
+        "teamId",
+        "id",
+    )
+    name = _get("name", "fullName") or row.get(f"{prefix}_team_name")
+    city = row.get(f"{prefix}_city") or base.get("city")
+    nickname = (
+        row.get(f"{prefix}_nickname")
+        or row.get(f"{prefix}_short_name")
+        or base.get("nickname")
+        or base.get("shortname")
+    )
+    if not name:
+        if city and nickname:
+            name = f"{city} {nickname}".strip()
+        elif nickname:
+            name = nickname
+        elif city:
+            name = city
+
+    abbr = (
+        row.get(f"{prefix}_code")
+        or row.get(f"{prefix}_abbr")
+        or row.get(f"{prefix}_abbrev")
+        or row.get(f"{prefix}_short")
+        or base.get("abbrev")
+        or base.get("code")
+    )
+    if isinstance(abbr, str):
+        abbr = abbr.upper()
+
+    score = _first_value({**row, **base}, f"{prefix}_score", "score")
+    shots = _first_value(
+        {**row, **base},
+        f"{prefix}_shots",
+        f"{prefix}_sog",
+        f"{prefix}Shots",
+        "shots",
+    )
+
+    def _as_int(value):
+        try:
+            if value in (None, ""):
+                return None
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    if not (name or abbr):
+        return None
+
+    return {
+        "id": team_id,
+        "name": name,
+        "abbr": (abbr or "").upper() or None,
+        "nickname": nickname,
+        "score": _as_int(score),
+        "shots": _as_int(shots),
+    }
+
+
+def _parse_datetime_candidates(row: Dict) -> Optional[datetime.datetime]:
+    candidates = [
+        row.get("game_date_time"),
+        row.get("game_date_time_local"),
+        row.get("game_date_time_utc"),
+        row.get("game_date_utc"),
+        row.get("game_time_utc"),
+        row.get("gameTimeUTC"),
+        row.get("gameDate"),
+    ]
+    for text in candidates:
+        if not isinstance(text, str):
+            continue
+        cleaned = text.strip()
+        if not cleaned:
+            continue
+        try:
+            if cleaned.endswith("Z"):
+                cleaned = cleaned[:-1] + "+00:00"
+            if len(cleaned) > 5 and cleaned[-3] != ":" and cleaned[-5] in "+-":
+                cleaned = f"{cleaned[:-2]}:{cleaned[-2:]}"
+            dt_obj = datetime.datetime.fromisoformat(cleaned)
+            if dt_obj.tzinfo is None:
+                return pytz.UTC.localize(dt_obj)
+            return dt_obj
+        except Exception:
+            pass
+
+    date_only = row.get("game_date") or row.get("date")
+    time_only = row.get("game_time") or row.get("time")
+    if isinstance(date_only, str) and isinstance(time_only, str):
+        for fmt in ("%Y-%m-%d %I:%M %p", "%Y-%m-%d %H:%M"):
+            try:
+                naive = datetime.datetime.strptime(f"{date_only} {time_only}", fmt)
+                return CENTRAL_TIME.localize(naive)
+            except Exception:
+                continue
+    if isinstance(date_only, str):
+        try:
+            naive = datetime.datetime.strptime(date_only, "%Y-%m-%d")
+            return CENTRAL_TIME.localize(naive)
+        except Exception:
+            return None
+    return None
+
+
+def _normalize_status(raw_status: Optional[str]) -> str:
+    if not raw_status:
+        return "FUT"
+    text = str(raw_status).strip().upper()
+    if not text:
+        return "FUT"
+    if "FINAL" in text or text.startswith("F"):
+        return "FINAL"
+    if any(token in text for token in ("LIVE", "IN PROGRESS", "INPROGRESS", "CRIT")):
+        return "LIVE"
+    if any(token in text for token in ("PREGAME", "SCHEDULED", "FUT", "PRE")):
+        return "FUT"
+    return text
+
+
+def _format_local_time(dt_obj: datetime.datetime) -> str:
+    fmt = "%-I:%M %p" if os.name != "nt" else "%#I:%M %p"
+    try:
+        return dt_obj.strftime(fmt).lstrip("0")
+    except Exception:
+        return dt_obj.strftime("%I:%M %p").lstrip("0")
+
+
+def _normalize_ahl_game(row: Dict) -> Optional[Dict]:
+    home = _extract_team_info(row, "home")
+    away = _extract_team_info(row, "away")
+    start = _parse_datetime_candidates(row)
+    if not home or not away or not start:
+        return None
+
+    state = _normalize_status(row.get("game_status") or row.get("status"))
+    detail = str(row.get("game_status") or row.get("status_detail") or row.get("result") or state).strip()
+    period = row.get("period_desc") or row.get("period") or row.get("periodName")
+    clock = row.get("period_time") or row.get("time_remaining") or row.get("clock")
+    note = row.get("status_note") or row.get("note")
+    venue = row.get("venue") or row.get("venue_name")
+    game_id = (
+        row.get("game_id")
+        or row.get("gameId")
+        or row.get("id")
+        or row.get("gameUuid")
+    )
+
+    start_utc = start.astimezone(pytz.UTC)
+    central = start.astimezone(CENTRAL_TIME)
+    official_date = start.date().isoformat()
+
+    return {
+        "game_id": str(game_id) if game_id else None,
+        "home": home,
+        "away": away,
+        "start": start,
+        "start_utc": start_utc,
+        "start_iso": start_utc.isoformat(),
+        "start_time_central": _format_local_time(central),
+        "official_date": official_date,
+        "status": {
+            "state": state,
+            "detail": detail,
+            "period": period,
+            "clock": clock,
+            "note": note,
+        },
+        "venue": venue,
+        "is_home": str(home.get("id")) == str(AHL_TEAM_ID),
+    }
+
+
+def _fetch_ahl_schedule() -> List[Dict]:
+    season_id = _current_ahl_season_id()
+    if not season_id:
+        return []
+
+    data = _ahl_request("schedule", team_id=AHL_TEAM_ID, season_id=season_id)
+    rows = _extract_rows(data, "Schedule", "TeamSchedule")
+    games: List[Dict] = []
+    for row in rows:
+        normalized = _normalize_ahl_game(row)
+        if normalized:
+            games.append(normalized)
+    games.sort(key=lambda g: g.get("start_utc"))
+    return games
+
+
+def _classify_wolves_games(games: List[Dict]) -> Dict[str, Optional[Dict]]:
+    now = datetime.datetime.now(pytz.UTC)
+    last_final: Optional[Dict] = None
+    live_game: Optional[Dict] = None
+    upcoming: List[Dict] = []
+
+    for game in games:
+        start = game.get("start_utc") or now
+        state = (game.get("status") or {}).get("state", "").upper()
+        if state.startswith("FIN"):
+            if not last_final or start > last_final.get("start_utc", start):
+                last_final = game
+            continue
+        if state in {"LIVE", "CRIT", "IN PROGRESS", "INPROGRESS"}:
+            if live_game is None or start < live_game.get("start_utc", start):
+                live_game = game
+            continue
+        if start >= now:
+            upcoming.append(game)
+        elif not last_final or start > last_final.get("start_utc", start):
+            last_final = game
+
+    upcoming.sort(key=lambda g: g.get("start_utc"))
+    next_game = upcoming[0] if upcoming else None
+    next_home = None
+    for game in upcoming:
+        if game.get("is_home"):
+            next_home = game
+            break
+
+    return {
+        "last_game": last_final,
+        "live_game": live_game,
+        "next_game": next_game,
+        "next_home_game": next_home,
+    }
+
+
+def fetch_wolves_games() -> Dict[str, Optional[Dict]]:
+    try:
+        games = _fetch_ahl_schedule()
+        if not games:
+            return {
+                "last_game": None,
+                "live_game": None,
+                "next_game": None,
+                "next_home_game": None,
+            }
+        return _classify_wolves_games(games)
+    except Exception as exc:
+        logging.error("Error fetching Chicago Wolves data: %s", exc)
+        return {
+            "last_game": None,
+            "live_game": None,
+            "next_game": None,
+            "next_home_game": None,
+        }
