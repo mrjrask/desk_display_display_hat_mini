@@ -683,16 +683,30 @@ def standard_next_game_logo_height(panel_height: int) -> int:
 
 
 def load_team_logo(base_dir: str, abbr: str, height: int = 36) -> Image.Image | None:
-    filename = f"{abbr}.png"
-    path = os.path.join(base_dir, filename)
-    try:
-        logo = Image.open(path).convert("RGBA")
-        logo = _adjust_logo_brightness(logo, base_dir, abbr)
-        ratio = height / logo.height
-        return logo.resize((int(logo.width * ratio), height), Image.ANTIALIAS)
-    except Exception as exc:
-        logging.warning("Could not load logo '%s': %s", filename, exc)
+    cleaned = (abbr or "").strip()
+    if not cleaned:
         return None
+    candidates: list[str] = []
+    for candidate in (cleaned, cleaned.upper(), cleaned.lower()):
+        if candidate and candidate not in candidates:
+            candidates.append(candidate)
+    last_error: Optional[Exception] = None
+    for candidate in candidates:
+        filename = f"{candidate}.png"
+        path = os.path.join(base_dir, filename)
+        if not os.path.exists(path):
+            continue
+        try:
+            logo = Image.open(path).convert("RGBA")
+            logo = _adjust_logo_brightness(logo, base_dir, candidate)
+            ratio = height / logo.height
+            return logo.resize((int(logo.width * ratio), height), Image.ANTIALIAS)
+        except Exception as exc:  # pragma: no cover - rare file corruption
+            last_error = exc
+            continue
+    if last_error:
+        logging.warning("Could not load logo '%s': %s", abbr, last_error)
+    return None
 
 @log_call
 def colored_image(mono_img: Image.Image, screen_key: str) -> Image.Image:

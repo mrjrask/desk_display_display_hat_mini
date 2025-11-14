@@ -1300,6 +1300,50 @@ def _parse_ics_datetime(value: Optional[str], meta: Dict[str, str]) -> Optional[
     return None
 
 
+_AHL_TEAM_ABBR_OVERRIDES = {
+    "abbotsford canucks": "ABB",
+    "ahl": "AHL",
+    "ahl all star": "AHL",
+    "ahl all star challenge": "AHL",
+    "ahl all star classic": "AHL",
+    "ahl all star game": "AHL",
+    "ahl all star skills competition": "AHL",
+    "ahl skills competition": "AHL",
+    "american hockey league": "AHL",
+    "bakersfield condors": "BAK",
+    "belleville senators": "BEL",
+    "bridgeport islanders": "BRI",
+    "calgary wranglers": "CGY",
+    "charlotte checkers": "CLT",
+    "chicago wolves": "CHI",
+    "cleveland monsters": "CLE",
+    "coachella valley firebirds": "CV",
+    "colorado eagles": "COL",
+    "grand rapids griffins": "GR",
+    "hartford wolf pack": "HFD",
+    "henderson silver knights": "HSK",
+    "hershey bears": "HER",
+    "iowa wild": "IA",
+    "laval rocket": "LAV",
+    "lehigh valley phantoms": "LV",
+    "manitoba moose": "MB",
+    "milwaukee admirals": "MIL",
+    "ontario reign": "ONT",
+    "providence bruins": "PRO",
+    "rockford icehogs": "RFD",
+    "rochester americans": "ROC",
+    "san diego gulls": "SD",
+    "san jose barracuda": "SJ",
+    "springfield thunderbirds": "SPR",
+    "syracuse crunch": "SYR",
+    "texas stars": "TEX",
+    "toronto marlies": "TOR",
+    "tucson roadrunners": "TUC",
+    "utica comets": "UTC",
+    "wilkes barre scranton penguins": "WBS",
+}
+
+
 def _derive_team_abbr(name: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9 ]+", "", name or "").strip()
     if not cleaned:
@@ -1326,7 +1370,8 @@ def _ics_team_payload(name: str, is_wolves: bool) -> Dict[str, Any]:
         abbr = (AHL_TEAM_TRICODE or _derive_team_abbr(name)).upper()
         team_id: Optional[int] = AHL_TEAM_ID
     else:
-        abbr = _derive_team_abbr(name)
+        key = re.sub(r"[^a-z0-9]+", " ", name or "").strip()
+        abbr = _AHL_TEAM_ABBR_OVERRIDES.get(key.lower()) or _derive_team_abbr(name)
         team_id = None
     return {
         "id": team_id,
