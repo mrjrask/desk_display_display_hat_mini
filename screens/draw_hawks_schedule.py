@@ -393,15 +393,19 @@ def _load_logo_png(abbr: str, height: int) -> Optional[Image.Image]:
     """Load team logo from local repo PNG: images/nhl/{ABBR}.png; fallback NHL.jpg."""
     if not abbr:
         abbr = "NHL"
-    png_path = os.path.join(NHL_DIR, f"{abbr.upper()}.png")
-    try:
-        if os.path.exists(png_path):
-            img = Image.open(png_path).convert("RGBA")
-            w0, h0 = img.size
-            r = height / float(h0) if h0 else 1.0
-            return img.resize((max(1, int(w0*r)), height), Image.LANCZOS)
-    except Exception:
-        pass
+
+    # Try case-insensitive lookup: uppercase first, then lowercase
+    for variant in [abbr.upper(), abbr.lower()]:
+        png_path = os.path.join(NHL_DIR, f"{variant}.png")
+        try:
+            if os.path.exists(png_path):
+                img = Image.open(png_path).convert("RGBA")
+                w0, h0 = img.size
+                r = height / float(h0) if h0 else 1.0
+                return img.resize((max(1, int(w0*r)), height), Image.LANCZOS)
+        except Exception:
+            pass
+
     # Generic fallback
     try:
         if os.path.exists(FALLBACK_LOGO):
