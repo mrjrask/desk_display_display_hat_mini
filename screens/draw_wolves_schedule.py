@@ -32,6 +32,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import os
+import re
 from typing import Dict, Optional, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
@@ -44,6 +45,7 @@ from config import (
     AHL_FALLBACK_LOGO,
     AHL_IMAGES_DIR,
     AHL_TEAM_ID,
+    AHL_TEAM_NAME,
     AHL_TEAM_TRICODE,
     TIMES_SQUARE_FONT_PATH,
     WIDTH,
@@ -102,6 +104,75 @@ FONT_SMALL = _ts(22 if HEIGHT > 64 else 19)    # for SOG label / live clock
 TEAM_ID      = AHL_TEAM_ID
 TEAM_TRICODE = (AHL_TEAM_TRICODE or "CHI").upper()
 
+# Map full team names (as returned by the ICS feed) to the
+# lowercase abbreviations used in ``images/ahl``.
+# Keys are stored as lowercase strings stripped of punctuation for
+# reliable lookups even if the feed varies the formatting.
+_TEAM_NAME_TO_ABBR = {
+    "abbotsford canucks": "ABB",
+    "ahl": "AHL",
+    "ahl all star": "AHL",
+    "ahl all star challenge": "AHL",
+    "ahl all star classic": "AHL",
+    "ahl all star game": "AHL",
+    "ahl all star skills competition": "AHL",
+    "ahl skills competition": "AHL",
+    "american hockey league": "AHL",
+    "bakersfield condors": "BAK",
+    "belleville senators": "BEL",
+    "bridgeport islanders": "BRI",
+    "calgary wranglers": "CGY",
+    "charlotte checkers": "CLT",
+    "chicago wolves": "CHI",
+    "cleveland monsters": "CLE",
+    "coachella valley firebirds": "CV",
+    "colorado eagles": "COL",
+    "grand rapids griffins": "GR",
+    "hartford wolf pack": "HFD",
+    "henderson silver knights": "HSK",
+    "hershey bears": "HER",
+    "iowa wild": "IA",
+    "laval rocket": "LAV",
+    "lehigh valley phantoms": "LV",
+    "manitoba moose": "MB",
+    "milwaukee admirals": "MIL",
+    "ontario reign": "ONT",
+    "providence bruins": "PRO",
+    "rockford icehogs": "RFD",
+    "rochester americans": "ROC",
+    "san diego gulls": "SD",
+    "san jose barracuda": "SJ",
+    "springfield thunderbirds": "SPR",
+    "syracuse crunch": "SYR",
+    "texas stars": "TEX",
+    "toronto marlies": "TOR",
+    "tucson roadrunners": "TUC",
+    "utica comets": "UTC",
+    "wilkes barre scranton penguins": "WBS",
+}
+
+
+def _normalize_team_key(name: Optional[str]) -> str:
+    if not isinstance(name, str):
+        return ""
+    return re.sub(r"[^a-z0-9]+", " ", name.lower()).strip()
+
+
+def _map_team_name_to_abbr(*names: Optional[str]) -> Optional[str]:
+    for candidate in names:
+        key = _normalize_team_key(candidate)
+        if not key:
+            continue
+        mapped = _TEAM_NAME_TO_ABBR.get(key)
+        if mapped:
+            return mapped.upper()
+    return None
+
+
+_CUSTOM_TEAM_NAME = _normalize_team_key(AHL_TEAM_NAME)
+if _CUSTOM_TEAM_NAME and TEAM_TRICODE:
+    _TEAM_NAME_TO_ABBR.setdefault(_CUSTOM_TEAM_NAME, TEAM_TRICODE)
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Display helpers
 
@@ -156,11 +227,17 @@ def _team_obj_from_any(t: Dict) -> Dict:
 
     # AHL data structure uses 'abbr' not 'abbrev'
     abbr = t.get("abbr") or t.get("abbrev") or t.get("code")
+    if isinstance(abbr, str):
+        abbr = abbr.strip()
     tid  = t.get("id") or t.get("teamId") or t.get("team_id")
     name = t.get("name") or t.get("fullName")
     nickname = t.get("nickname") or t.get("shortName")
 
-    return {"abbrev": abbr, "id": tid, "name": name, "nickname": nickname}
+    resolved_abbr = abbr or _map_team_name_to_abbr(name, nickname)
+    if isinstance(resolved_abbr, str):
+        resolved_abbr = resolved_abbr.upper()
+
+    return {"abbrev": resolved_abbr, "id": tid, "name": name, "nickname": nickname}
 
 def _extract_tris_from_game(game: Dict) -> Tuple[str, str]:
     """(away_tri, home_tri) from a game-like dict."""
@@ -397,7 +474,11 @@ def _team_scoreboard_label(team_like: Dict, fallback: str = "") -> str:
     if not isinstance(team_like, dict):
         return fallback
 
-    # AHL data structure - prefer nickname over name
+    abbr = team_like.get("abbr") or team_like.get("abbrev")
+    if abbr and isinstance(abbr, str) and abbr.strip():
+        return abbr.strip().upper()
+
+    # AHL data structure - prefer nickname over name when no abbr exists
     nickname = team_like.get("nickname")
     if nickname and isinstance(nickname, str) and nickname.strip():
         return nickname.strip()
@@ -405,10 +486,6 @@ def _team_scoreboard_label(team_like: Dict, fallback: str = "") -> str:
     name = team_like.get("name")
     if name and isinstance(name, str) and name.strip():
         return name.strip()
-
-    abbr = team_like.get("abbr") or team_like.get("abbrev")
-    if abbr and isinstance(abbr, str) and abbr.strip():
-        return abbr.strip()
 
     return fallback
 
@@ -896,14 +973,16 @@ def draw_last_wolves_game(display, game, transition: bool=False):
 
     raw_away = game.get("away") or {}
     raw_home = game.get("home") or {}
+    away_info = _team_obj_from_any(raw_away)
+    home_info = _team_obj_from_any(raw_home)
 
-    away_tri = (raw_away.get("abbr") or "AWY").upper()
-    home_tri = (raw_home.get("abbr") or "HME").upper()
+    away_tri = (away_info.get("abbrev") or "AWY").upper()
+    home_tri = (home_info.get("abbrev") or "HME").upper()
     away_score = raw_away.get("score")
     home_score = raw_home.get("score")
 
-    away_label = _team_scoreboard_label(raw_away, away_tri)
-    home_label = _team_scoreboard_label(raw_home, home_tri)
+    away_label = _team_scoreboard_label(away_info, away_tri)
+    home_label = _team_scoreboard_label(home_info, home_tri)
 
     # Scoreboard
     _draw_scoreboard(
@@ -918,7 +997,7 @@ def draw_last_wolves_game(display, game, transition: bool=False):
     # LED indicator logic
     led_override: Optional[Tuple[float, float, float]] = None
 
-    wolves_home = str(raw_home.get("id")) == str(TEAM_ID)
+    wolves_home = str(home_info.get("id")) == str(TEAM_ID)
     wolves_score = home_score if wolves_home else away_score
     opp_score = away_score if wolves_home else home_score
 
@@ -973,14 +1052,16 @@ def draw_live_wolves_game(display, game, transition: bool=False):
 
     raw_away = game.get("away") or {}
     raw_home = game.get("home") or {}
+    away_info = _team_obj_from_any(raw_away)
+    home_info = _team_obj_from_any(raw_home)
 
-    away_tri = (raw_away.get("abbr") or "AWY").upper()
-    home_tri = (raw_home.get("abbr") or "HME").upper()
+    away_tri = (away_info.get("abbrev") or "AWY").upper()
+    home_tri = (home_info.get("abbrev") or "HME").upper()
     away_score = raw_away.get("score")
     home_score = raw_home.get("score")
 
-    away_label = _team_scoreboard_label(raw_away, away_tri)
-    home_label = _team_scoreboard_label(raw_home, home_tri)
+    away_label = _team_scoreboard_label(away_info, away_tri)
+    home_label = _team_scoreboard_label(home_info, home_tri)
 
     # Scoreboard
     _draw_scoreboard(
