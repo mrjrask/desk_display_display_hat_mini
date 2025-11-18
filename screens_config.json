@@ -3,8 +3,8 @@
     "date": 1,
     "time": 0,
     "weather logo": 0,
-    "weather1": 1,
-    "weather2": 1,
+    "weather1": 0,
+    "weather2": 0,
     "inside": 1,
     "sensors": 0,
     "verano logo": 0,
@@ -25,52 +25,52 @@
     "sox live": 0,
     "sox next": 0,
     "sox next home": 0,
-    "bears logo": 1,
-    "bears next": 1,
-    "hawks logo": 1,
-    "hawks last": 1,
-    "hawks live": 1,
-    "hawks next": 1,
-    "hawks next home": 1,
+    "bears logo": 0,
+    "bears next": 0,
+    "hawks logo": 0,
+    "hawks last": 0,
+    "hawks live": 0,
+    "hawks next": 0,
+    "hawks next home": 0,
     "wolves logo": 1,
     "wolves last": 1,
     "wolves next": 1,
     "wolves next home": 1,
-    "bulls logo": 1,
-    "bulls last": 1,
-    "bulls live": 1,
-    "bulls next": 1,
-    "bulls next home": 1,
+    "bulls logo": 0,
+    "bulls last": 0,
+    "bulls live": 0,
+    "bulls next": 0,
+    "bulls next home": 0,
     "nfl logo": 0,
-    "NFL Scoreboard": 3,
-    "NFL Scoreboard v2": 3,
+    "NFL Scoreboard": 0,
+    "NFL Scoreboard v2": 1,
     "NFL Overview NFC": {
-      "frequency": 3,
+      "frequency": 0,
       "alt": {
         "screen": "NFL Standings NFC",
-        "frequency": 6
+        "frequency": 0
       }
     },
     "NFL Overview AFC": {
-      "frequency": 3,
+      "frequency": 0,
       "alt": {
         "screen": "NFL Standings AFC",
-        "frequency": 6
+        "frequency": 0
       }
     },
     "NFL Standings NFC": 0,
     "NFL Standings AFC": 0,
     "nhl logo": 0,
-    "NHL Scoreboard": 1,
+    "NHL Scoreboard": 0,
     "NHL Scoreboard v2": 1,
     "NHL Standings Overview": {
-      "frequency": 2,
+      "frequency": 0,
       "alt": {
         "screen": [
           "NHL Standings West",
           "NHL Standings East"
         ],
-        "frequency": 4
+        "frequency": 0
       }
     },
     "NHL Standings West": 0,
@@ -89,7 +89,7 @@
     "AL West": 0,
     "AL Wild Card": 0,
     "nba logo": 0,
-    "NBA Scoreboard": 5,
-    "NBA Scoreboard v2": 5
+    "NBA Scoreboard": 0,
+    "NBA Scoreboard v2": 1
   }
 }
