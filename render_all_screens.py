@@ -14,7 +14,7 @@ from typing import Dict, Iterable, Optional, Tuple
 from PIL import Image
 
 import data_fetch
-from config import CENTRAL_TIME, HEIGHT, WIDTH
+from config import AHL_TEAM_TRICODE, CENTRAL_TIME, HEIGHT, WIDTH
 from screens.draw_travel_time import get_travel_active_window, is_travel_screen_active
 from screens.registry import ScreenContext, ScreenDefinition, build_screen_registry
 from schedule import build_scheduler, load_schedule_config
@@ -93,6 +93,15 @@ def load_logo(filename: str, height: int = LOGO_SCREEN_HEIGHT) -> Optional[Image
 
 
 def build_logo_map() -> Dict[str, Optional[Image.Image]]:
+    wolves_logo = None
+    wolves_tri = (AHL_TEAM_TRICODE or "CHI").strip() or "CHI"
+    for variant in {wolves_tri.upper(), wolves_tri.lower()}:
+        wolves_logo = load_logo(f"ahl/{variant}.png", height=TEAM_LOGO_HEIGHT)
+        if wolves_logo:
+            break
+    if wolves_logo is None:
+        wolves_logo = load_logo("wolves.jpg", height=TEAM_LOGO_HEIGHT)
+
     return {
         "weather logo": load_logo("weather.jpg"),
         "verano logo": load_logo("verano.jpg"),
@@ -100,10 +109,7 @@ def build_logo_map() -> Dict[str, Optional[Image.Image]]:
         "nfl logo": load_logo("nfl/nfl.png"),
         "hawks logo": load_logo("hawks.jpg", height=TEAM_LOGO_HEIGHT),
         "nhl logo": load_logo("nhl/nhl.png") or load_logo("nhl/NHL.png"),
-        "wolves logo": (
-            load_logo("ahl/CHI.png", height=TEAM_LOGO_HEIGHT)
-            or load_logo("wolves.jpg", height=TEAM_LOGO_HEIGHT)
-        ),
+        "wolves logo": wolves_logo,
         "cubs logo": load_logo("cubs.jpg", height=TEAM_LOGO_HEIGHT),
         "sox logo": load_logo("sox.jpg", height=TEAM_LOGO_HEIGHT),
         "mlb logo": load_logo("mlb.jpg"),
