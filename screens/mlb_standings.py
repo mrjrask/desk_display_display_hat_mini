@@ -218,6 +218,8 @@ def draw_overview(display, title: str, league_id: int, transition=False):
         completed = [False] * len(schedule)
 
         for current_step in range(total_duration):
+            frame_start = time.time()
+
             for idx, (start, drops) in enumerate(schedule):
                 if current_step >= start + steps and not completed[idx]:
                     placed.extend(drops)
@@ -243,7 +245,12 @@ def draw_overview(display, title: str, league_id: int, transition=False):
 
             display.image(frame)
             display.show()
-            time.sleep(OVERVIEW_DROP_FRAME_DELAY)
+
+            # Account for rendering time to maintain consistent frame rate
+            elapsed = time.time() - frame_start
+            sleep_time = max(0, OVERVIEW_DROP_FRAME_DELAY - elapsed)
+            if sleep_time > 0:
+                time.sleep(sleep_time)
 
     # Final static image
     final = header.copy()
@@ -328,18 +335,26 @@ def draw_division_screen(display, league_id: int, division_id: int, title: str, 
         time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
         return None
 
+    target_frame_time = 0.016  # ~60 FPS for smoother scrolling
     for off in range(
         SCOREBOARD_SCROLL_STEP,
         max_offset + SCOREBOARD_SCROLL_STEP,
         SCOREBOARD_SCROLL_STEP,
     ):
+        frame_start = time.time()
+
         offset = min(off, max_offset)
         f2 = header.copy()
         part = canvas.crop((0, offset, WIDTH, offset + visible_h))
         f2.paste(part, (0, header_h))
         display.image(f2)
         display.show()
-        time.sleep(SCOREBOARD_SCROLL_DELAY)
+
+        # Account for rendering time to maintain consistent frame rate
+        elapsed = time.time() - frame_start
+        sleep_time = max(0, target_frame_time - elapsed)
+        if sleep_time > 0:
+            time.sleep(sleep_time)
 
     time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
     return None
@@ -424,18 +439,26 @@ def draw_wildcard_screen(display, league_id: int, title: str, transition=False):
         time.sleep(SCOREBOARD_SCROLL_PAUSE_TOP)
         return None
 
+    target_frame_time = 0.016  # ~60 FPS for smoother scrolling
     for off in range(
         start_off - SCOREBOARD_SCROLL_STEP,
         -SCOREBOARD_SCROLL_STEP,
         -SCOREBOARD_SCROLL_STEP,
     ):
+        frame_start = time.time()
+
         offset = max(0, off)
         f2 = header.copy()
         part = canvas.crop((0, offset, WIDTH, offset + visible_h))
         f2.paste(part, (0, header_h))
         display.image(f2)
         display.show()
-        time.sleep(SCOREBOARD_SCROLL_DELAY)
+
+        # Account for rendering time to maintain consistent frame rate
+        elapsed = time.time() - frame_start
+        sleep_time = max(0, target_frame_time - elapsed)
+        if sleep_time > 0:
+            time.sleep(sleep_time)
 
     time.sleep(SCOREBOARD_SCROLL_PAUSE_TOP)
     return None

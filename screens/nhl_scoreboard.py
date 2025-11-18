@@ -960,12 +960,20 @@ def _scroll_display(display, full_img: Image.Image):
     display.image(frame)
     time.sleep(SCOREBOARD_SCROLL_PAUSE_TOP)
 
+    target_frame_time = 0.016  # ~60 FPS for smoother scrolling
     for offset in range(
         SCOREBOARD_SCROLL_STEP, max_offset + 1, SCOREBOARD_SCROLL_STEP
     ):
+        frame_start = time.time()
+
         frame = full_img.crop((0, offset, WIDTH, offset + HEIGHT))
         display.image(frame)
-        time.sleep(SCOREBOARD_SCROLL_DELAY)
+
+        # Account for rendering time to maintain consistent frame rate
+        elapsed = time.time() - frame_start
+        sleep_time = max(0, target_frame_time - elapsed)
+        if sleep_time > 0:
+            time.sleep(sleep_time)
 
     time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
 

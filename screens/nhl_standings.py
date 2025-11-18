@@ -1043,6 +1043,8 @@ def _animate_overview_drop(
     completed = [False] * len(schedule)
 
     for current_step in range(total_duration):
+        frame_start = time.time()
+
         for idx, (start, drops) in enumerate(schedule):
             if current_step >= start + steps and not completed[idx]:
                 placed.extend(drops)
@@ -1073,7 +1075,12 @@ def _animate_overview_drop(
         display.image(frame)
         if hasattr(display, "show"):
             display.show()
-        time.sleep(DROP_FRAME_DELAY)
+
+        # Account for rendering time to maintain consistent frame rate
+        elapsed = time.time() - frame_start
+        sleep_time = max(0, DROP_FRAME_DELAY - elapsed)
+        if sleep_time > 0:
+            time.sleep(sleep_time)
 
 
 def _prepare_overview(divisions: List[tuple[str, List[dict]]]) -> tuple[Image.Image, List[List[Placement]]]:
@@ -1100,12 +1107,20 @@ def _scroll_vertical(display, image: Image.Image) -> None:
     display.image(image.crop((0, 0, WIDTH, HEIGHT)))
     time.sleep(SCOREBOARD_SCROLL_PAUSE_TOP)
 
+    target_frame_time = 0.016  # ~60 FPS for smoother scrolling
     for offset in range(
         SCOREBOARD_SCROLL_STEP, max_offset + 1, SCOREBOARD_SCROLL_STEP
     ):
+        frame_start = time.time()
+
         frame = image.crop((0, offset, WIDTH, offset + HEIGHT))
         display.image(frame)
-        time.sleep(SCOREBOARD_SCROLL_DELAY)
+
+        # Account for rendering time to maintain consistent frame rate
+        elapsed = time.time() - frame_start
+        sleep_time = max(0, target_frame_time - elapsed)
+        if sleep_time > 0:
+            time.sleep(sleep_time)
 
     time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
 

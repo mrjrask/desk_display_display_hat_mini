@@ -511,10 +511,17 @@ def animate_fade_in(
     target = new_image.convert("RGB")
 
     for i in range(steps + 1):
+        frame_start = time.time()
+
         alpha = i / steps
         frame = Image.blend(base, target, alpha)
         display.image(frame)
-        time.sleep(delay)
+
+        # Account for rendering time to maintain consistent frame rate
+        elapsed = time.time() - frame_start
+        sleep_time = max(0, delay - elapsed)
+        if sleep_time > 0:
+            time.sleep(sleep_time)
 
 @log_call
 def animate_scroll(display: Display, image: Image.Image, speed=3, y_offset=None):
@@ -537,7 +544,10 @@ def animate_scroll(display: Display, image: Image.Image, speed=3, y_offset=None)
     background_color = (0, 0, 0, 0) if has_alpha else (0, 0, 0)
     frame_mode = "RGBA" if has_alpha else "RGB"
 
+    target_frame_time = 0.016  # ~60 FPS for smoother animation
     for x in range(start, end + step, step):
+        frame_start = time.time()
+
         frame = Image.new(frame_mode, (w, h), background_color)
         if has_alpha:
             frame.paste(image, (x, y), image)
@@ -546,7 +556,12 @@ def animate_scroll(display: Display, image: Image.Image, speed=3, y_offset=None)
             frame.paste(image, (x, y))
             frame_to_show = frame
         display.image(frame_to_show)
-        time.sleep(0.008)
+
+        # Account for rendering time to maintain consistent frame rate
+        elapsed = time.time() - frame_start
+        sleep_time = max(0, target_frame_time - elapsed)
+        if sleep_time > 0:
+            time.sleep(sleep_time)
 
     # Ensure the display is clear once the image has fully scrolled off-screen.
     final_frame = Image.new(frame_mode, (w, h), background_color)
