@@ -25,6 +25,7 @@ from screens.draw_hawks_schedule import (
 )
 from screens.draw_wolves_schedule import (
     draw_last_wolves_game,
+    draw_live_wolves_game,
     draw_sports_screen_wolves,
     draw_wolves_next_home_game,
 )
@@ -431,6 +432,13 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 context.display, data, transition=True
             ),
             available=bool(wolves.get("last")),
+        )
+        register(
+            "wolves live",
+            lambda data=wolves.get("live"): draw_live_wolves_game(
+                context.display, data, transition=True
+            ),
+            available=_is_live_game_today(wolves.get("live")),
         )
         register(
             "wolves next",
