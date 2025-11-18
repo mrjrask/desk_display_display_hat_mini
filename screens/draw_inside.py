@@ -57,6 +57,25 @@ def _extract_field(data: Any, key: str) -> Optional[float]:
         return None
 
 
+def _normalize_pressure(pres_raw: Optional[float]) -> Tuple[Optional[float], Optional[float]]:
+    """Return (pressure_hpa, pressure_inhg) for a raw sensor reading."""
+
+    if pres_raw is None:
+        return None, None
+
+    try:
+        pres_value = float(pres_raw)
+    except Exception:
+        return None, None
+
+    # Many drivers report Pascals while others provide hectopascals directly.
+    # Treat anything that looks like a Pascal reading (>2,000) as Pa and
+    # convert down to hPa before deriving inches of mercury.
+    pres_hpa = pres_value / 100.0 if pres_value > 2000 else pres_value
+    pres_inhg = pres_hpa * 0.02953 if pres_hpa is not None else None
+    return pres_hpa, pres_inhg
+
+
 
 def _suppress_i2c_error_output():
     """Context manager that silences noisy stderr output from native drivers."""
@@ -344,20 +363,23 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
         def read() -> SensorReadings:
             temp_f = float(dev.get_temperature()) * 9 / 5 + 32
             hum = float(dev.get_humidity())
-            pres_raw = float(dev.get_pressure())
+            pres_raw = dev.get_pressure()
+            pres_hpa, pres_inhg = _normalize_pressure(pres_raw)
 
-            # DEBUG: Log the raw pressure value to understand what units the sensor returns
-            logging.info(f"draw_inside: Pimoroni BME280 raw pressure: {pres_raw}")
+            logging.info(
+                "draw_inside: Pimoroni BME280 raw pressure: %s -> %.2f hPa = %.2f inHg",
+                pres_raw,
+                pres_hpa if pres_hpa is not None else float("nan"),
+                pres_inhg if pres_inhg is not None else float("nan"),
+            )
 
-            # BME280 typically returns pressure in hPa (hectopascals/millibars)
-            # Normal sea level pressure is ~1013 hPa or ~29.92 inHg
-            # Conversion: 1 hPa = 0.02953 inHg
-            pres_hpa = pres_raw
-            pres = pres_hpa * 0.02953
-
-            logging.info(f"draw_inside: Pimoroni BME280 converted: {pres_hpa:.2f} hPa = {pres:.2f} inHg")
-
-            return dict(temp_f=temp_f, humidity=hum, pressure_inhg=pres, voc_ohms=None)
+            return dict(
+                temp_f=temp_f,
+                humidity=hum,
+                pressure_inhg=pres_inhg,
+                pressure_hpa=pres_hpa,
+                voc_ohms=None,
+            )
 
         return label, read
 
@@ -367,19 +389,24 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
         temp_c = float(fallback_dev.temperature)
         hum_raw = getattr(fallback_dev, "humidity", None)
         pres_raw = getattr(fallback_dev, "pressure", None)
+        pres_hpa, pres = _normalize_pressure(pres_raw)
         hum = float(hum_raw) if hum_raw is not None else None
-        pres = None
-        if pres_raw is not None:
-            # DEBUG: Log the raw pressure value to understand what units the sensor returns
-            logging.info(f"draw_inside: Pimoroni BME280 (fallback) raw pressure: {pres_raw}")
-
-            pres_hpa = float(pres_raw)
-            pres = pres_hpa * 0.02953
-
-            logging.info(f"draw_inside: Pimoroni BME280 (fallback) converted: {pres_hpa:.2f} hPa = {pres:.2f} inHg")
+        if pres_hpa is not None:
+            logging.info(
+                "draw_inside: Pimoroni BME280 (fallback) raw pressure: %s -> %.2f hPa = %.2f inHg",
+                pres_raw,
+                pres_hpa,
+                pres if pres is not None else float("nan"),
+            )
 
         temp_f = temp_c * 9 / 5 + 32
-        return dict(temp_f=temp_f, humidity=hum, pressure_inhg=pres, voc_ohms=None)
+        return dict(
+            temp_f=temp_f,
+            humidity=hum,
+            pressure_inhg=pres,
+            pressure_hpa=pres_hpa,
+            voc_ohms=None,
+        )
 
     return label, read
 
@@ -395,17 +422,23 @@ def _probe_adafruit_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
     def read() -> SensorReadings:
         temp_f = float(dev.temperature) * 9 / 5 + 32
         hum = float(dev.humidity)
-        pres_raw = float(dev.pressure)
+        pres_raw = getattr(dev, "pressure", None)
+        pres_hpa, pres = _normalize_pressure(pres_raw)
 
-        # DEBUG: Log the raw pressure value to understand what units the sensor returns
-        logging.info(f"draw_inside: Adafruit BME280 raw pressure: {pres_raw}")
+        logging.info(
+            "draw_inside: Adafruit BME280 raw pressure: %s -> %.2f hPa = %.2f inHg",
+            pres_raw,
+            pres_hpa if pres_hpa is not None else float("nan"),
+            pres if pres is not None else float("nan"),
+        )
 
-        pres_hpa = pres_raw
-        pres = pres_hpa * 0.02953
-
-        logging.info(f"draw_inside: Adafruit BME280 converted: {pres_hpa:.2f} hPa = {pres:.2f} inHg")
-
-        return dict(temp_f=temp_f, humidity=hum, pressure_inhg=pres, voc_ohms=None)
+        return dict(
+            temp_f=temp_f,
+            humidity=hum,
+            pressure_inhg=pres,
+            pressure_hpa=pres_hpa,
+            voc_ohms=None,
+        )
 
     return "Adafruit BME280", read
 
