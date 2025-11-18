@@ -134,7 +134,7 @@ _TEAM_NAME_TO_ABBR = {
     "iowa wild": "IA",
     "laval rocket": "LAV",
     "lehigh valley phantoms": "LV",
-    "manitoba moose": "MB",
+    "manitoba moose": "MM",
     "milwaukee admirals": "MIL",
     "ontario reign": "ONT",
     "providence bruins": "PRO",
