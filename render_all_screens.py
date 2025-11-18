@@ -14,7 +14,13 @@ from typing import Dict, Iterable, Optional, Tuple
 from PIL import Image
 
 import data_fetch
-from config import AHL_TEAM_TRICODE, CENTRAL_TIME, HEIGHT, WIDTH
+from config import (
+    AHL_TEAM_TRICODE,
+    CENTRAL_TIME,
+    ENABLE_SCREENSHOTS,
+    HEIGHT,
+    WIDTH,
+)
 from screens.draw_travel_time import get_travel_active_window, is_travel_screen_active
 from screens.registry import ScreenContext, ScreenDefinition, build_screen_registry
 from schedule import build_scheduler, load_schedule_config
@@ -271,7 +277,7 @@ def _suppress_animation_delay():
 
 def render_all_screens(
     *,
-    sync_screenshots: bool = False,
+    sync_screenshots: bool = ENABLE_SCREENSHOTS,
     create_archive: bool = True,
     ignore_schedule: bool = False,
 ) -> int:
@@ -372,9 +378,20 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--sync-screenshots",
+        dest="sync_screenshots",
         action="store_true",
-        help="Write PNG files for each rendered screen to the screenshots directory.",
+        help=(
+            "Write PNG files for each rendered screen to the screenshots directory "
+            "(default mirrors ENABLE_SCREENSHOTS from config.py)."
+        ),
     )
+    parser.add_argument(
+        "--no-sync-screenshots",
+        dest="sync_screenshots",
+        action="store_false",
+        help="Disable screenshot syncing even if ENABLE_SCREENSHOTS is true.",
+    )
+    parser.set_defaults(sync_screenshots=ENABLE_SCREENSHOTS)
     parser.add_argument(
         "--no-archive",
         action="store_true",
