@@ -48,6 +48,7 @@ from config import (
     TRAVEL_ACTIVE_WINDOW,
     DARK_HOURS_ENABLED,
     is_within_dark_hours,
+    AHL_TEAM_TRICODE,
 )
 from utils import (
     Display,
@@ -615,9 +616,14 @@ nhl_logo    = load_logo("nhl/nhl.png") or load_logo("nhl/NHL.png")
 nfl_logo    = load_logo("nfl/nfl.png")
 verano_img  = load_logo("verano.jpg")
 bears_logo  = load_logo("bears.png")
-wolves_logo = load_logo("ahl/CHI.png", height=TEAM_LOGO_HEIGHT) or load_logo(
-    "wolves.jpg", height=TEAM_LOGO_HEIGHT
-)
+_WOLVES_TRI = (AHL_TEAM_TRICODE or "CHI").strip() or "CHI"
+wolves_logo = None
+for variant in {_WOLVES_TRI.upper(), _WOLVES_TRI.lower()}:
+    wolves_logo = load_logo(f"ahl/{variant}.png", height=TEAM_LOGO_HEIGHT)
+    if wolves_logo:
+        break
+if wolves_logo is None:
+    wolves_logo = load_logo("wolves.jpg", height=TEAM_LOGO_HEIGHT)
 
 LOGOS = {
     "weather logo": weather_img,

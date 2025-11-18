@@ -1570,17 +1570,32 @@ def _classify_wolves_ics_games(games: List[Dict[str, Any]]) -> Dict[str, Optiona
     now = datetime.datetime.now(pytz.UTC)
     upcoming: List[Dict[str, Any]] = []
     last_final: Optional[Dict[str, Any]] = None
+    live_game: Optional[Dict[str, Any]] = None
+    live_window = datetime.timedelta(hours=4)
+
     for game in games:
         start = game.get("start_utc")
+        if not isinstance(start, datetime.datetime):
+            continue
         status_state = ((game.get("status") or {}).get("state") or "").upper()
         has_scores = _ics_game_has_scores(game)
-        if has_scores and isinstance(start, datetime.datetime):
-            if status_state.startswith("FIN") or start <= now:
-                if not last_final or start > last_final.get("start_utc", start):
-                    last_final = game
+
+        if has_scores and (status_state.startswith("FIN") or start <= now):
+            if not last_final or start > last_final.get("start_utc", start):
+                last_final = game
+            continue
+
+        if start <= now:
+            if not has_scores and now - start <= live_window:
+                if (live_game is None) or start < live_game.get("start_utc", start):
+                    live_game = game
                 continue
-        if isinstance(start, datetime.datetime) and start >= now - datetime.timedelta(hours=1):
-            upcoming.append(game)
+            if not last_final or start > last_final.get("start_utc", start):
+                last_final = game
+            continue
+
+        upcoming.append(game)
+
     upcoming.sort(key=lambda g: g.get("start_utc"))
     next_game = upcoming[0] if upcoming else None
     next_home = None
@@ -1588,7 +1603,18 @@ def _classify_wolves_ics_games(games: List[Dict[str, Any]]) -> Dict[str, Optiona
         if game.get("is_home"):
             next_home = game
             break
-    return {"last_game": last_final, "next_game": next_game, "next_home_game": next_home}
+
+    if live_game is not None:
+        status = live_game.setdefault("status", {})
+        status.setdefault("state", "LIVE")
+        status.setdefault("detail", "In Progress")
+
+    return {
+        "last_game": last_final,
+        "live_game": live_game,
+        "next_game": next_game,
+        "next_home_game": next_home,
+    }
 
 
 _WOLVES_CACHE_TTL = 15 * 60  # seconds
@@ -1613,22 +1639,13 @@ def fetch_wolves_games(force_refresh: bool = False) -> Dict[str, Optional[Dict]]
     next_home: Optional[Dict] = None
 
     try:
-        games = _fetch_ahl_schedule()
-        if games:
-            classified = _classify_wolves_games(games)
-            last_game = classified.get("last_game")
-            live_game = classified.get("live_game")
-    except Exception as exc:
-        logging.error("Error fetching Chicago Wolves score data: %s", exc)
-
-    try:
         ics_games = _fetch_wolves_ics_games()
         if ics_games:
             classified_ics = _classify_wolves_ics_games(ics_games)
+            last_game = classified_ics.get("last_game")
+            live_game = classified_ics.get("live_game")
             next_game = classified_ics.get("next_game")
             next_home = classified_ics.get("next_home_game")
-            if not last_game:
-                last_game = classified_ics.get("last_game")
     except Exception as exc:
         logging.error("Error parsing Wolves ICS schedule: %s", exc)
 
