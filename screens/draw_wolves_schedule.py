@@ -4,9 +4,8 @@ draw_wolves_schedule.py
 
 Chicago Wolves (AHL) screens that mirror the Hawks layouts:
 
-- Last Wolves game: compact 2×3 scoreboard (logo+abbr | score | SOG)
+- Last Wolves game: compact 2×2 scoreboard (logo+abbr | score)
   * Title: "Last Wolves game:" (uses same title font as mlb_schedule if available)
-  * SOG label sits right above the table
   * Bottom date: "Yesterday" or "Wed Sep 24" (no year) using the same footer/small font as mlb_schedule if available
 
 - Wolves Live: compact scoreboard (same), optional live clock line.
@@ -420,31 +419,22 @@ def _draw_scoreboard(
     top_y: int,
     away_tri: str,
     away_score: Optional[int],
-    away_sog: Optional[int],
     home_tri: str,
     home_score: Optional[int],
-    home_sog: Optional[int],
     *,
     away_label: Optional[str] = None,
     home_label: Optional[str] = None,
-    put_sog_label: bool = True,
     bottom_reserved_px: int = 0,
 ) -> int:
-    """Draw a compact 2×3 scoreboard. Returns bottom y."""
-    # Column widths: first column dominates for logo + name, remaining space split
-    # for score/SOG with the score column slightly wider than SOG.
+    """Draw a compact 2×2 scoreboard. Returns bottom y."""
+    # Column widths: first column dominates for logo + name, second column for score
     col1_w = min(WIDTH - 32, max(84, int(WIDTH * 0.72)))
-    remaining = max(24, WIDTH - col1_w)
-    col2_w = max(12, int(round(remaining * 0.55)))
-    col3_w = max(8, WIDTH - col1_w - col2_w)
-    # Ensure we account for rounding adjustments.
-    if col1_w + col2_w + col3_w != WIDTH:
-        col3_w = WIDTH - col1_w - col2_w
-    x0, x1, x2, x3 = 0, col1_w, col1_w + col2_w, WIDTH
+    col2_w = WIDTH - col1_w
+    x0, x1, x2 = 0, col1_w, WIDTH
 
     y = top_y
 
-    header_h = _text_h(d, FONT_SMALL) + 4 if put_sog_label else 0
+    header_h = 0
     table_top = y
 
     # Row heights — compact
@@ -475,21 +465,11 @@ def _draw_scoreboard(
 
     # We keep the invisible grid for layout math only—no rendered lines.
 
-    # Column headers inside the table
-    if header_h:
-        header_y = table_top + (header_h - _text_h(d, FONT_SMALL)) // 2
-        score_lbl = ""
-        sog_lbl = "SOG"
-        if score_lbl:
-            d.text((x1 + (col2_w - _text_w(d, score_lbl, FONT_SMALL)) // 2, header_y), score_lbl, font=FONT_SMALL, fill="white")
-        d.text((x2 + (col3_w - _text_w(d, sog_lbl, FONT_SMALL)) // 2, header_y), sog_lbl, font=FONT_SMALL, fill="white")
-
     def _prepare_row(
         row_top: int,
         row_height: int,
         tri: str,
         score: Optional[int],
-        sog: Optional[int],
         label: Optional[str],
     ) -> Dict:
         base_logo_height = max(1, row_height - 4)
@@ -507,15 +487,14 @@ def _draw_scoreboard(
             "height": row_height,
             "tri": tri,
             "score": score,
-            "sog": sog,
             "base_text": text,
             "logo": logo,
             "max_width": max_width,
         }
 
     row_specs = [
-        _prepare_row(row1_top, row1_h, away_tri, away_score, away_sog, away_label),
-        _prepare_row(split_y, row2_h, home_tri, home_score, home_sog, home_label),
+        _prepare_row(row1_top, row1_h, away_tri, away_score, away_label),
+        _prepare_row(split_y, row2_h, home_tri, home_score, home_label),
     ]
 
     def _fits(font: ImageFont.ImageFont) -> bool:
@@ -542,7 +521,6 @@ def _draw_scoreboard(
         row_height = spec["height"]
         tri = spec["tri"]
         score = spec["score"]
-        sog = spec["sog"]
         text = spec["base_text"]
         logo = spec["logo"]
 
@@ -580,13 +558,6 @@ def _draw_scoreboard(
         sx = x1 + (col2_w - sw)//2
         sy = cy - sh//2
         d.text((sx, sy), sc, font=FONT_SCORE, fill="white")
-
-        sog_txt = "-" if sog is None else str(sog)
-        gw = _text_w(d, sog_txt, FONT_SOG)
-        gh = _text_h(d, FONT_SOG)
-        gx = x2 + (col3_w - gw)//2
-        gy = cy - gh//2
-        d.text((gx, gy), sog_txt, font=FONT_SOG, fill="white")
 
     for spec in row_specs:
         _draw_row(spec)
@@ -930,8 +901,6 @@ def draw_last_wolves_game(display, game, transition: bool=False):
     home_tri = (raw_home.get("abbr") or "HME").upper()
     away_score = raw_away.get("score")
     home_score = raw_home.get("score")
-    away_sog = raw_away.get("shots")
-    home_sog = raw_home.get("shots")
 
     away_label = _team_scoreboard_label(raw_away, away_tri)
     home_label = _team_scoreboard_label(raw_home, home_tri)
@@ -939,11 +908,10 @@ def draw_last_wolves_game(display, game, transition: bool=False):
     # Scoreboard
     _draw_scoreboard(
         img, d, y,
-        away_tri, away_score, away_sog,
-        home_tri, home_score, home_sog,
+        away_tri, away_score,
+        home_tri, home_score,
         away_label=away_label,
         home_label=home_label,
-        put_sog_label=True,
         bottom_reserved_px=reserve,
     )
 
@@ -975,6 +943,60 @@ def draw_last_wolves_game(display, game, transition: bool=False):
         _center_bottom_text(d, bottom_str, FONT_BOTTOM)
 
     return _push(display, img, transition=transition, led_override=led_override)
+
+def draw_live_wolves_game(display, game, transition: bool=False):
+    """
+    Display a live Wolves game with scoreboard and live status.
+    Expects AHL data structure with away/home dicts containing abbr and score.
+    """
+    if not isinstance(game, dict):
+        logging.warning("wolves live: missing game data")
+        return None
+
+    # Build the image
+    img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    d   = ImageDraw.Draw(img)
+
+    # Title (MLB title font)
+    y = 2
+    title_h = _draw_title_line(img, d, y, "Wolves Live:", FONT_TITLE)
+    y += title_h
+
+    # Live status (period and clock)
+    dateline = _format_live_dateline(game)
+    if dateline:
+        _center_text(d, y, dateline, FONT_SMALL)
+        y += _text_h(d, FONT_SMALL)
+
+    # Reserve bottom for live status if present
+    reserve = (_text_h(d, FONT_BOTTOM) + 2) if dateline else 0
+
+    raw_away = game.get("away") or {}
+    raw_home = game.get("home") or {}
+
+    away_tri = (raw_away.get("abbr") or "AWY").upper()
+    home_tri = (raw_home.get("abbr") or "HME").upper()
+    away_score = raw_away.get("score")
+    home_score = raw_home.get("score")
+
+    away_label = _team_scoreboard_label(raw_away, away_tri)
+    home_label = _team_scoreboard_label(raw_home, home_tri)
+
+    # Scoreboard
+    _draw_scoreboard(
+        img, d, y,
+        away_tri, away_score,
+        home_tri, home_score,
+        away_label=away_label,
+        home_label=home_label,
+        bottom_reserved_px=reserve,
+    )
+
+    # Bottom status line if available
+    if dateline:
+        _center_bottom_text(d, dateline, FONT_BOTTOM)
+
+    return _push(display, img, transition=transition)
 
 def draw_sports_screen_wolves(display, game, transition: bool=False):
     """
