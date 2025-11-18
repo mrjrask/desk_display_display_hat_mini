@@ -88,6 +88,21 @@ def _get_first_env_var(*names: str):
     return None
 
 
+def _get_bool_env(name: str, default: bool) -> bool:
+    """Parse boolean feature flags from environment variables."""
+
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+
+    value = raw.strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
 def _get_required_env_var(*names: str) -> str:
     value = _get_first_env_var(*names)
     if value:
@@ -111,10 +126,10 @@ except AttributeError:  # pragma: no cover - fallback for older Pillow
 IMAGES_DIR  = os.path.join(SCRIPT_DIR, "images")
 
 # ─── Feature flags ────────────────────────────────────────────────────────────
-ENABLE_SCREENSHOTS   = True
-ENABLE_VIDEO         = False
+ENABLE_SCREENSHOTS   = _get_bool_env("ENABLE_SCREENSHOTS", True)
+ENABLE_VIDEO         = _get_bool_env("ENABLE_VIDEO", False)
 VIDEO_FPS            = 30
-ENABLE_WIFI_MONITOR  = True
+ENABLE_WIFI_MONITOR  = _get_bool_env("ENABLE_WIFI_MONITOR", True)
 
 WIFI_RETRY_DURATION  = 180
 WIFI_CHECK_INTERVAL  = 60
