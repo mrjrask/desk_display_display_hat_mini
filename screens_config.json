@@ -43,7 +43,7 @@
     "bulls next home": 1,
     "nfl logo": 0,
     "NFL Scoreboard": 1,
-    "NFL Scoreboard v2": 1,
+    "NFL Scoreboard v2": 0,
     "NFL Overview NFC": {
       "frequency": 1,
       "alt": {
@@ -62,7 +62,7 @@
     "NFL Standings AFC": 0,
     "nhl logo": 0,
     "NHL Scoreboard": 1,
-    "NHL Scoreboard v2": 1,
+    "NHL Scoreboard v2": 0,
     "NHL Standings Overview": {
       "frequency": 1,
       "alt": {
@@ -90,6 +90,6 @@
     "AL Wild Card": 0,
     "nba logo": 0,
     "NBA Scoreboard": 1,
-    "NBA Scoreboard v2": 1
+    "NBA Scoreboard v2": 0
   }
 }
