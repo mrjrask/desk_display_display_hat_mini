@@ -345,16 +345,18 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
             temp_f = float(dev.get_temperature()) * 9 / 5 + 32
             hum = float(dev.get_humidity())
             pres_raw = float(dev.get_pressure())
-            # Handle both Pa and hPa - if value seems too high, assume it's in Pa
-            pres_hpa = pres_raw / 100.0 if pres_raw > 2000 else pres_raw
-            # Warn if pressure seems abnormally low (< 800 hPa would be very high altitude)
-            if pres_hpa < 800:
-                logging.warning(
-                    "draw_inside: BME280 pressure reading seems low: %.1f hPa (%.2f inHg). "
-                    "This may indicate a sensor calibration issue.",
-                    pres_hpa, pres_hpa * 0.02953
-                )
+
+            # DEBUG: Log the raw pressure value to understand what units the sensor returns
+            logging.info(f"draw_inside: Pimoroni BME280 raw pressure: {pres_raw}")
+
+            # BME280 typically returns pressure in hPa (hectopascals/millibars)
+            # Normal sea level pressure is ~1013 hPa or ~29.92 inHg
+            # Conversion: 1 hPa = 0.02953 inHg
+            pres_hpa = pres_raw
             pres = pres_hpa * 0.02953
+
+            logging.info(f"draw_inside: Pimoroni BME280 converted: {pres_hpa:.2f} hPa = {pres:.2f} inHg")
+
             return dict(temp_f=temp_f, humidity=hum, pressure_inhg=pres, voc_ohms=None)
 
         return label, read
@@ -368,16 +370,14 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
         hum = float(hum_raw) if hum_raw is not None else None
         pres = None
         if pres_raw is not None:
-            # Handle both Pa and hPa - if value seems too high, assume it's in Pa
-            pres_hpa = float(pres_raw) / 100.0 if pres_raw > 2000 else float(pres_raw)
-            # Warn if pressure seems abnormally low (< 800 hPa would be very high altitude)
-            if pres_hpa < 800:
-                logging.warning(
-                    "draw_inside: BME280 pressure reading seems low: %.1f hPa (%.2f inHg). "
-                    "This may indicate a sensor calibration issue.",
-                    pres_hpa, pres_hpa * 0.02953
-                )
+            # DEBUG: Log the raw pressure value to understand what units the sensor returns
+            logging.info(f"draw_inside: Pimoroni BME280 (fallback) raw pressure: {pres_raw}")
+
+            pres_hpa = float(pres_raw)
             pres = pres_hpa * 0.02953
+
+            logging.info(f"draw_inside: Pimoroni BME280 (fallback) converted: {pres_hpa:.2f} hPa = {pres:.2f} inHg")
+
         temp_f = temp_c * 9 / 5 + 32
         return dict(temp_f=temp_f, humidity=hum, pressure_inhg=pres, voc_ohms=None)
 
@@ -396,16 +396,15 @@ def _probe_adafruit_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
         temp_f = float(dev.temperature) * 9 / 5 + 32
         hum = float(dev.humidity)
         pres_raw = float(dev.pressure)
-        # Handle both Pa and hPa - if value seems too high, assume it's in Pa
-        pres_hpa = pres_raw / 100.0 if pres_raw > 2000 else pres_raw
-        # Warn if pressure seems abnormally low (< 800 hPa would be very high altitude)
-        if pres_hpa < 800:
-            logging.warning(
-                "draw_inside: BME280 pressure reading seems low: %.1f hPa (%.2f inHg). "
-                "This may indicate a sensor calibration issue.",
-                pres_hpa, pres_hpa * 0.02953
-            )
+
+        # DEBUG: Log the raw pressure value to understand what units the sensor returns
+        logging.info(f"draw_inside: Adafruit BME280 raw pressure: {pres_raw}")
+
+        pres_hpa = pres_raw
         pres = pres_hpa * 0.02953
+
+        logging.info(f"draw_inside: Adafruit BME280 converted: {pres_hpa:.2f} hPa = {pres:.2f} inHg")
+
         return dict(temp_f=temp_f, humidity=hum, pressure_inhg=pres, voc_ohms=None)
 
     return "Adafruit BME280", read
