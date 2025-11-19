@@ -716,12 +716,11 @@ def main_loop():
         while not _shutdown_event.is_set():
             refresh_schedule_if_needed()
 
-            if _manual_skip_event.is_set():
-                _manual_skip_event.clear()
-                continue
-
-            if _check_control_buttons():
-                continue
+            # Always drain button events, but keep skip requests active so the
+            # currently visible screen (or the very next one) can react
+            # immediately instead of idling on the previous frame for another
+            # full iteration.
+            _check_control_buttons()
 
             current_time = datetime.datetime.now(CENTRAL_TIME)
 
