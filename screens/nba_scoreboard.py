@@ -39,11 +39,12 @@ from config import (
     SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
     SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
+    get_screen_font,
+    get_screen_image_scale,
 )
 from utils import (
     ScreenImage,
     clear_display,
-    clone_font,
     load_team_logo,
     log_call,
 )
@@ -64,28 +65,65 @@ COL_X = [_COL_LEFT]
 for w in COL_WIDTHS:
     COL_X.append(COL_X[-1] + w)
 
-SCORE_FONT              = clone_font(FONT_TEAM_SPORTS, 39)
-STATUS_FONT             = clone_font(FONT_STATUS, 28)
-CENTER_FONT             = clone_font(FONT_STATUS, 28)
-TITLE_FONT              = FONT_TITLE_SPORTS
-LOGO_HEIGHT             = 52
-LOGO_DIR                = os.path.join(IMAGES_DIR, "nba")
-LEAGUE_LOGO_KEYS        = ("NBA", "nba")
-LEAGUE_LOGO_GAP         = 4
-LEAGUE_LOGO_HEIGHT      = max(1, int(round(LOGO_HEIGHT * 1.25)))
+SCREEN_ID = "NBA Scoreboard"
+TITLE_FONT = FONT_TITLE_SPORTS
+LOGO_DIR = os.path.join(IMAGES_DIR, "nba")
+LEAGUE_LOGO_KEYS = ("NBA", "nba")
+LEAGUE_LOGO_GAP = 4
+TEAM_LOGO_BASE_HEIGHT = 52
+LEAGUE_LOGO_BASE_HEIGHT = int(round(TEAM_LOGO_BASE_HEIGHT * 1.25))
+INTRO_LOGO = "NBA.png"
+INTRO_MAX_BASE_HEIGHT = 100
+INTRO_ANIM_SCALES = (0.45, 0.6, 0.75, 0.9, 1.04, 0.98, 1.0)
+INTRO_ANIM_DELAY = 0.06
+INTRO_ANIM_HOLD = 0.4
+BACKGROUND_COLOR = SCOREBOARD_BACKGROUND_COLOR
+BACKGROUND_COLOR_RGBA = BACKGROUND_COLOR + (255,)
 IN_PROGRESS_SCORE_COLOR = SCOREBOARD_IN_PROGRESS_SCORE_COLOR
 IN_PROGRESS_STATUS_COLOR = IN_PROGRESS_SCORE_COLOR
 FINAL_WINNING_SCORE_COLOR = SCOREBOARD_FINAL_WINNING_SCORE_COLOR
 FINAL_LOSING_SCORE_COLOR = SCOREBOARD_FINAL_LOSING_SCORE_COLOR
-INTRO_LOGO        = "NBA.png"
-INTRO_MAX_HEIGHT  = 100
-INTRO_ANIM_SCALES = (0.45, 0.6, 0.75, 0.9, 1.04, 0.98, 1.0)
-INTRO_ANIM_DELAY  = 0.06
-INTRO_ANIM_HOLD   = 0.4
-BACKGROUND_COLOR  = SCOREBOARD_BACKGROUND_COLOR
-BACKGROUND_COLOR_RGBA = BACKGROUND_COLOR + (255,)
 
-_LOGO_CACHE: dict[str, Optional[Image.Image]] = {}
+
+def _scoreboard_fonts():
+    score = get_screen_font(
+        SCREEN_ID,
+        "score",
+        base_font=FONT_TEAM_SPORTS,
+        default_size=39,
+    )
+    status = get_screen_font(
+        SCREEN_ID,
+        "status",
+        base_font=FONT_STATUS,
+        default_size=28,
+    )
+    center = get_screen_font(
+        SCREEN_ID,
+        "center",
+        base_font=FONT_STATUS,
+        default_size=28,
+    )
+    return score, status, center
+
+
+def _team_logo_height() -> int:
+    scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
+    return max(1, int(round(TEAM_LOGO_BASE_HEIGHT * scale)))
+
+
+def _league_logo_height() -> int:
+    team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
+    scale = get_screen_image_scale(SCREEN_ID, "league_logo", team_scale)
+    return max(1, int(round(LEAGUE_LOGO_BASE_HEIGHT * scale)))
+
+
+def _intro_max_height() -> int:
+    team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
+    scale = get_screen_image_scale(SCREEN_ID, "intro_logo", team_scale)
+    return max(1, int(round(INTRO_MAX_BASE_HEIGHT * scale)))
+
+_LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 _LOGO_ABBREVIATION_OVERRIDES: dict[str, str] = {
     "BKN": "BRK",
 }
@@ -110,8 +148,7 @@ _espn_fallback_notice_at: Optional[datetime.datetime] = None
 
 _INTRO_LOGO_CACHE: Optional[Image.Image] = None
 _INTRO_LOGO_LOADED = False
-_LEAGUE_LOGO: Optional[Image.Image] = None
-_LEAGUE_LOGO_LOADED = False
+_LEAGUE_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 def _scoreboard_date(now: Optional[datetime.datetime] = None) -> datetime.date:
@@ -127,23 +164,26 @@ def _load_logo_cached(abbr: str) -> Optional[Image.Image]:
     if not key:
         return None
     cache_key = key.upper()
-    if cache_key in _LOGO_CACHE:
-        return _LOGO_CACHE[cache_key]
-    logo = load_team_logo(LOGO_DIR, cache_key, height=LOGO_HEIGHT)
-    _LOGO_CACHE[cache_key] = logo
+    height = _team_logo_height()
+    cache_token = (cache_key, height)
+    if cache_token in _LOGO_CACHE:
+        return _LOGO_CACHE[cache_token]
+    logo = load_team_logo(LOGO_DIR, cache_key, height=height)
+    _LOGO_CACHE[cache_token] = logo
     return logo
 
 
 def _get_league_logo() -> Optional[Image.Image]:
-    global _LEAGUE_LOGO, _LEAGUE_LOGO_LOADED
-    if not _LEAGUE_LOGO_LOADED:
-        for key in LEAGUE_LOGO_KEYS:
-            logo = load_team_logo(LOGO_DIR, key, height=LEAGUE_LOGO_HEIGHT)
-            if logo is not None:
-                _LEAGUE_LOGO = logo
-                break
-        _LEAGUE_LOGO_LOADED = True
-    return _LEAGUE_LOGO
+    height = _league_logo_height()
+    if height in _LEAGUE_LOGO_CACHE:
+        return _LEAGUE_LOGO_CACHE[height]
+    for key in LEAGUE_LOGO_KEYS:
+        logo = load_team_logo(LOGO_DIR, key, height=height)
+        if logo is not None:
+            _LEAGUE_LOGO_CACHE[height] = logo
+            return logo
+    _LEAGUE_LOGO_CACHE[height] = None
+    return None
 
 
 def _load_intro_logo() -> Optional[Image.Image]:
@@ -173,8 +213,9 @@ def _render_intro_frame(logo: Image.Image, scale: float) -> Image.Image:
     effective_scale = max(0.0, base_scale * scale)
     if effective_scale <= 0:
         effective_scale = base_scale
+    intro_max = _intro_max_height()
     max_height_scale = (
-        INTRO_MAX_HEIGHT / logo.height if logo.height else base_scale
+        intro_max / logo.height if logo.height else base_scale
     )
     effective_scale = min(effective_scale, base_scale, max_height_scale)
 
@@ -455,7 +496,16 @@ def _center_text(draw: ImageDraw.ImageDraw, text: str, font, x: int, width: int,
     draw.text((tx, ty), text, font=font, fill=fill)
 
 
-def _draw_game_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict, top: int):
+def _draw_game_block(
+    canvas: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    game: dict,
+    top: int,
+    *,
+    score_font,
+    center_font,
+    status_font,
+):
     teams = (game or {}).get("teams", {})
     away = teams.get("away", {})
     home = teams.get("home", {})
@@ -469,7 +519,7 @@ def _draw_game_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict,
 
     score_top = top
     for idx, text in ((0, away_text), (2, "@"), (4, home_text)):
-        font = SCORE_FONT if idx != 2 else CENTER_FONT
+        font = score_font if idx != 2 else center_font
         if idx == 0:
             fill = _score_fill("away", in_progress=in_progress, final=final, results=results)
         elif idx == 4:
@@ -491,10 +541,12 @@ def _draw_game_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict,
     status_top = score_top + SCORE_ROW_H
     status_text = _format_status(game)
     status_fill = IN_PROGRESS_STATUS_COLOR if in_progress else (255, 255, 255)
-    _center_text(draw, status_text, STATUS_FONT, COL_X[2], COL_WIDTHS[2], status_top, STATUS_ROW_H, fill=status_fill)
+    _center_text(draw, status_text, status_font, COL_X[2], COL_WIDTHS[2], status_top, STATUS_ROW_H, fill=status_fill)
 
 
-def _compose_canvas(games: list[dict]) -> Image.Image:
+def _compose_canvas(
+    games: list[dict], *, score_font, center_font, status_font
+) -> Image.Image:
     if not games:
         return Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     block_height = SCORE_ROW_H + STATUS_ROW_H
@@ -506,7 +558,15 @@ def _compose_canvas(games: list[dict]) -> Image.Image:
 
     y = 0
     for idx, game in enumerate(games):
-        _draw_game_block(canvas, draw, game, y)
+        _draw_game_block(
+            canvas,
+            draw,
+            game,
+            y,
+            score_font=score_font,
+            center_font=center_font,
+            status_font=status_font,
+        )
         y += SCORE_ROW_H + STATUS_ROW_H
         if idx < len(games) - 1:
             sep_y = y + BLOCK_SPACING // 2
@@ -997,8 +1057,15 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
     return _fetch_games_from_espn(day)
 
 
-def _render_scoreboard(games: list[dict]) -> Image.Image:
-    canvas = _compose_canvas(games)
+def _render_scoreboard(
+    games: list[dict], *, score_font, center_font, status_font
+) -> Image.Image:
+    canvas = _compose_canvas(
+        games,
+        score_font=score_font,
+        center_font=center_font,
+        status_font=status_font,
+    )
 
     dummy = Image.new("RGB", (WIDTH, 10), BACKGROUND_COLOR)
     dd = ImageDraw.Draw(dummy)
@@ -1069,6 +1136,7 @@ def _scroll_display(display, full_img: Image.Image):
 @log_call
 def draw_nba_scoreboard(display, transition: bool = False) -> ScreenImage:
     games = _fetch_games_for_date(_scoreboard_date())
+    score_font, status_font, center_font = _scoreboard_fonts()
 
     if not games:
         clear_display(display)
@@ -1090,14 +1158,27 @@ def draw_nba_scoreboard(display, transition: bool = False) -> ScreenImage:
             tx = (WIDTH - tw) // 2
             ty = title_top
         draw.text((tx, ty), TITLE, font=TITLE_FONT, fill=(255, 255, 255))
-        _center_text(draw, "No games today", STATUS_FONT, 0, WIDTH, HEIGHT // 2 - STATUS_ROW_H // 2, STATUS_ROW_H)
+        _center_text(
+            draw,
+            "No games today",
+            status_font,
+            0,
+            WIDTH,
+            HEIGHT // 2 - STATUS_ROW_H // 2,
+            STATUS_ROW_H,
+        )
         if transition:
             return ScreenImage(img, displayed=False)
         display.image(img)
         time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
         return ScreenImage(img, displayed=True)
 
-    full_img = _render_scoreboard(games)
+    full_img = _render_scoreboard(
+        games,
+        score_font=score_font,
+        center_font=center_font,
+        status_font=status_font,
+    )
     if transition:
         _scroll_display(display, full_img)
         return ScreenImage(full_img, displayed=True)

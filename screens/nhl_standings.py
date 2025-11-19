@@ -23,9 +23,11 @@ from config import (
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
     SCOREBOARD_BACKGROUND_COLOR,
+    get_screen_font,
+    get_screen_image_scale,
 )
 from services.http_client import NHL_HEADERS, get_session
-from utils import ScreenImage, clear_display, clone_font, log_call
+from utils import ScreenImage, clear_display, log_call
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 TITLE_WEST = "Western Conference"
@@ -40,7 +42,8 @@ CONFERENCE_WEST_KEY = "Western"
 CONFERENCE_EAST_KEY = "Eastern"
 
 LOGO_DIR = NHL_IMAGES_DIR
-LOGO_HEIGHT = 41  # ~10% larger logos for standings rows
+_LOGO_BASE_HEIGHT = 41
+LOGO_HEIGHT = _LOGO_BASE_HEIGHT  # ~10% larger logos for standings rows
 LEFT_MARGIN = 4
 RIGHT_MARGIN = 6
 TEAM_COLUMN_GAP = 6
@@ -57,13 +60,72 @@ COLUMN_GAP_BELOW = 3
 DIVISION_HEADER_GAP = 6
 
 TITLE_FONT = FONT_TITLE_SPORTS
-DIVISION_FONT = clone_font(FONT_TITLE_SPORTS, 26)
-COLUMN_FONT = clone_font(FONT_STATUS, 24)
-_COLUMN_POINTS_SIZE = max(8, getattr(COLUMN_FONT, "size", 24) - 6)
-COLUMN_FONT_POINTS = clone_font(COLUMN_FONT, _COLUMN_POINTS_SIZE)
-ROW_FONT = clone_font(FONT_STATUS, 28)
-_TEAM_NAME_FONT_SIZE = max(8, getattr(ROW_FONT, "size", 28) - 3)
-TEAM_NAME_FONT = clone_font(ROW_FONT, _TEAM_NAME_FONT_SIZE)
+_DEFAULT_STYLE_ID = "NHL Standings Default"
+_DIVISION_BASE_SIZE = 26
+_COLUMN_BASE_SIZE = 24
+_ROW_BASE_SIZE = 28
+_COLUMN_POINTS_DELTA = 6
+_TEAM_NAME_DELTA = 3
+
+
+def _build_fonts(style_id: str) -> tuple:
+    division = get_screen_font(
+        style_id,
+        "division",
+        base_font=FONT_TITLE_SPORTS,
+        default_size=_DIVISION_BASE_SIZE,
+    )
+    column = get_screen_font(
+        style_id,
+        "column",
+        base_font=FONT_STATUS,
+        default_size=_COLUMN_BASE_SIZE,
+    )
+    column_points_size = max(8, getattr(column, "size", _COLUMN_BASE_SIZE) - _COLUMN_POINTS_DELTA)
+    column_points = get_screen_font(
+        style_id,
+        "column_points",
+        base_font=column,
+        default_size=column_points_size,
+    )
+    row = get_screen_font(
+        style_id,
+        "row",
+        base_font=FONT_STATUS,
+        default_size=_ROW_BASE_SIZE,
+    )
+    team_name_size = max(8, getattr(row, "size", _ROW_BASE_SIZE) - _TEAM_NAME_DELTA)
+    team_name = get_screen_font(
+        style_id,
+        "team_name",
+        base_font=row,
+        default_size=team_name_size,
+    )
+    return division, column, column_points, row, team_name
+
+
+DIVISION_FONT, COLUMN_FONT, COLUMN_FONT_POINTS, ROW_FONT, TEAM_NAME_FONT = _build_fonts(
+    _DEFAULT_STYLE_ID
+)
+
+
+def _apply_style_overrides(screen_id: str) -> None:
+    global DIVISION_FONT, COLUMN_FONT, COLUMN_FONT_POINTS, ROW_FONT, TEAM_NAME_FONT
+    global LOGO_HEIGHT, OVERVIEW_MIN_LOGO_HEIGHT, OVERVIEW_MAX_LOGO_HEIGHT
+
+    (
+        DIVISION_FONT,
+        COLUMN_FONT,
+        COLUMN_FONT_POINTS,
+        ROW_FONT,
+        TEAM_NAME_FONT,
+    ) = _build_fonts(screen_id)
+
+    team_scale = get_screen_image_scale(screen_id, "team_logo", 1.0)
+    LOGO_HEIGHT = max(1, int(round(_LOGO_BASE_HEIGHT * team_scale)))
+    overview_scale = get_screen_image_scale(screen_id, "overview_logo", team_scale)
+    OVERVIEW_MIN_LOGO_HEIGHT = max(1, int(round(_OVERVIEW_MIN_LOGO_BASE * overview_scale)))
+    OVERVIEW_MAX_LOGO_HEIGHT = max(1, int(round(_OVERVIEW_MAX_LOGO_BASE * overview_scale)))
 
 OVERVIEW_TITLE = "NHL Overview"
 OVERVIEW_DIVISIONS = [
@@ -75,8 +137,10 @@ OVERVIEW_DIVISIONS = [
 OVERVIEW_MARGIN_X = 4
 OVERVIEW_TITLE_MARGIN_BOTTOM = 6
 OVERVIEW_BOTTOM_MARGIN = 2
-OVERVIEW_MIN_LOGO_HEIGHT = 33
-OVERVIEW_MAX_LOGO_HEIGHT = 67
+_OVERVIEW_MIN_LOGO_BASE = 33
+_OVERVIEW_MAX_LOGO_BASE = 67
+OVERVIEW_MIN_LOGO_HEIGHT = _OVERVIEW_MIN_LOGO_BASE
+OVERVIEW_MAX_LOGO_HEIGHT = _OVERVIEW_MAX_LOGO_BASE
 OVERVIEW_LOGO_PADDING = 4
 OVERVIEW_LOGO_OVERLAP = 6
 BACKGROUND_COLOR = SCOREBOARD_BACKGROUND_COLOR
@@ -235,18 +299,20 @@ def _load_logo_cached(abbr: str) -> Optional[Image.Image]:
     if not key:
         return None
     cache_key = key.upper()
-    if cache_key in _LOGO_CACHE:
-        return _LOGO_CACHE[cache_key]
+    height = LOGO_HEIGHT
+    cache_token = (cache_key, height)
+    if cache_token in _LOGO_CACHE:
+        return _LOGO_CACHE[cache_token]
 
     candidates = [cache_key, cache_key.lower(), cache_key.title()]
     for candidate in candidates:
         path = os.path.join(LOGO_DIR, f"{candidate}.png")
         if os.path.exists(path):
             logo = _load_logo(candidate)
-            _LOGO_CACHE[cache_key] = logo
+            _LOGO_CACHE[cache_token] = logo
             return logo
 
-    _LOGO_CACHE[cache_key] = None
+    _LOGO_CACHE[cache_token] = None
     return None
 
 
@@ -1129,6 +1195,7 @@ def _scroll_vertical(display, image: Image.Image) -> None:
 @log_call
 def draw_nhl_standings_overview(display, transition: bool = False) -> ScreenImage:
     standings_by_conf = _fetch_standings_data()
+    _apply_style_overrides("NHL Standings Overview")
 
     divisions: List[tuple[str, List[dict]]] = []
     for conference_key, division_name, label in OVERVIEW_DIVISIONS:
@@ -1159,6 +1226,7 @@ def draw_nhl_standings_overview(display, transition: bool = False) -> ScreenImag
 @log_call
 def draw_nhl_standings_west(display, transition: bool = False) -> ScreenImage:
     standings_by_conf = _fetch_standings_data()
+    _apply_style_overrides("NHL Standings West")
     conference = standings_by_conf.get(CONFERENCE_WEST_KEY, {})
     divisions = [d for d in DIVISION_ORDER_WEST if conference.get(d)]
     if not divisions:
@@ -1178,6 +1246,7 @@ def draw_nhl_standings_west(display, transition: bool = False) -> ScreenImage:
 @log_call
 def draw_nhl_standings_east(display, transition: bool = False) -> ScreenImage:
     standings_by_conf = _fetch_standings_data()
+    _apply_style_overrides("NHL Standings East")
     conference = standings_by_conf.get(CONFERENCE_EAST_KEY, {})
     divisions = [d for d in DIVISION_ORDER_EAST if conference.get(d)]
     if not divisions:

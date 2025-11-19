@@ -37,11 +37,12 @@ from config import (
     SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
     SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
+    get_screen_font,
+    get_screen_image_scale,
 )
 from utils import (
     ScreenImage,
     clear_display,
-    clone_font,
     load_team_logo,
     log_call,
 )
@@ -65,24 +66,68 @@ COL_X = [_COL_LEFT]
 for w in COL_WIDTHS:
     COL_X.append(COL_X[-1] + w)
 
-SCORE_FONT              = clone_font(FONT_TEAM_SPORTS, 39)
-STATUS_FONT             = clone_font(FONT_STATUS, 28)
-CENTER_FONT             = clone_font(FONT_STATUS, 28)
-TITLE_FONT              = FONT_TITLE_SPORTS
-LOGO_HEIGHT             = 52
-LOGO_DIR                = os.path.join(IMAGES_DIR, "nhl")
-LEAGUE_LOGO_KEYS        = ("NHL", "nhl")
-LEAGUE_LOGO_GAP         = 4
-LEAGUE_LOGO_HEIGHT      = max(1, int(round(LOGO_HEIGHT * 1.25)))
+SCREEN_ID = "NHL Scoreboard"
+TITLE_FONT = FONT_TITLE_SPORTS
+LOGO_DIR = os.path.join(IMAGES_DIR, "nhl")
+LEAGUE_LOGO_KEYS = ("NHL", "nhl")
+LEAGUE_LOGO_GAP = 4
+TEAM_LOGO_BASE_HEIGHT = 52
+LEAGUE_LOGO_BASE_HEIGHT = int(round(TEAM_LOGO_BASE_HEIGHT * 1.25))
+LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
+LEAGUE_LOGO_HEIGHT = LEAGUE_LOGO_BASE_HEIGHT
+SCORE_FONT = get_screen_font(
+    SCREEN_ID,
+    "score",
+    base_font=FONT_TEAM_SPORTS,
+    default_size=39,
+)
+STATUS_FONT = get_screen_font(
+    SCREEN_ID,
+    "status",
+    base_font=FONT_STATUS,
+    default_size=28,
+)
+CENTER_FONT = get_screen_font(
+    SCREEN_ID,
+    "center",
+    base_font=FONT_STATUS,
+    default_size=28,
+)
 IN_PROGRESS_SCORE_COLOR = SCOREBOARD_IN_PROGRESS_SCORE_COLOR
 IN_PROGRESS_STATUS_COLOR = IN_PROGRESS_SCORE_COLOR
 FINAL_WINNING_SCORE_COLOR = SCOREBOARD_FINAL_WINNING_SCORE_COLOR
 FINAL_LOSING_SCORE_COLOR = SCOREBOARD_FINAL_LOSING_SCORE_COLOR
 BACKGROUND_COLOR = SCOREBOARD_BACKGROUND_COLOR
 
-_LOGO_CACHE: dict[str, Optional[Image.Image]] = {}
-_LEAGUE_LOGO: Optional[Image.Image] = None
-_LEAGUE_LOGO_LOADED = False
+_LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
+_LEAGUE_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
+
+
+def _apply_style_overrides() -> None:
+    global SCORE_FONT, STATUS_FONT, CENTER_FONT, LOGO_HEIGHT, LEAGUE_LOGO_HEIGHT
+
+    SCORE_FONT = get_screen_font(
+        SCREEN_ID,
+        "score",
+        base_font=FONT_TEAM_SPORTS,
+        default_size=39,
+    )
+    STATUS_FONT = get_screen_font(
+        SCREEN_ID,
+        "status",
+        base_font=FONT_STATUS,
+        default_size=28,
+    )
+    CENTER_FONT = get_screen_font(
+        SCREEN_ID,
+        "center",
+        base_font=FONT_STATUS,
+        default_size=28,
+    )
+    team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
+    LOGO_HEIGHT = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
+    league_scale = get_screen_image_scale(SCREEN_ID, "league_logo", team_scale)
+    LEAGUE_LOGO_HEIGHT = max(1, int(round(LEAGUE_LOGO_BASE_HEIGHT * league_scale)))
 
 _SESSION = get_session()
 
@@ -106,31 +151,34 @@ def _load_logo_cached(abbr: str) -> Optional[Image.Image]:
     if not key:
         return None
     cache_key = key.upper()
-    if cache_key in _LOGO_CACHE:
-        return _LOGO_CACHE[cache_key]
+    height = LOGO_HEIGHT
+    cache_token = (cache_key, height)
+    if cache_token in _LOGO_CACHE:
+        return _LOGO_CACHE[cache_token]
 
     candidates = [cache_key, cache_key.lower(), cache_key.title()]
     for candidate in candidates:
         path = os.path.join(LOGO_DIR, f"{candidate}.png")
         if os.path.exists(path):
-            logo = load_team_logo(LOGO_DIR, candidate, height=LOGO_HEIGHT)
-            _LOGO_CACHE[cache_key] = logo
+            logo = load_team_logo(LOGO_DIR, candidate, height=height)
+            _LOGO_CACHE[cache_token] = logo
             return logo
 
-    _LOGO_CACHE[cache_key] = None
+    _LOGO_CACHE[cache_token] = None
     return None
 
 
 def _get_league_logo() -> Optional[Image.Image]:
-    global _LEAGUE_LOGO, _LEAGUE_LOGO_LOADED
-    if not _LEAGUE_LOGO_LOADED:
-        for key in LEAGUE_LOGO_KEYS:
-            logo = load_team_logo(LOGO_DIR, key, height=LEAGUE_LOGO_HEIGHT)
-            if logo is not None:
-                _LEAGUE_LOGO = logo
-                break
-        _LEAGUE_LOGO_LOADED = True
-    return _LEAGUE_LOGO
+    height = LEAGUE_LOGO_HEIGHT
+    if height in _LEAGUE_LOGO_CACHE:
+        return _LEAGUE_LOGO_CACHE[height]
+    for key in LEAGUE_LOGO_KEYS:
+        logo = load_team_logo(LOGO_DIR, key, height=height)
+        if logo is not None:
+            _LEAGUE_LOGO_CACHE[height] = logo
+            return logo
+    _LEAGUE_LOGO_CACHE[height] = None
+    return None
 
 
 def _team_logo_abbr(team: dict) -> str:
@@ -981,6 +1029,7 @@ def _scroll_display(display, full_img: Image.Image):
 # ─── Public API ───────────────────────────────────────────────────────────────
 @log_call
 def draw_nhl_scoreboard(display, transition: bool = False) -> ScreenImage:
+    _apply_style_overrides()
     games = _fetch_games_for_date(_scoreboard_date())
 
     if not games:

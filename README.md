@@ -198,6 +198,37 @@ Key points:
 
   The scheduler automatically skips a step when its conditions are not met.
 
+### Screen-specific style overrides
+
+The default fonts, sizes, and logo heights baked into each renderer can be
+overridden without touching Python code. Settings live in
+`screens_style.json`, which is managed through the same ConfigStore wrapper as
+`screens_config.json`. Each screen can opt into overrides via `fonts` and
+`images` dictionaries:
+
+```json
+{
+  "screens": {
+    "nba_scoreboard": {
+      "fonts": {
+        "score": {"family": "fonts/TimesSquare-m105.ttf", "size": 32},
+        "ticker": {"size": 20}
+      },
+      "images": {
+        "team_logo": {"scale": 1.15}
+      }
+    }
+  }
+}
+```
+
+Available font slots correspond to the keys requested inside each renderer
+(`"score"`, `"ticker"`, etc.). When a screen requests a slot, the helper in
+`config.get_screen_font()` loads the requested family/size, falling back to the
+existing font object if no override is present. Logo sizing works similarly via
+`config.get_screen_image_scale()`—renderers read the scale during each draw so
+edits to `screens_style.json` take effect immediately.
+
 #### Migrating existing configs
 
 Legacy `sequence` arrays are migrated to v2 automatically on startup. For manual conversions or batch jobs run:

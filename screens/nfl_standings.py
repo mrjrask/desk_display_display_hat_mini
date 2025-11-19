@@ -26,9 +26,10 @@ from config import (
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
     SCOREBOARD_BACKGROUND_COLOR,
+    get_screen_font,
 )
 from services.http_client import get_session
-from utils import ScreenImage, clear_display, clone_font, load_team_logo, log_call
+from utils import ScreenImage, clear_display, load_team_logo, log_call
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 TITLE_NFC = "NFC Standings"
@@ -72,9 +73,48 @@ RECORD_COLUMN_SPACING = 10
 TEAM_COLUMN_PADDING = 6
 
 TITLE_FONT = FONT_TITLE_SPORTS
-DIVISION_FONT = clone_font(FONT_TITLE_SPORTS, 28)
-COLUMN_FONT = clone_font(FONT_STATUS, 26)
-ROW_FONT = clone_font(FONT_STATUS, 30)
+_DEFAULT_STYLE_ID = "NFL Standings Default"
+DIVISION_FONT = get_screen_font(
+    _DEFAULT_STYLE_ID,
+    "division",
+    base_font=FONT_TITLE_SPORTS,
+    default_size=28,
+)
+COLUMN_FONT = get_screen_font(
+    _DEFAULT_STYLE_ID,
+    "column",
+    base_font=FONT_STATUS,
+    default_size=26,
+)
+ROW_FONT = get_screen_font(
+    _DEFAULT_STYLE_ID,
+    "row",
+    base_font=FONT_STATUS,
+    default_size=30,
+)
+
+
+def _apply_style_overrides(screen_id: str) -> None:
+    global DIVISION_FONT, COLUMN_FONT, ROW_FONT
+
+    DIVISION_FONT = get_screen_font(
+        screen_id,
+        "division",
+        base_font=FONT_TITLE_SPORTS,
+        default_size=28,
+    )
+    COLUMN_FONT = get_screen_font(
+        screen_id,
+        "column",
+        base_font=FONT_STATUS,
+        default_size=26,
+    )
+    ROW_FONT = get_screen_font(
+        screen_id,
+        "row",
+        base_font=FONT_STATUS,
+        default_size=30,
+    )
 
 TEAM_NAMES_BY_ABBR: dict[str, str] = {
     "ARI": "Cardinals",
@@ -1416,6 +1456,7 @@ def _render_and_display(
 @log_call
 def draw_nfl_overview_nfc(display, transition: bool = False) -> ScreenImage:
     standings_by_conf, fallback_message = _fetch_standings_data()
+    _apply_style_overrides("NFL Overview NFC")
     conference = standings_by_conf.get(CONFERENCE_NFC_KEY, {})
     return _render_overview(
         display,
@@ -1430,6 +1471,7 @@ def draw_nfl_overview_nfc(display, transition: bool = False) -> ScreenImage:
 @log_call
 def draw_nfl_overview_afc(display, transition: bool = False) -> ScreenImage:
     standings_by_conf, fallback_message = _fetch_standings_data()
+    _apply_style_overrides("NFL Overview AFC")
     conference = standings_by_conf.get(CONFERENCE_AFC_KEY, {})
     return _render_overview(
         display,
@@ -1444,6 +1486,7 @@ def draw_nfl_overview_afc(display, transition: bool = False) -> ScreenImage:
 @log_call
 def draw_nfl_standings_nfc(display, transition: bool = False) -> ScreenImage:
     standings_by_conf, fallback_message = _fetch_standings_data()
+    _apply_style_overrides("NFL Standings NFC")
     conference = standings_by_conf.get(CONFERENCE_NFC_KEY, {})
     return _render_and_display(
         display,
@@ -1458,6 +1501,7 @@ def draw_nfl_standings_nfc(display, transition: bool = False) -> ScreenImage:
 @log_call
 def draw_nfl_standings_afc(display, transition: bool = False) -> ScreenImage:
     standings_by_conf, fallback_message = _fetch_standings_data()
+    _apply_style_overrides("NFL Standings AFC")
     conference = standings_by_conf.get(CONFERENCE_AFC_KEY, {})
     return _render_and_display(
         display,
