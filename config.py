@@ -135,7 +135,7 @@ WIFI_RETRY_DURATION  = 180
 WIFI_CHECK_INTERVAL  = 60
 WIFI_OFF_DURATION    = 180
 
-VRNOF_CACHE_TTL      = 1800
+VRNO_CACHE_TTL       = 1800
 
 def get_current_ssid():
     try:
@@ -739,9 +739,9 @@ NFL_TEAM_ABBREVIATIONS = {
     "browns": "cle",     "49ers": "sf",
 }
 
-# VRNOF screen
-VRNOF_FRESHNESS_LIMIT = 10 * 60
-VRNOF_LOTS = [
+# VRNO screen
+VRNO_FRESHNESS_LIMIT = 10 * 60
+VRNO_LOTS = [
     {"shares": 125, "cost": 3.39},
     {"shares": 230, "cost": 0.74},
     {"shares": 230, "cost": 1.34},

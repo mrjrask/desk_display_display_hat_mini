@@ -198,7 +198,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             lambda img=verano_logo: _show_logo(context.display, img),
             available=True,
         )
-    register("vrnof", lambda: draw_vrnof_screen(context.display, "VRNOF", transition=True))
+    register("vrnof", lambda: draw_vrnof_screen(context.display, "VRNO", transition=True))
 
     travel_state = context.previous_travel_state
     travel_available = False
