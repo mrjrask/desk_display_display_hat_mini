@@ -32,11 +32,12 @@ from config import (
     SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
     SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
+    get_screen_font,
+    get_screen_image_scale,
 )
 from utils import (
     ScreenImage,
     clear_display,
-    clone_font,
     load_team_logo,
     log_call,
 )
@@ -73,15 +74,33 @@ GAME_COL_X = [0]
 for w in GAME_COL_WIDTHS:
     GAME_COL_X.append(GAME_COL_X[-1] + w)
 
-SCORE_FONT = clone_font(FONT_TEAM_SPORTS, 20)
-STATUS_FONT = clone_font(FONT_STATUS, 18)
-CENTER_FONT = clone_font(FONT_STATUS, 18)
+SCREEN_ID = "NBA Scoreboard v2"
 TITLE_FONT = FONT_TITLE_SPORTS
-LOGO_HEIGHT = 26
+TEAM_LOGO_BASE_HEIGHT = 26
+LEAGUE_LOGO_BASE_HEIGHT = int(round(TEAM_LOGO_BASE_HEIGHT * 1.25))
+LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
+LEAGUE_LOGO_HEIGHT = LEAGUE_LOGO_BASE_HEIGHT
+SCORE_FONT = get_screen_font(
+    SCREEN_ID,
+    "score",
+    base_font=FONT_TEAM_SPORTS,
+    default_size=20,
+)
+STATUS_FONT = get_screen_font(
+    SCREEN_ID,
+    "status",
+    base_font=FONT_STATUS,
+    default_size=18,
+)
+CENTER_FONT = get_screen_font(
+    SCREEN_ID,
+    "center",
+    base_font=FONT_STATUS,
+    default_size=18,
+)
 LOGO_DIR = os.path.join(IMAGES_DIR, "nba")
 LEAGUE_LOGO_KEYS = ("NBA", "nba")
 LEAGUE_LOGO_GAP = 4
-LEAGUE_LOGO_HEIGHT = max(1, int(round(LOGO_HEIGHT * 1.25)))
 
 IN_PROGRESS_SCORE_COLOR = SCOREBOARD_IN_PROGRESS_SCORE_COLOR
 IN_PROGRESS_STATUS_COLOR = IN_PROGRESS_SCORE_COLOR
@@ -89,10 +108,37 @@ FINAL_WINNING_SCORE_COLOR = SCOREBOARD_FINAL_WINNING_SCORE_COLOR
 FINAL_LOSING_SCORE_COLOR = SCOREBOARD_FINAL_LOSING_SCORE_COLOR
 BACKGROUND_COLOR = SCOREBOARD_BACKGROUND_COLOR
 
-_LOGO_CACHE: dict[str, Optional[Image.Image]] = {}
+_LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 _LOGO_ABBREVIATION_OVERRIDES: dict[str, str] = {
     "BKN": "BRK",
 }
+
+
+def _apply_style_overrides() -> None:
+    global SCORE_FONT, STATUS_FONT, CENTER_FONT, LOGO_HEIGHT, LEAGUE_LOGO_HEIGHT
+
+    SCORE_FONT = get_screen_font(
+        SCREEN_ID,
+        "score",
+        base_font=FONT_TEAM_SPORTS,
+        default_size=20,
+    )
+    STATUS_FONT = get_screen_font(
+        SCREEN_ID,
+        "status",
+        base_font=FONT_STATUS,
+        default_size=18,
+    )
+    CENTER_FONT = get_screen_font(
+        SCREEN_ID,
+        "center",
+        base_font=FONT_STATUS,
+        default_size=18,
+    )
+    team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
+    LOGO_HEIGHT = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
+    league_scale = get_screen_image_scale(SCREEN_ID, "league_logo", team_scale)
+    LEAGUE_LOGO_HEIGHT = max(1, int(round(LEAGUE_LOGO_BASE_HEIGHT * league_scale)))
 
 
 def _load_logo_cached(abbr: str) -> Optional[Image.Image]:
@@ -100,10 +146,12 @@ def _load_logo_cached(abbr: str) -> Optional[Image.Image]:
     if not key:
         return None
     cache_key = key.upper()
-    if cache_key in _LOGO_CACHE:
-        return _LOGO_CACHE[cache_key]
-    logo = load_team_logo(LOGO_DIR, cache_key, height=LOGO_HEIGHT)
-    _LOGO_CACHE[cache_key] = logo
+    height = LOGO_HEIGHT
+    cache_token = (cache_key, height)
+    if cache_token in _LOGO_CACHE:
+        return _LOGO_CACHE[cache_token]
+    logo = load_team_logo(LOGO_DIR, cache_key, height=height)
+    _LOGO_CACHE[cache_token] = logo
     return logo
 
 
@@ -316,6 +364,7 @@ def _scroll_display(display, full_img: Image.Image):
 
 @log_call
 def draw_nba_scoreboard_v2(display, transition: bool = False) -> ScreenImage:
+    _apply_style_overrides()
     games = _fetch_games_for_date(_scoreboard_date())
 
     if not games:

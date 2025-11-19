@@ -7,9 +7,10 @@ import logging
 import os
 import re
 import subprocess
+import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 # ─── Environment helpers ───────────────────────────────────────────────────────
 
@@ -117,6 +118,8 @@ def _get_required_env_var(*names: str) -> str:
 import pytz
 from PIL import Image, ImageDraw, ImageFont
 
+from config_store import ConfigStore
+
 try:
     _RESAMPLE_LANCZOS = Image.Resampling.LANCZOS  # Pillow >= 9.1
 except AttributeError:  # pragma: no cover - fallback for older Pillow
@@ -124,6 +127,14 @@ except AttributeError:  # pragma: no cover - fallback for older Pillow
 
 # ─── Project paths ────────────────────────────────────────────────────────────
 IMAGES_DIR  = os.path.join(SCRIPT_DIR, "images")
+
+STYLE_CONFIG_PATH = os.environ.get(
+    "SCREENS_STYLE_PATH", os.path.join(SCRIPT_DIR, "screens_style.json")
+)
+_STYLE_CONFIG_STORE = ConfigStore(STYLE_CONFIG_PATH)
+_STYLE_CONFIG_CACHE: Dict[str, Any] = {"screens": {}}
+_STYLE_CONFIG_MTIME: Optional[float] = None
+_STYLE_CONFIG_LOCK = threading.Lock()
 
 # ─── Feature flags ────────────────────────────────────────────────────────────
 ENABLE_SCREENSHOTS   = _get_bool_env("ENABLE_SCREENSHOTS", True)
@@ -637,6 +648,180 @@ def _load_emoji_font(size: int) -> ImageFont.ImageFont:
 
 FONT_EMOJI = _load_emoji_font(30)
 FONT_EMOJI_SMALL = _load_emoji_font(18)
+
+
+def _normalise_style_config(payload: Dict[str, Any]) -> Dict[str, Any]:
+    normalised: Dict[str, Any] = {"screens": {}}
+    if not isinstance(payload, dict):
+        return normalised
+
+    screens = payload.get("screens")
+    if not isinstance(screens, dict):
+        return normalised
+
+    for screen_id, spec in screens.items():
+        if not isinstance(screen_id, str) or not isinstance(spec, dict):
+            continue
+
+        fonts: Dict[str, Dict[str, Any]] = {}
+        images: Dict[str, Dict[str, Any]] = {}
+
+        font_specs = spec.get("fonts")
+        if isinstance(font_specs, dict):
+            for font_slot, font_spec in font_specs.items():
+                if not isinstance(font_slot, str) or not isinstance(font_spec, dict):
+                    continue
+                entry: Dict[str, Any] = {}
+                family = font_spec.get("family")
+                if isinstance(family, str) and family.strip():
+                    entry["family"] = family.strip()
+                size = font_spec.get("size")
+                if isinstance(size, int) and size > 0:
+                    entry["size"] = size
+                if entry:
+                    fonts[font_slot] = entry
+
+        image_specs = spec.get("images")
+        if isinstance(image_specs, dict):
+            for image_slot, image_spec in image_specs.items():
+                if not isinstance(image_slot, str) or not isinstance(image_spec, dict):
+                    continue
+                scale = image_spec.get("scale")
+                try:
+                    scale_value = float(scale)
+                except (TypeError, ValueError):
+                    continue
+                if scale_value <= 0:
+                    continue
+                images[image_slot] = {"scale": scale_value}
+
+        entry: Dict[str, Any] = {}
+        if fonts:
+            entry["fonts"] = fonts
+        if images:
+            entry["images"] = images
+        if entry:
+            normalised["screens"][screen_id] = entry
+
+    return normalised
+
+
+def _load_style_config(*, force: bool = False) -> Dict[str, Any]:
+    global _STYLE_CONFIG_CACHE, _STYLE_CONFIG_MTIME
+
+    try:
+        mtime = os.path.getmtime(STYLE_CONFIG_PATH)
+    except OSError:
+        mtime = None
+
+    with _STYLE_CONFIG_LOCK:
+        if not force and _STYLE_CONFIG_CACHE is not None and _STYLE_CONFIG_MTIME == mtime:
+            return _STYLE_CONFIG_CACHE
+
+        try:
+            raw = _STYLE_CONFIG_STORE.load()
+        except Exception as exc:  # pragma: no cover - unexpected read failure
+            logging.debug("Unable to load style configuration: %s", exc)
+            raw = {}
+
+        normalised = _normalise_style_config(raw)
+        _STYLE_CONFIG_CACHE = normalised
+        _STYLE_CONFIG_MTIME = mtime
+        return normalised
+
+
+def reload_style_config() -> Dict[str, Any]:
+    """Force a reload of the style configuration."""
+
+    return _load_style_config(force=True)
+
+
+def get_style_config() -> Dict[str, Any]:
+    """Return the cached style configuration."""
+
+    return _load_style_config()
+
+
+def get_screen_style(screen_id: str) -> Dict[str, Any]:
+    """Return the style overrides for *screen_id*."""
+
+    config = get_style_config()
+    screens = config.get("screens") or {}
+    if not isinstance(screens, dict):
+        return {}
+    entry = screens.get(screen_id)
+    return entry if isinstance(entry, dict) else {}
+
+
+def _clone_font_instance(font: ImageFont.FreeTypeFont, size: int) -> ImageFont.FreeTypeFont:
+    path = getattr(font, "path", None)
+    if path:
+        try:
+            return ImageFont.truetype(path, size)
+        except OSError:
+            logging.debug("Unable to clone font %s at size %s", path, size)
+    return font
+
+
+def _load_font_from_family(family: str, size: int) -> Optional[ImageFont.FreeTypeFont]:
+    candidates = [family]
+    if not os.path.isabs(family):
+        candidates.insert(0, os.path.join(FONTS_DIR, family))
+
+    for candidate in candidates:
+        try:
+            return ImageFont.truetype(candidate, size)
+        except OSError:
+            continue
+    logging.debug("Unable to load override font '%s'", family)
+    return None
+
+
+def get_screen_font(
+    screen_id: str,
+    font_slot: str,
+    *,
+    base_font: ImageFont.FreeTypeFont,
+    default_size: Optional[int] = None,
+) -> ImageFont.FreeTypeFont:
+    """Return a font for *screen_id*/*font_slot* applying style overrides."""
+
+    style = get_screen_style(screen_id)
+    fonts = style.get("fonts") if isinstance(style.get("fonts"), dict) else {}
+    spec = fonts.get(font_slot) if isinstance(fonts, dict) else None
+
+    target_size = default_size or getattr(base_font, "size", None)
+    if isinstance(spec, dict):
+        size_override = spec.get("size")
+        if isinstance(size_override, int) and size_override > 0:
+            target_size = size_override
+        family = spec.get("family")
+        if isinstance(family, str) and family.strip():
+            override_font = _load_font_from_family(family.strip(), target_size or getattr(base_font, "size", 12))
+            if override_font is not None:
+                return override_font
+
+    if target_size and getattr(base_font, "size", None) != target_size:
+        return _clone_font_instance(base_font, target_size)
+    return base_font
+
+
+def get_screen_image_scale(screen_id: str, image_slot: str, default: float = 1.0) -> float:
+    """Return an image scaling factor for *screen_id*/*image_slot*."""
+
+    style = get_screen_style(screen_id)
+    images = style.get("images") if isinstance(style.get("images"), dict) else {}
+    spec = images.get(image_slot) if isinstance(images, dict) else None
+    if isinstance(spec, dict):
+        scale = spec.get("scale")
+        try:
+            value = float(scale)
+        except (TypeError, ValueError):
+            value = default
+        else:
+            if value > 0:
+                return value
+    return default
 
 # ─── Screen-specific configuration ─────────────────────────────────────────────
 
