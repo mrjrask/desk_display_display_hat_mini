@@ -1,14 +1,14 @@
 {
   "screens": {
     "date": 1,
-    "time": 0,
+    "time": 1,
     "weather logo": 0,
     "weather1": 1,
     "weather2": 1,
     "inside": 1,
     "sensors": 0,
     "verano logo": 0,
-    "vrnof": 1,
+    "vrnof": 4,
     "travel": 2,
     "cubs logo": 0,
     "cubs stand1": 0,
@@ -25,8 +25,8 @@
     "sox live": 0,
     "sox next": 0,
     "sox next home": 0,
-    "bears logo": 1,
-    "bears next": 1,
+    "bears logo": 2,
+    "bears next": 2,
     "hawks logo": 1,
     "hawks last": 1,
     "hawks live": 1,
@@ -36,26 +36,26 @@
     "wolves last": 0,
     "wolves next": 0,
     "wolves next home": 0,
-    "bulls logo": 1,
-    "bulls last": 1,
-    "bulls live": 1,
-    "bulls next": 1,
-    "bulls next home": 1,
+    "bulls logo": 3,
+    "bulls last": 3,
+    "bulls live": 3,
+    "bulls next": 3,
+    "bulls next home": 3,
     "nfl logo": 0,
     "NFL Scoreboard": 1,
     "NFL Scoreboard v2": 0,
     "NFL Overview NFC": {
-      "frequency": 1,
+      "frequency": 2,
       "alt": {
         "screen": "NFL Standings NFC",
-        "frequency": 2
+        "frequency": 4
       }
     },
     "NFL Overview AFC": {
-      "frequency": 1,
+      "frequency": 2,
       "alt": {
         "screen": "NFL Standings AFC",
-        "frequency": 2
+        "frequency": 4
       }
     },
     "NFL Standings NFC": 0,
@@ -89,7 +89,7 @@
     "AL West": 0,
     "AL Wild Card": 0,
     "nba logo": 0,
-    "NBA Scoreboard": 1,
+    "NBA Scoreboard": 5,
     "NBA Scoreboard v2": 0
   }
 }
