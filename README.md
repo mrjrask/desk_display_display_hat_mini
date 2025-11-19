@@ -228,7 +228,7 @@ The repository ships with a ready-to-run `screens_config.json` that exposes the 
 3. Every third pass, show `weather2`.
 4. Every third pass, show `inside` (indoor sensors).
 5. `travel`
-6. Every fourth pass, show `vrnof` (Verano office status).
+6. Every fourth pass, show `vrnof` (Verano VRNO stock panel).
 7. Every other pass, cycle through the Blackhawks cards: `hawks logo`, `hawks last`, `hawks live`, `hawks next`, `hawks next home`.
 8. Every fifth pass, show `NHL Scoreboard`.
 9. Every sixth pass, cycle through `NHL Standings Overview`, `NHL Standings Overview`, `NHL Standings West`.
@@ -292,7 +292,7 @@ Or copy `.env.example` to `.env` and load it with your preferred process manager
 - **Date/Time:** legible, high‑contrast text with the GitHub update dot when upstream commits are available.
 - **Weather (1/2):** Open‑Meteo + OWM snapshots and extended forecasts.
 - **Inside:** BME688/BME280/LTR559/SHT41 summaries when sensors are wired.
-- **VRNOF:** stock mini‑panel.
+- **VRNO:** stock mini‑panel.
 - **Travel:** Maps ETA using your configured mode.
 - **Bears:** opponent card, logo splash, standings, and NFL scoreboard tie‑ins.
 - **Blackhawks:** last/live/next based on the NHL schedule feed, logos included.

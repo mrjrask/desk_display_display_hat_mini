@@ -2,7 +2,7 @@
 """
 draw_vrnof.py
 
-Displays VRNOF stock price, change, and all-time P/L on the Display HAT Mini,
+Displays VRNO stock price, change, and all-time P/L on the Display HAT Mini,
 with a 10-minute freshness requirement. Title and all-time P/L remain fixed; price/change vertically centered on screen.
 Exact cost-basis calculation from individual lots.
 """
@@ -16,9 +16,9 @@ import yfinance as yf
 from config import (
     WIDTH,
     HEIGHT,
-    VRNOF_CACHE_TTL,
-    VRNOF_FRESHNESS_LIMIT,
-    VRNOF_LOTS,
+    VRNO_CACHE_TTL,
+    VRNO_FRESHNESS_LIMIT,
+    VRNO_LOTS,
     FONT_STOCK_TITLE,
     FONT_STOCK_PRICE,
     FONT_STOCK_CHANGE,
@@ -59,7 +59,7 @@ def _get_logo() -> Image.Image | None:
         height = LOGO_HEIGHT
         _LOGO = logo.resize((width, height), Image.ANTIALIAS)
     except Exception as exc:
-        logging.warning("VRNOF: failed to load logo at %s: %s", LOGO_PATH, exc)
+        logging.warning("VRNO: failed to load logo at %s: %s", LOGO_PATH, exc)
         _LOGO = None
     return _LOGO
 
@@ -80,7 +80,7 @@ def _fetch_price(symbol: str):
             change_val = price - float(prev)
             change_pct = (change_val / float(prev)) * 100
     except Exception as e:
-        logging.warning(f"VRNOF: info fetch failed: {e}")
+        logging.warning(f"VRNO: info fetch failed: {e}")
 
     # Fallback to history
     if price is None:
@@ -93,14 +93,14 @@ def _fetch_price(symbol: str):
                 change_val = price - prev
                 change_pct = (change_val / prev) * 100
         except Exception as e:
-            logging.warning(f"VRNOF: history fetch failed: {e}")
+            logging.warning(f"VRNO: history fetch failed: {e}")
 
     # calculate all-time P/L exactly per lot
     all_time_str = None
     if price is not None:
         total_pl = 0.0
         total_cost = 0.0
-        for lot in VRNOF_LOTS:
+        for lot in VRNO_LOTS:
             shares = lot["shares"]
             cost_basis = lot["cost"]
             total_cost += shares * cost_basis
@@ -119,10 +119,10 @@ def _fetch_price(symbol: str):
     })
 
 
-def _build_image(symbol: str = "VRNOF") -> Image.Image:
+def _build_image(symbol: str = "VRNO") -> Image.Image:
     """Construct the PIL image for the stock screen."""
     now = time.time()
-    if _cache["price"] is None or (now - _cache["ts"] > VRNOF_FRESHNESS_LIMIT):
+    if _cache["price"] is None or (now - _cache["ts"] > VRNO_FRESHNESS_LIMIT):
         _fetch_price(symbol)
 
     # Fallback when no price
@@ -196,7 +196,7 @@ def _build_image(symbol: str = "VRNOF") -> Image.Image:
     return img
 
 
-def draw_vrnof_screen(display, symbol: str = "VRNOF", transition: bool = False):
+def draw_vrnof_screen(display, symbol: str = "VRNO", transition: bool = False):
     img = _build_image(symbol)
     change_val = _cache.get("change_val")
     led_color = None
