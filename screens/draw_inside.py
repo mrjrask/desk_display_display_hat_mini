@@ -15,6 +15,7 @@ import logging
 import math
 import os
 import sys
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from PIL import Image, ImageDraw
@@ -40,6 +41,24 @@ W, H = config.WIDTH, config.HEIGHT
 SensorReadings = Dict[str, Optional[float]]
 SensorProbeResult = Tuple[str, Callable[[], SensorReadings]]
 SensorProbeFn = Callable[[Any, Set[int]], Optional[SensorProbeResult]]
+
+
+def _prepend_vendor_sensor_drivers():
+    """Prefer vendored Pimoroni sensor drivers when available."""
+
+    repo_root = Path(__file__).resolve().parents[1]
+    vendor_paths = (
+        repo_root / "vendor" / "pimoroni-bme280",
+        repo_root / "vendor" / "pimoroni-bme680",
+    )
+    for vendor_path in vendor_paths:
+        if vendor_path.exists():
+            path_str = str(vendor_path)
+            if path_str not in sys.path:
+                sys.path.insert(0, path_str)
+
+
+_prepend_vendor_sensor_drivers()
 
 
 def _extract_field(data: Any, key: str) -> Optional[float]:
@@ -295,23 +314,38 @@ def _probe_pimoroni_bme680(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
 
     from importlib import import_module
 
-    try:
-        bme680 = import_module("pimoroni_bme680")  # type: ignore
-    except ModuleNotFoundError:
-        bme680 = import_module("bme680")  # type: ignore
+    module = None
+    last_import_error: Optional[Exception] = None
+    for name in ("pimoroni_bme680", "bme680"):
+        try:
+            module = import_module(name)  # type: ignore[assignment]
+            break
+        except ModuleNotFoundError as exc:
+            last_import_error = exc
+        except Exception as exc:  # pragma: no cover - depends on environment
+            logging.debug("draw_inside: error importing %s: %s", name, exc)
+            last_import_error = exc
+
+    if module is None:
+        if last_import_error is not None:
+            raise last_import_error
+        raise RuntimeError("Pimoroni BME680 driver not available")
 
     candidate_addresses: Sequence[int]
     if addresses:
         candidate_addresses = tuple(sorted(addresses.intersection({0x76, 0x77})))
     else:
         candidate_addresses = (
-            getattr(bme680, "I2C_ADDR_PRIMARY", 0x76),
-            getattr(bme680, "I2C_ADDR_SECONDARY", 0x77),
+            getattr(module, "I2C_ADDR_PRIMARY", 0x76),
+            getattr(module, "I2C_ADDR_SECONDARY", 0x77),
         )
 
     sensor = None
     last_error: Optional[Exception] = None
-    expected_chip_id = getattr(bme680, "CHIP_ID", 0x61)
+    provider_label = "Pimoroni BME680"
+    expected_chip_id = getattr(module, "CHIP_ID", 0x61)
+    variant_high = getattr(module, "VARIANT_HIGH", None)
+    variant_low = getattr(module, "VARIANT_LOW", None)
     for addr in candidate_addresses:
         chip_id = _read_chip_id(_i2c, addr)
         if chip_id is not None and chip_id != expected_chip_id:
@@ -322,7 +356,17 @@ def _probe_pimoroni_bme680(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
             )
             continue
         try:
-            sensor = bme680.BME680(addr)  # type: ignore[arg-type]
+            sensor = module.BME680(addr)  # type: ignore[arg-type]
+            variant = getattr(sensor, "_variant", None)
+            if variant is not None:
+                if variant_high is not None and variant == variant_high:
+                    provider_label = f"Pimoroni BME688 (0x{addr:02X})"
+                elif variant_low is not None and variant == variant_low:
+                    provider_label = f"Pimoroni BME680 (0x{addr:02X})"
+                else:
+                    provider_label = f"Pimoroni BME68x (0x{addr:02X})"
+            else:
+                provider_label = f"Pimoroni BME680 (0x{addr:02X})"
             break
         except Exception as exc:  # pragma: no cover - relies on hardware
             last_error = exc
@@ -332,11 +376,11 @@ def _probe_pimoroni_bme680(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
         raise RuntimeError("BME680 sensor not found")
 
     for method, value in (
-        ("set_humidity_oversample", getattr(bme680, "OS_2X", None)),
-        ("set_pressure_oversample", getattr(bme680, "OS_4X", None)),
-        ("set_temperature_oversample", getattr(bme680, "OS_8X", None)),
-        ("set_filter", getattr(bme680, "FILTER_SIZE_3", None)),
-        ("set_gas_status", getattr(bme680, "ENABLE_GAS_MEAS", None)),
+        ("set_humidity_oversample", getattr(module, "OS_2X", None)),
+        ("set_pressure_oversample", getattr(module, "OS_4X", None)),
+        ("set_temperature_oversample", getattr(module, "OS_8X", None)),
+        ("set_filter", getattr(module, "FILTER_SIZE_3", None)),
+        ("set_gas_status", getattr(module, "ENABLE_GAS_MEAS", None)),
     ):
         fn = getattr(sensor, method, None)
         if callable(fn) and value is not None:
@@ -345,8 +389,16 @@ def _probe_pimoroni_bme680(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
             except Exception:
                 pass
 
-    gas_temp = getattr(bme680, "DEFAULT_GAS_HEATER_TEMPERATURE", getattr(bme680, "GAS_HEATER_TEMP", None))
-    gas_dur = getattr(bme680, "DEFAULT_GAS_HEATER_DURATION", getattr(bme680, "GAS_HEATER_DURATION", None))
+    gas_temp = getattr(
+        module,
+        "DEFAULT_GAS_HEATER_TEMPERATURE",
+        getattr(module, "GAS_HEATER_TEMP", None),
+    )
+    gas_dur = getattr(
+        module,
+        "DEFAULT_GAS_HEATER_DURATION",
+        getattr(module, "GAS_HEATER_DURATION", None),
+    )
     fn_temp = getattr(sensor, "set_gas_heater_temperature", None)
     fn_dur = getattr(sensor, "set_gas_heater_duration", None)
     if callable(fn_temp) and gas_temp is not None:
@@ -391,7 +443,7 @@ def _probe_pimoroni_bme680(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
             voc_ohms=voc,
         )
 
-    return "Pimoroni BME680", read
+    return provider_label, read
 
 
 def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProbeResult]:
@@ -774,9 +826,9 @@ def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings
     probers: Tuple[SensorProbeFn, ...] = (
         _probe_pimoroni_bme280,
         _probe_adafruit_bme280,
-        _probe_adafruit_bme680,
-        _probe_pimoroni_bme68x,
         _probe_pimoroni_bme680,
+        _probe_pimoroni_bme68x,
+        _probe_adafruit_bme680,
         _probe_adafruit_sht4x,
     )
 

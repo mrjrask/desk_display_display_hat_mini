@@ -17,5 +17,7 @@ cairosvg
 rpi.gpio
 colorama
 adafruit-circuitpython-bme280
-pimoroni-bme280
+i2cdevice>=1.0.0
+-e ./vendor/pimoroni-bme280
+-e ./vendor/pimoroni-bme680
 -e ./vendor/bme68x
