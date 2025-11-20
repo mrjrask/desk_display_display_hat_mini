@@ -503,6 +503,24 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
                 pres_inhg if pres_inhg is not None else float("nan"),
             )
 
+            if pres_hpa is not None and not 700 <= pres_hpa <= 1100:
+                logging.warning(
+                    "draw_inside: discarding Pimoroni BME280 reading with out-of-range pressure %.1f hPa",
+                    pres_hpa,
+                )
+                raise RuntimeError(
+                    f"Pimoroni BME280 pressure sanity check failed: {pres_hpa:.1f} hPa"
+                )
+
+            if hum is not None and not 0 <= hum <= 100:
+                logging.warning(
+                    "draw_inside: discarding Pimoroni BME280 reading with out-of-range humidity %.1f%%",
+                    hum,
+                )
+                raise RuntimeError(
+                    f"Pimoroni BME280 humidity sanity check failed: {hum:.1f}%"
+                )
+
             return dict(
                 temp_f=temp_f,
                 humidity=hum,
@@ -527,6 +545,24 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
                 pres_raw,
                 pres_hpa,
                 pres if pres is not None else float("nan"),
+            )
+
+        if pres_hpa is not None and not 700 <= pres_hpa <= 1100:
+            logging.warning(
+                "draw_inside: discarding Pimoroni BME280 (fallback) reading with out-of-range pressure %.1f hPa",
+                pres_hpa,
+            )
+            raise RuntimeError(
+                f"Pimoroni BME280 (fallback) pressure sanity check failed: {pres_hpa:.1f} hPa"
+            )
+
+        if hum is not None and not 0 <= hum <= 100:
+            logging.warning(
+                "draw_inside: discarding Pimoroni BME280 (fallback) reading with out-of-range humidity %.1f%%",
+                hum,
+            )
+            raise RuntimeError(
+                f"Pimoroni BME280 (fallback) humidity sanity check failed: {hum:.1f}%"
             )
 
         temp_f = temp_c * 9 / 5 + 32
@@ -561,6 +597,24 @@ def _probe_adafruit_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
             pres_hpa if pres_hpa is not None else float("nan"),
             pres if pres is not None else float("nan"),
         )
+
+        if pres_hpa is not None and not 700 <= pres_hpa <= 1100:
+            logging.warning(
+                "draw_inside: discarding Adafruit BME280 reading with out-of-range pressure %.1f hPa",
+                pres_hpa,
+            )
+            raise RuntimeError(
+                f"Adafruit BME280 pressure sanity check failed: {pres_hpa:.1f} hPa"
+            )
+
+        if hum is not None and not 0 <= hum <= 100:
+            logging.warning(
+                "draw_inside: discarding Adafruit BME280 reading with out-of-range humidity %.1f%%",
+                hum,
+            )
+            raise RuntimeError(
+                f"Adafruit BME280 humidity sanity check failed: {hum:.1f}%"
+            )
 
         return dict(
             temp_f=temp_f,
