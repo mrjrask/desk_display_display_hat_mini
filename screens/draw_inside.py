@@ -299,6 +299,14 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
     if sensor_cls is None:
         raise RuntimeError(f"{module.__name__} is missing the BME280 class")
 
+    # Import SMBus for proper sensor initialization
+    try:
+        from smbus2 import SMBus
+        bus = SMBus(1)
+    except Exception as exc:
+        logging.warning("draw_inside: failed to initialize SMBus: %s", exc)
+        raise
+
     # Prefer the addresses we actually saw on the bus so we don't try the
     # wrong default. Fallback to the library defaults if we could not scan.
     candidate_addresses: Sequence[int]
@@ -312,7 +320,7 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
     last_error: Optional[Exception] = None
     for addr in candidate_addresses:
         try:
-            candidate = sensor_cls(i2c_addr=addr)  # type: ignore[call-arg]
+            candidate = sensor_cls(i2c_addr=addr, i2c_dev=bus)  # type: ignore[call-arg]
             try:
                 # Force an initial reading to validate connectivity. The Pimoroni
                 # driver raises a RuntimeError with a helpful message if the bus
