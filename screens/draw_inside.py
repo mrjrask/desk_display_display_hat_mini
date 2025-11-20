@@ -520,13 +520,18 @@ def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings
     else:
         logging.debug("draw_inside: no I2C addresses detected during scan")
 
+    # Prefer BME280 variants before BME680/BME68x. Some BME680 drivers can
+    # incorrectly initialise against a BME280 at the same address and return
+    # garbage pressure values (~660 hPa instead of ~997 hPa). Trying the
+    # BME280-specific probers first keeps the readings aligned with the
+    # standalone BME280 CLI script.
     probers: Tuple[SensorProbeFn, ...] = (
+        _probe_pimoroni_bme280,
+        _probe_adafruit_bme280,
         _probe_adafruit_bme680,
         _probe_pimoroni_bme68x,
         _probe_pimoroni_bme680,
         _probe_adafruit_sht4x,
-        _probe_pimoroni_bme280,
-        _probe_adafruit_bme280,
     )
 
     for probe in probers:
