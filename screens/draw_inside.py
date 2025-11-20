@@ -193,7 +193,7 @@ def _probe_adafruit_bme680(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
         hum = float(dev.humidity)
         pres_raw = getattr(dev, "pressure", None)
         pres_hpa, pres = _normalize_pressure(pres_raw)
-        if pres_hpa is not None and not 700 <= pres_hpa <= 1100:
+        if pres_hpa is not None and not 300 <= pres_hpa <= 1100:
             raise RuntimeError(f"BME680 pressure sanity check failed: {pres_hpa:.1f} hPa")
         gas = getattr(dev, "gas", None)
         voc = float(gas) if gas not in (None, 0) else None
@@ -270,7 +270,7 @@ def _probe_pimoroni_bme68x(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
 
         temp_f = temp_c * 9 / 5 + 32 if temp_c is not None else None
         pres_hpa, pres = _normalize_pressure(pres_raw)
-        if pres_hpa is not None and not 700 <= pres_hpa <= 1100:
+        if pres_hpa is not None and not 300 <= pres_hpa <= 1100:
             raise RuntimeError(f"BME68X pressure sanity check failed: {pres_hpa:.1f} hPa")
 
         voc = voc_raw if voc_raw not in (None, 0) else None
@@ -375,7 +375,7 @@ def _probe_pimoroni_bme680(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
 
         temp_f = float(temp_c) * 9 / 5 + 32 if temp_c is not None else None
         pres_hpa, pres = _normalize_pressure(pres_raw)
-        if pres_hpa is not None and not 700 <= pres_hpa <= 1100:
+        if pres_hpa is not None and not 300 <= pres_hpa <= 1100:
             raise RuntimeError(f"BME680 pressure sanity check failed: {pres_hpa:.1f} hPa")
         voc = float(gas) if gas not in (None, 0) and heat_stable else None
         hum_val = float(hum) if hum is not None else None
@@ -488,6 +488,60 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
     addr_for_label = successful_addr if successful_addr is not None else candidate_addresses[0]
     label = f"Pimoroni BME280 (0x{addr_for_label:02X})"
 
+    fallback_dev: Optional[Any] = None
+    fallback_error: Optional[Exception] = None
+
+    def read_with_fallback() -> Optional[SensorReadings]:
+        nonlocal fallback_dev, fallback_error
+
+        if fallback_dev is None and fallback_error is None:
+            try:
+                import adafruit_bme280  # type: ignore
+
+                fallback_dev = adafruit_bme280.Adafruit_BME280_I2C(
+                    i2c, address=addr_for_label
+                )
+            except ModuleNotFoundError:
+                fallback_error = ModuleNotFoundError("Adafruit BME280 driver missing")
+            except Exception as exc:  # pragma: no cover - relies on hardware
+                fallback_error = exc
+
+        if fallback_dev is None:
+            if fallback_error is not None:
+                logging.debug(
+                    "draw_inside: unable to use Adafruit fallback BME280 driver: %s",
+                    fallback_error,
+                )
+            return None
+
+        temp_f = float(fallback_dev.temperature) * 9 / 5 + 32
+        hum_raw = getattr(fallback_dev, "humidity", None)
+        pres_raw = getattr(fallback_dev, "pressure", None)
+        pres_hpa, pres_inhg = _normalize_pressure(pres_raw)
+        hum = float(hum_raw) if hum_raw is not None else None
+
+        if pres_hpa is None or not 300 <= pres_hpa <= 1100:
+            logging.debug(
+                "draw_inside: Adafruit fallback BME280 pressure sanity check failed: %s",
+                pres_hpa,
+            )
+            return None
+
+        if hum is not None and not 0 <= hum <= 100:
+            logging.debug(
+                "draw_inside: Adafruit fallback BME280 humidity sanity check failed: %s",
+                hum,
+            )
+            return None
+
+        return dict(
+            temp_f=temp_f,
+            humidity=hum,
+            pressure_inhg=pres_inhg,
+            pressure_hpa=pres_hpa,
+            voc_ohms=None,
+        )
+
     if dev is not None:
 
         def read() -> SensorReadings:
@@ -503,11 +557,15 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
                 pres_inhg if pres_inhg is not None else float("nan"),
             )
 
-            if pres_hpa is not None and not 700 <= pres_hpa <= 1100:
+            if pres_hpa is not None and not 300 <= pres_hpa <= 1100:
                 logging.warning(
                     "draw_inside: discarding Pimoroni BME280 reading with out-of-range pressure %.1f hPa",
                     pres_hpa,
                 )
+                fallback = read_with_fallback()
+                if fallback is not None:
+                    return fallback
+
                 raise RuntimeError(
                     f"Pimoroni BME280 pressure sanity check failed: {pres_hpa:.1f} hPa"
                 )
@@ -517,6 +575,10 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
                     "draw_inside: discarding Pimoroni BME280 reading with out-of-range humidity %.1f%%",
                     hum,
                 )
+                fallback = read_with_fallback()
+                if fallback is not None:
+                    return fallback
+
                 raise RuntimeError(
                     f"Pimoroni BME280 humidity sanity check failed: {hum:.1f}%"
                 )
@@ -547,7 +609,7 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
                 pres if pres is not None else float("nan"),
             )
 
-        if pres_hpa is not None and not 700 <= pres_hpa <= 1100:
+        if pres_hpa is not None and not 300 <= pres_hpa <= 1100:
             logging.warning(
                 "draw_inside: discarding Pimoroni BME280 (fallback) reading with out-of-range pressure %.1f hPa",
                 pres_hpa,
@@ -598,7 +660,7 @@ def _probe_adafruit_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
             pres if pres is not None else float("nan"),
         )
 
-        if pres_hpa is not None and not 700 <= pres_hpa <= 1100:
+        if pres_hpa is not None and not 300 <= pres_hpa <= 1100:
             logging.warning(
                 "draw_inside: discarding Adafruit BME280 reading with out-of-range pressure %.1f hPa",
                 pres_hpa,
