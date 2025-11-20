@@ -76,6 +76,43 @@ def _normalize_pressure(pres_raw: Optional[float]) -> Tuple[Optional[float], Opt
     return pres_hpa, pres_inhg
 
 
+def _read_chip_id(i2c: Any, addr: int, register: int = 0xD0) -> Optional[int]:
+    """Best-effort helper to read a chip ID register over I2C.
+
+    Used to guard against BME680/BME68x drivers latching onto a BME280 at the
+    same address. Returns ``None`` if the register cannot be read cleanly.
+    """
+
+    if not hasattr(i2c, "writeto_then_readfrom"):
+        return None
+
+    buf = bytearray(1)
+    locked = False
+    try:
+        if hasattr(i2c, "try_lock"):
+            for _ in range(3):
+                try:
+                    locked = i2c.try_lock()
+                except Exception:
+                    locked = False
+                if locked:
+                    break
+                time.sleep(0.005)
+        if not locked and hasattr(i2c, "try_lock"):
+            return None
+        try:
+            i2c.writeto_then_readfrom(addr, bytes([register]), buf)
+        except Exception:
+            return None
+        return buf[0]
+    finally:
+        if locked and hasattr(i2c, "unlock"):
+            try:
+                i2c.unlock()
+            except Exception:
+                pass
+
+
 
 def _suppress_i2c_error_output():
     """Context manager that silences noisy stderr output from native drivers."""
@@ -121,15 +158,52 @@ def _probe_adafruit_bme680(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
 
     import adafruit_bme680  # type: ignore
 
-    dev = adafruit_bme680.Adafruit_BME680_I2C(i2c)
+    expected_chip_id = getattr(adafruit_bme680, "_BME680_CHIPID", 0x61)
+
+    candidate_addresses: Sequence[int]
+    if addresses:
+        candidate_addresses = tuple(sorted(addresses.intersection({0x76, 0x77})))
+    else:
+        candidate_addresses = (0x77, 0x76)
+
+    dev = None
+    last_error: Optional[Exception] = None
+    for addr in candidate_addresses:
+        chip_id = _read_chip_id(i2c, addr)
+        if chip_id is not None and chip_id != expected_chip_id:
+            logging.debug(
+                "draw_inside: skipping Adafruit BME680 probe at 0x%02X due to chip ID 0x%02X",
+                addr,
+                chip_id,
+            )
+            continue
+        try:
+            dev = adafruit_bme680.Adafruit_BME680_I2C(i2c, address=addr)
+            break
+        except Exception as exc:  # pragma: no cover - relies on hardware
+            last_error = exc
+
+    if dev is None:
+        if last_error is not None:
+            raise last_error
+        return None
 
     def read() -> SensorReadings:
         temp_f = float(dev.temperature) * 9 / 5 + 32
         hum = float(dev.humidity)
-        pres = float(dev.pressure) * 0.02953
+        pres_raw = getattr(dev, "pressure", None)
+        pres_hpa, pres = _normalize_pressure(pres_raw)
+        if pres_hpa is not None and not 700 <= pres_hpa <= 1100:
+            raise RuntimeError(f"BME680 pressure sanity check failed: {pres_hpa:.1f} hPa")
         gas = getattr(dev, "gas", None)
         voc = float(gas) if gas not in (None, 0) else None
-        return dict(temp_f=temp_f, humidity=hum, pressure_inhg=pres, voc_ohms=voc)
+        return dict(
+            temp_f=temp_f,
+            humidity=hum,
+            pressure_inhg=pres,
+            pressure_hpa=pres_hpa,
+            voc_ohms=voc,
+        )
 
     return "Adafruit BME680", read
 
@@ -153,6 +227,15 @@ def _probe_pimoroni_bme68x(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
     sensor = None
     last_error: Optional[Exception] = None
     for addr in (I2C_ADDR_LOW, I2C_ADDR_HIGH):
+        chip_id = _read_chip_id(_i2c, addr)
+        expected_id = getattr(bme68x, "BME68X_CHIP_ID", 0x61)
+        if chip_id is not None and chip_id != expected_id:
+            logging.debug(
+                "draw_inside: skipping BME68X probe at 0x%02X due to chip ID 0x%02X",
+                addr,
+                chip_id,
+            )
+            continue
         try:
             with _suppress_i2c_error_output():
                 sensor = bme68x.BME68X(addr)  # type: ignore
@@ -186,17 +269,22 @@ def _probe_pimoroni_bme68x(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
         voc_raw = _extract_field(data, "gas_resistance")
 
         temp_f = temp_c * 9 / 5 + 32 if temp_c is not None else None
-        pres = None
-        if pres_raw is not None:
-            pres_hpa = pres_raw / 100.0 if pres_raw > 2000 else pres_raw
-            pres = pres_hpa * 0.02953
+        pres_hpa, pres = _normalize_pressure(pres_raw)
+        if pres_hpa is not None and not 700 <= pres_hpa <= 1100:
+            raise RuntimeError(f"BME68X pressure sanity check failed: {pres_hpa:.1f} hPa")
 
         voc = voc_raw if voc_raw not in (None, 0) else None
 
         if temp_f is None:
             raise RuntimeError("BME68X temperature reading missing")
 
-        return dict(temp_f=temp_f, humidity=hum, pressure_inhg=pres, voc_ohms=voc)
+        return dict(
+            temp_f=temp_f,
+            humidity=hum,
+            pressure_inhg=pres,
+            pressure_hpa=pres_hpa,
+            voc_ohms=voc,
+        )
 
     return provider, read
 
@@ -212,10 +300,36 @@ def _probe_pimoroni_bme680(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
     except ModuleNotFoundError:
         bme680 = import_module("bme680")  # type: ignore
 
-    try:
-        sensor = bme680.BME680(getattr(bme680, "I2C_ADDR_PRIMARY", 0x76))  # type: ignore
-    except Exception:
-        sensor = bme680.BME680()  # type: ignore
+    candidate_addresses: Sequence[int]
+    if addresses:
+        candidate_addresses = tuple(sorted(addresses.intersection({0x76, 0x77})))
+    else:
+        candidate_addresses = (
+            getattr(bme680, "I2C_ADDR_PRIMARY", 0x76),
+            getattr(bme680, "I2C_ADDR_SECONDARY", 0x77),
+        )
+
+    sensor = None
+    last_error: Optional[Exception] = None
+    expected_chip_id = getattr(bme680, "CHIP_ID", 0x61)
+    for addr in candidate_addresses:
+        chip_id = _read_chip_id(_i2c, addr)
+        if chip_id is not None and chip_id != expected_chip_id:
+            logging.debug(
+                "draw_inside: skipping Pimoroni BME680 probe at 0x%02X due to chip ID 0x%02X",
+                addr,
+                chip_id,
+            )
+            continue
+        try:
+            sensor = bme680.BME680(addr)  # type: ignore[arg-type]
+            break
+        except Exception as exc:  # pragma: no cover - relies on hardware
+            last_error = exc
+    if sensor is None:
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("BME680 sensor not found")
 
     for method, value in (
         ("set_humidity_oversample", getattr(bme680, "OS_2X", None)),
@@ -260,16 +374,24 @@ def _probe_pimoroni_bme680(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
         heat_stable = getattr(data, "heat_stable", True)
 
         temp_f = float(temp_c) * 9 / 5 + 32 if temp_c is not None else None
-        pres = float(pres_raw) * 0.02953 if pres_raw is not None else None
+        pres_hpa, pres = _normalize_pressure(pres_raw)
+        if pres_hpa is not None and not 700 <= pres_hpa <= 1100:
+            raise RuntimeError(f"BME680 pressure sanity check failed: {pres_hpa:.1f} hPa")
         voc = float(gas) if gas not in (None, 0) and heat_stable else None
         hum_val = float(hum) if hum is not None else None
 
         if temp_f is None:
             raise RuntimeError("BME680 temperature reading missing")
 
-        return dict(temp_f=temp_f, humidity=hum_val, pressure_inhg=pres, voc_ohms=voc)
+        return dict(
+            temp_f=temp_f,
+            humidity=hum_val,
+            pressure_inhg=pres,
+            pressure_hpa=pres_hpa,
+            voc_ohms=voc,
+        )
 
-    return "Pimoroni BME68X", read
+    return "Pimoroni BME680", read
 
 
 def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProbeResult]:
@@ -993,8 +1115,10 @@ def _build_metric_entries(data: Dict[str, Optional[float]]) -> List[Dict[str, An
         ("humidity", "Humidity", lambda v: f"{v:.1f}%", config.INSIDE_CHIP_BLUE, "humidity"),
         ("dew_point_f", "Dew Point", lambda v: f"{v:.1f}°F", config.INSIDE_CHIP_BLUE, "dew_point"),
         ("dew_point_c", "Dew Point", lambda v: f"{v:.1f}°C", config.INSIDE_CHIP_BLUE, "dew_point"),
-        ("pressure_hpa", "Pressure", lambda v: f"{v:.1f} hPa", config.INSIDE_CHIP_AMBER, "pressure"),
+        # Prefer inHg for consistency with the standalone Pimoroni BME280 CLI
+        # script; fall back to metric units if necessary.
         ("pressure_inhg", "Pressure", lambda v: f"{v:.2f} inHg", config.INSIDE_CHIP_AMBER, "pressure"),
+        ("pressure_hpa", "Pressure", lambda v: f"{v:.1f} hPa", config.INSIDE_CHIP_AMBER, "pressure"),
         ("pressure_pa", "Pressure", lambda v: f"{v:.0f} Pa", config.INSIDE_CHIP_AMBER, "pressure"),
         ("voc_ohms", "VOC", format_voc_ohms, config.INSIDE_CHIP_PURPLE, "voc"),
         ("voc_index", "VOC Index", lambda v: f"{v:.0f}", config.INSIDE_CHIP_PURPLE, "voc"),
