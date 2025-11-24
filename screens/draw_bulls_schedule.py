@@ -50,6 +50,17 @@ TS_PATH = TIMES_SQUARE_FONT_PATH
 NBA_DIR = NBA_IMAGES_DIR
 TEAM_TRICODE = (NBA_TEAM_TRICODE or "CHI").upper()
 
+# Map API abbreviations to logo filenames when they differ
+LOGO_ABBREVIATION_OVERRIDES = {
+    "BKN": "BRK",  # Brooklyn Nets
+    "NOP": "NO",   # New Orleans Pelicans
+    "WSH": "WAS",  # Washington Wizards
+    "GSW": "GS",   # Golden State Warriors
+    "NYK": "NY",   # New York Knicks
+    "SAS": "SA",   # San Antonio Spurs
+    "PHO": "PHX",  # Phoenix Suns (some feeds use PHO)
+}
+
 NBA_TEAM_NICKNAMES = {
     "ATL": "Hawks",
     "BOS": "Celtics",
@@ -180,6 +191,8 @@ def _center_wrapped_text(
 
 def _load_logo_png(abbr: str, height: int) -> Optional[Image.Image]:
     abbr = (abbr or "NBA").upper()
+    # Apply abbreviation overrides to match actual filenames
+    abbr = LOGO_ABBREVIATION_OVERRIDES.get(abbr, abbr)
     path = os.path.join(NBA_DIR, f"{abbr}.png")
     try:
         if os.path.exists(path):
