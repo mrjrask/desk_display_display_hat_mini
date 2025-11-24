@@ -17,6 +17,7 @@ import os
 import sys
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
+from datetime import datetime
 
 from PIL import Image, ImageDraw
 import config
@@ -849,6 +850,33 @@ def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings
     logging.warning("No supported indoor environmental sensor detected.")
     return None, None
 
+
+def _log_sensor_data(provider: Optional[str], data: Dict[str, Optional[float]]) -> None:
+    """Log sensor readings to a file in the user's home directory."""
+    try:
+        home_dir = Path.home()
+        log_file = home_dir / "sensor_data.log"
+
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Format the sensor readings
+        readings = []
+        if data:
+            for key, value in sorted(data.items()):
+                if value is not None:
+                    readings.append(f"{key}={value:.2f}")
+
+        readings_str = ", ".join(readings) if readings else "no data"
+        log_line = f"{timestamp} | {provider or 'Unknown Sensor'} | {readings_str}\n"
+
+        # Append to log file
+        with open(log_file, "a") as f:
+            f.write(log_line)
+
+    except Exception as exc:
+        logging.debug("Failed to log sensor data: %s", exc)
+
+
 # ── Layout helpers ───────────────────────────────────────────────────────────
 def _mix_color(color: Tuple[int, int, int], target: Tuple[int, int, int], factor: float) -> Tuple[int, int, int]:
     factor = max(0.0, min(1.0, factor))
@@ -1343,6 +1371,10 @@ def draw_inside(display, transition: bool=False):
             logging.debug("draw_inside: unexpected data payload type %s", type(data))
             cleaned = {}
         temp_f = cleaned.get("temp_f")
+
+        # Log the sensor data to file
+        _log_sensor_data(provider, cleaned)
+
     except Exception as e:
         logging.warning(f"draw_inside: sensor read failed: {e}")
         return None
