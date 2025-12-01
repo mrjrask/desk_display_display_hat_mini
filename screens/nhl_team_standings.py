@@ -1,7 +1,7 @@
 """NHL team standings screens."""
 from screens.mlb_team_standings import (
     draw_standings_screen1 as _base_screen1,
-    draw_standings_screen2 as draw_nhl_standings_screen2,
+    draw_standings_screen2 as _base_screen2,
 )
 from utils import log_call
 
@@ -16,6 +16,32 @@ def draw_nhl_standings_screen1(display, rec, logo_path, division_name, *, transi
         division_name,
         show_games_back=False,
         show_wild_card=False,
+        ot_label="OTL",
+        points_label="points",
+        conference_label="conference",
+        transition=transition,
+    )
+
+
+def _nhl_record_details(rec, base_rec):
+    pts = rec.get("points")
+    pts_val = "-" if pts in (None, "") else pts
+    return f"{base_rec} ({pts_val} pts)"
+
+
+@log_call
+def draw_nhl_standings_screen2(display, rec, logo_path, *, transition=False):
+    """Customize standings screen 2 for NHL teams."""
+
+    return _base_screen2(
+        display,
+        rec,
+        logo_path,
+        record_details_fn=_nhl_record_details,
+        split_order=("division", "conference", "lastTen", "home", "away"),
+        split_overrides={"lastTen": "-", "home": "-", "away": "-"},
+        show_streak=False,
+        show_points=False,
         transition=transition,
     )
 
