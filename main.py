@@ -642,10 +642,11 @@ LOGOS = {
 
 # ─── Data cache & refresh ────────────────────────────────────────────────────
 cache = {
+    "bears":  {"stand": None},
     "weather": None,
-    "hawks":   {"last":None, "live":None, "next":None, "next_home":None},
+    "hawks":   {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
     "wolves":  {"last":None, "live":None, "next":None, "next_home":None},
-    "bulls":   {"last":None, "live":None, "next":None, "next_home":None},
+    "bulls":   {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
     "cubs":    {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
     "sox":     {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
 }
@@ -653,7 +654,11 @@ cache = {
 def refresh_all():
     logging.info("🔄 Refreshing all data…")
     cache["weather"] = data_fetch.fetch_weather()
+    cache["bears"].update({
+        "stand": data_fetch.fetch_bears_standings(),
+    })
     cache["hawks"].update({
+        "stand": data_fetch.fetch_blackhawks_standings(),
         "last": data_fetch.fetch_blackhawks_last_game(),
         "live": data_fetch.fetch_blackhawks_live_game(),
         "next": data_fetch.fetch_blackhawks_next_game(),
@@ -667,6 +672,7 @@ def refresh_all():
         "next_home": wolves_games.get("next_home_game"),
     })
     cache["bulls"].update({
+        "stand": data_fetch.fetch_bulls_standings(),
         "last": data_fetch.fetch_bulls_last_game(),
         "live": data_fetch.fetch_bulls_live_game(),
         "next": data_fetch.fetch_bulls_next_game(),

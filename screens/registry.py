@@ -57,6 +57,18 @@ from screens.mlb_standings import (
     draw_NL_WildCard,
 )
 from screens.mlb_team_standings import draw_standings_screen1, draw_standings_screen2
+from screens.nba_team_standings import (
+    draw_nba_standings_screen1,
+    draw_nba_standings_screen2,
+)
+from screens.nfl_team_standings import (
+    draw_nfl_standings_screen1,
+    draw_nfl_standings_screen2,
+)
+from screens.nhl_team_standings import (
+    draw_nhl_standings_screen1,
+    draw_nhl_standings_screen2,
+)
 from screens.nba_scoreboard import draw_nba_scoreboard
 from screens.nba_scoreboard_v2 import draw_nba_scoreboard_v2
 from screens.nfl_scoreboard import draw_nfl_scoreboard
@@ -364,6 +376,30 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     for base_logo in ("bears logo", "nfl logo", "mlb logo", "nba logo"):
         register_logo(base_logo)
 
+    bears = context.cache.get("bears") or {}
+    if bears.get("stand"):
+        register(
+            "bears stand1",
+            lambda data=bears.get("stand"): draw_nfl_standings_screen1(
+                context.display,
+                data,
+                os.path.join(context.image_dir, "bears.png"),
+                "NFC North",
+                transition=True,
+            ),
+            available=True,
+        )
+        register(
+            "bears stand2",
+            lambda data=bears.get("stand"): draw_nfl_standings_screen2(
+                context.display,
+                data,
+                os.path.join(context.image_dir, "bears.png"),
+                transition=True,
+            ),
+            available=True,
+        )
+
     register("bears next", lambda: show_bears_next_game(context.display, transition=True))
     register("NFL Scoreboard", lambda: draw_nfl_scoreboard(context.display, transition=True))
     register("NFL Scoreboard v2", lambda: draw_nfl_scoreboard_v2(context.display, transition=True))
@@ -379,6 +415,28 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         hawks_next_home = hawks.get("next_home")
         if _games_match(hawks_next_home, hawks_next):
             hawks_next_home = None
+        if hawks.get("stand"):
+            register(
+                "hawks stand1",
+                lambda data=hawks.get("stand"): draw_nhl_standings_screen1(
+                    context.display,
+                    data,
+                    os.path.join(context.image_dir, "hawks.jpg"),
+                    "Central Division",
+                    transition=True,
+                ),
+                available=True,
+            )
+            register(
+                "hawks stand2",
+                lambda data=hawks.get("stand"): draw_nhl_standings_screen2(
+                    context.display,
+                    data,
+                    os.path.join(context.image_dir, "hawks.jpg"),
+                    transition=True,
+                ),
+                available=True,
+            )
         register(
             "hawks last",
             lambda data=hawks.get("last"): draw_last_hawks_game(
@@ -632,6 +690,29 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         bulls_next_home = bulls.get("next_home")
         if _games_match(bulls_next_home, bulls_next):
             bulls_next_home = None
+
+        if bulls.get("stand"):
+            register(
+                "bulls stand1",
+                lambda data=bulls.get("stand"): draw_nba_standings_screen1(
+                    context.display,
+                    data,
+                    os.path.join(context.image_dir, "nba/CHI.png"),
+                    "Central Division",
+                    transition=True,
+                ),
+                available=True,
+            )
+            register(
+                "bulls stand2",
+                lambda data=bulls.get("stand"): draw_nba_standings_screen2(
+                    context.display,
+                    data,
+                    os.path.join(context.image_dir, "nba/CHI.png"),
+                    transition=True,
+                ),
+                available=True,
+            )
 
         register(
             "bulls last",

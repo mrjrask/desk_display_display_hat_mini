@@ -61,10 +61,35 @@ def format_games_back(gb):
         pass
     return str(gb)
 
+def _format_record_values(record):
+    w = record.get("wins", "-")
+    l = record.get("losses", "-")
+    t = record.get("ties")
+    ot = record.get("ot")
+
+    tie_val = t if t not in (None, "", "-") else ot
+    tie_label = "T" if t is not None else "OT"
+
+    parts = [f"W: {w}", f"L: {l}"]
+    if tie_val not in (None, "", "-", 0, "0"):
+        parts.append(f"{tie_label}: {tie_val}")
+
+    return " ".join(parts)
+
+
 @log_call
-def draw_standings_screen1(display, rec, logo_path, division_name, transition=False):
+def draw_standings_screen1(
+    display,
+    rec,
+    logo_path,
+    division_name,
+    *,
+    show_games_back=True,
+    show_wild_card=True,
+    transition=False,
+):
     """
-    Screen 1: logo, W/L, rank, GB, WCGB.
+    Screen 1: logo, W/L, rank, optional GB/WCGB.
     """
     if not rec:
         return None
@@ -89,9 +114,7 @@ def draw_standings_screen1(display, rec, logo_path, division_name, transition=Fa
     bottom_limit = HEIGHT - MARGIN
 
     # W/L
-    w = rec['leagueRecord'].get('wins','-')
-    l = rec['leagueRecord'].get('losses','-')
-    wl_txt = f"W: {w} L: {l}"
+    wl_txt = _format_record_values(rec.get('leagueRecord', {}))
 
     # Division rank
     dr = rec.get('divisionRank','-')
@@ -102,33 +125,37 @@ def draw_standings_screen1(display, rec, logo_path, division_name, transition=Fa
     rank_txt = f"{dr_lbl} in {division_name}"
 
     # GB
-    gb_raw = rec.get('divisionGamesBack','-')
-    gb_txt = f"{format_games_back(gb_raw)} GB" if gb_raw!='-' else "- GB"
+    gb_txt = None
+    if show_games_back:
+        gb_raw = rec.get('divisionGamesBack','-')
+        gb_txt = f"{format_games_back(gb_raw)} GB" if gb_raw!='-' else "- GB"
 
     # WCGB
-    wc_raw  = rec.get('wildCardGamesBack')
-    wc_rank = rec.get('wildCardRank')
     wc_txt  = None
-    if wc_raw is not None:
-        base = format_games_back(wc_raw)
-        try:
-            rank_int = int(wc_rank)
-        except:
-            rank_int = None
+    if show_wild_card:
+        wc_raw  = rec.get('wildCardGamesBack')
+        wc_rank = rec.get('wildCardRank')
+        if wc_raw is not None:
+            base = format_games_back(wc_raw)
+            try:
+                rank_int = int(wc_rank)
+            except:
+                rank_int = None
 
-        if wc_raw == 0:
-            wc_txt = "-- WCGB"
-        elif rank_int and rank_int <= 3:
-            wc_txt = f"+{base} WCGB"
-        else:
-            wc_txt = f"{base} WCGB"
+            if wc_raw == 0:
+                wc_txt = "-- WCGB"
+            elif rank_int and rank_int <= 3:
+                wc_txt = f"+{base} WCGB"
+            else:
+                wc_txt = f"{base} WCGB"
 
     # Lines to draw
     lines = [
         (wl_txt, FONT_STAND1_WL),
         (rank_txt, FONT_STAND1_RANK),
-        (gb_txt, FONT_STAND1_GB_VALUE),
     ]
+    if gb_txt:
+        lines.append((gb_txt, FONT_STAND1_GB_VALUE))
     if wc_txt:
         lines.append((wc_txt, FONT_STAND1_WCGB_VALUE))
 
@@ -180,10 +207,17 @@ def draw_standings_screen2(display, rec, logo_path, transition=False):
     bottom_limit = HEIGHT - MARGIN
 
     # Overall record
-    w = rec['leagueRecord'].get('wins','-')
-    l = rec['leagueRecord'].get('losses','-')
-    pct = str(rec['leagueRecord'].get('pct','-')).lstrip('0')
-    rec_txt = f"{w}-{l} ({pct})"
+    record = rec.get('leagueRecord', {})
+    w = record.get('wins','-')
+    l = record.get('losses','-')
+    t = record.get('ties') if record.get('ties') not in (0, '0') else None
+    if t in (None, '', '-', 0, '0'):
+        t = record.get('ot') if record.get('ot') not in (0, '0') else None
+    pct = str(record.get('pct','-')).lstrip('0')
+    base_rec = f"{w}-{l}"
+    if t not in (None, '', '-', 0, '0'):
+        base_rec = f"{base_rec}-{t}"
+    rec_txt = f"{base_rec} ({pct})"
 
     # Splits
     splits = rec.get('records',{}).get('splitRecords',[])
@@ -194,10 +228,15 @@ def draw_standings_screen2(display, rec, logo_path, transition=False):
         return "-"
     items = [
         f"Streak: {rec.get('streak',{}).get('streakCode','-')}",
+    ]
+    pts = rec.get('points')
+    if pts not in (None, ''):
+        items.append(f"Pts: {pts}")
+    items.extend([
         f"L10: {find_split('lastTen')}",
         f"Home: {find_split('home')}",
         f"Away: {find_split('away')}"
-    ]
+    ])
 
     lines2 = [(rec_txt, FONT_STAND2_RECORD)] + [(it, FONT_STAND2_VALUE) for it in items]
     heights2 = [draw.textsize(txt,font)[1] for txt,font in lines2]
