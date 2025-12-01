@@ -61,14 +61,14 @@ def format_games_back(gb):
         pass
     return str(gb)
 
-def _format_record_values(record):
+def _format_record_values(record, *, ot_label="OT"):
     w = record.get("wins", "-")
     l = record.get("losses", "-")
     t = record.get("ties")
     ot = record.get("ot")
 
     tie_val = t if t not in (None, "", "-") else ot
-    tie_label = "T" if t is not None else "OT"
+    tie_label = "T" if t is not None else ot_label
 
     parts = [f"W: {w}", f"L: {l}"]
     if tie_val not in (None, "", "-", 0, "0"):
@@ -86,6 +86,9 @@ def draw_standings_screen1(
     *,
     show_games_back=True,
     show_wild_card=True,
+    ot_label="OT",
+    points_label=None,
+    conference_label=None,
     transition=False,
 ):
     """
@@ -114,7 +117,13 @@ def draw_standings_screen1(
     bottom_limit = HEIGHT - MARGIN
 
     # W/L
-    wl_txt = _format_record_values(rec.get('leagueRecord', {}))
+    wl_txt = _format_record_values(rec.get('leagueRecord', {}), ot_label=ot_label)
+
+    points_txt = None
+    if points_label is not None:
+        pts = rec.get("points")
+        pts_val = "-" if pts in (None, "") else pts
+        points_txt = f"{pts_val} {points_label}"
 
     # Division rank
     dr = rec.get('divisionRank','-')
@@ -152,8 +161,18 @@ def draw_standings_screen1(
     # Lines to draw
     lines = [
         (wl_txt, FONT_STAND1_WL),
-        (rank_txt, FONT_STAND1_RANK),
     ]
+    if points_txt:
+        lines.append((points_txt, FONT_STAND1_GB_VALUE))
+    lines.append((rank_txt, FONT_STAND1_RANK))
+    if conference_label:
+        conf_rank = rec.get("conferenceRank", "-")
+        try:
+            conf_lbl = "Last" if int(conf_rank) == 16 else _ord(conf_rank)
+        except Exception:
+            conf_lbl = conf_rank
+        conf_name = rec.get("conferenceName") or rec.get("conferenceAbbrev") or "conference"
+        lines.append((f"{conf_lbl} in {conf_name}", FONT_STAND1_RANK))
     if gb_txt:
         lines.append((gb_txt, FONT_STAND1_GB_VALUE))
     if wc_txt:
@@ -181,7 +200,19 @@ def draw_standings_screen1(
 
 
 @log_call
-def draw_standings_screen2(display, rec, logo_path, transition=False):
+def draw_standings_screen2(
+    display,
+    rec,
+    logo_path,
+    *,
+    pct_precision=None,
+    record_details_fn=None,
+    split_order=("lastTen", "home", "away"),
+    split_overrides=None,
+    show_streak=True,
+    show_points=True,
+    transition=False,
+):
     """
     Screen 2: logo + overall record and splits.
     """
@@ -213,30 +244,50 @@ def draw_standings_screen2(display, rec, logo_path, transition=False):
     t = record.get('ties') if record.get('ties') not in (0, '0') else None
     if t in (None, '', '-', 0, '0'):
         t = record.get('ot') if record.get('ot') not in (0, '0') else None
-    pct = str(record.get('pct','-')).lstrip('0')
+    pct_raw = record.get("pct", "-")
+    if pct_precision is not None:
+        try:
+            pct = f"{float(pct_raw):.{pct_precision}f}".lstrip("0")
+        except Exception:
+            pct = str(pct_raw).lstrip("0")
+    else:
+        pct = str(pct_raw).lstrip("0")
+
     base_rec = f"{w}-{l}"
     if t not in (None, '', '-', 0, '0'):
         base_rec = f"{base_rec}-{t}"
-    rec_txt = f"{base_rec} ({pct})"
+    if record_details_fn:
+        rec_txt = record_details_fn(rec, base_rec)
+    else:
+        rec_txt = f"{base_rec} ({pct})"
 
     # Splits
+    split_overrides = split_overrides or {}
     splits = rec.get('records',{}).get('splitRecords',[])
+
     def find_split(t):
+        if t in split_overrides:
+            return split_overrides[t]
         for sp in splits:
             if sp.get('type','').lower()==t.lower():
                 return f"{sp.get('wins','-')}-{sp.get('losses','-')}"
         return "-"
-    items = [
-        f"Streak: {rec.get('streak',{}).get('streakCode','-')}",
-    ]
+
+    items = []
+    if show_streak:
+        items.append(f"Streak: {rec.get('streak',{}).get('streakCode','-')}")
     pts = rec.get('points')
-    if pts not in (None, ''):
+    if show_points and pts not in (None, ''):
         items.append(f"Pts: {pts}")
-    items.extend([
-        f"L10: {find_split('lastTen')}",
-        f"Home: {find_split('home')}",
-        f"Away: {find_split('away')}"
-    ])
+    for split in split_order:
+        label = {
+            "lastTen": "L10",
+            "home": "Home",
+            "away": "Away",
+            "division": "Division",
+            "conference": "Conference",
+        }.get(split, split)
+        items.append(f"{label}: {find_split(split)}")
 
     lines2 = [(rec_txt, FONT_STAND2_RECORD)] + [(it, FONT_STAND2_VALUE) for it in items]
     heights2 = [draw.textsize(txt,font)[1] for txt,font in lines2]

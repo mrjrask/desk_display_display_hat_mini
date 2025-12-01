@@ -477,6 +477,21 @@ def _extract_split_records(**kwargs):
     return splits
 
 
+def _empty_standings_record(team_abbr: str) -> dict:
+    """Return a placeholder standings structure so screens can still render."""
+
+    return {
+        "leagueRecord": {"wins": "-", "losses": "-", "pct": "-"},
+        "divisionRank": "-",
+        "divisionGamesBack": "-",
+        "wildCardGamesBack": None,
+        "streak": {"streakCode": "-"},
+        "records": {"splitRecords": []},
+        "points": None,
+        "team": team_abbr,
+    }
+
+
 def _statsapi_available() -> bool:
     """Lightweight DNS check so we avoid slow statsapi fallbacks when DNS fails."""
 
@@ -558,8 +573,18 @@ def _fetch_nhl_team_standings(team_abbr: str):
             home = {"wins": entry.get("homeWins"), "losses": entry.get("homeLosses")}
             away = {"wins": entry.get("roadWins"), "losses": entry.get("roadLosses")}
             l10 = {"wins": entry.get("l10Wins"), "losses": entry.get("l10Losses")}
+            division = {
+                "wins": entry.get("divisionWins"),
+                "losses": entry.get("divisionLosses"),
+            }
+            conference = {
+                "wins": entry.get("conferenceWins"),
+                "losses": entry.get("conferenceLosses"),
+            }
 
-            splits = _extract_split_records(home=home, away=away, lastTen=l10)
+            splits = _extract_split_records(
+                home=home, away=away, lastTen=l10, division=division, conference=conference
+            )
 
             streak_code = entry.get("streakCode") or _format_streak_code(entry.get("streakType"), entry.get("streakNumber"))
 
@@ -571,6 +596,10 @@ def _fetch_nhl_team_standings(team_abbr: str):
                 "streak": {"streakCode": streak_code or "-"},
                 "records": {"splitRecords": splits},
                 "points": entry.get("points"),
+                "conferenceRank": entry.get("conferenceSeq")
+                or entry.get("conferenceRank"),
+                "conferenceName": entry.get("conferenceName")
+                or entry.get("conferenceAbbrev"),
             }
         logging.warning("Team %s not found in NHL standings; trying fallback", team_abbr)
     except Exception as exc:
@@ -642,6 +671,7 @@ def _fetch_nhl_team_standings_espn(team_abbr: str):
                 "streak": {"streakCode": streak_code or "-"},
                 "records": {"splitRecords": []},
                 "points": _stat(stats, "points"),
+                "conferenceRank": _stat(stats, "playoffSeed"),
             }
     except Exception as exc:
         logging.error("Error fetching NHL standings (ESPN fallback) for %s: %s", team_abbr, exc)
@@ -691,6 +721,7 @@ def _fetch_nhl_team_standings_statsapi(team_abbr: str):
                     "streak": {"streakCode": streak_code or "-"},
                     "records": {"splitRecords": split_records},
                     "points": team.get("points"),
+                    "conferenceRank": team.get("conferenceRank"),
                 }
         logging.error("Team %s not found in NHL standings (statsapi fallback)", team_abbr)
     except Exception as exc:
@@ -730,44 +761,49 @@ def _fetch_nba_team_standings(team_tricode: str):
 
     payload = _load_json() or {}
     teams = payload.get("league", {}).get("standard", {}).get("teams", [])
-    if not teams:
-        return None
 
     try:
         entry = next((row for row in teams if row.get("teamTricode") == team_tricode), None)
-        if not entry:
+        if entry:
+            record = {
+                "wins": _safe_int(entry.get("wins") or entry.get("win")),
+                "losses": _safe_int(entry.get("losses") or entry.get("loss")),
+                "pct": entry.get("winPct"),
+            }
+
+            streak_blob = entry.get("streak") or {}
+            streak_code = entry.get("streakText") or entry.get("streakCode")
+            if not streak_code:
+                streak_code = _format_streak_from_dict(streak_blob)
+
+            splits = _extract_split_records(
+                lastTen=entry.get("lastTen"),
+                home=entry.get("home"),
+                away=entry.get("away"),
+            )
+
+            return {
+                "leagueRecord": record,
+                "divisionRank": entry.get("divisionRank")
+                or (entry.get("teamDivision") or {}).get("rank"),
+                "divisionGamesBack": entry.get("gamesBehind")
+                or entry.get("gamesBehindDivision"),
+                "wildCardGamesBack": None,
+                "streak": {"streakCode": streak_code},
+                "records": {"splitRecords": splits},
+            }
+
+        if teams:
             logging.warning("Team %s not found in NBA standings", team_tricode)
-            return None
-
-        record = {
-            "wins": _safe_int(entry.get("wins") or entry.get("win")),
-            "losses": _safe_int(entry.get("losses") or entry.get("loss")),
-            "pct": entry.get("winPct"),
-        }
-
-        streak_blob = entry.get("streak") or {}
-        streak_code = entry.get("streakText") or entry.get("streakCode")
-        if not streak_code:
-            streak_code = _format_streak_from_dict(streak_blob)
-
-        splits = _extract_split_records(
-            lastTen=entry.get("lastTen"),
-            home=entry.get("home"),
-            away=entry.get("away"),
-        )
-
-        return {
-            "leagueRecord": record,
-            "divisionRank": entry.get("divisionRank")
-            or (entry.get("teamDivision") or {}).get("rank"),
-            "divisionGamesBack": entry.get("gamesBehind") or entry.get("gamesBehindDivision"),
-            "wildCardGamesBack": None,
-            "streak": {"streakCode": streak_code},
-            "records": {"splitRecords": splits},
-        }
     except Exception as exc:
         logging.error("Error fetching NBA standings for %s: %s", team_tricode, exc)
-        return None
+
+    fallback = _fetch_nba_team_standings_espn()
+    if fallback:
+        return fallback
+
+    logging.warning("Using placeholder NBA standings for %s due to fetch errors", team_tricode)
+    return _empty_standings_record(team_tricode)
 
 
 def fetch_bulls_standings():
