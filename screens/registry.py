@@ -373,7 +373,15 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             return
         register(screen_id, lambda img=image: _show_logo(context.display, img), available=True)
 
-    for base_logo in ("bears logo", "nfl logo", "mlb logo", "nba logo"):
+    for base_logo in (
+        "bears logo",
+        "hawks logo",
+        "bulls logo",
+        "nfl logo",
+        "nhl logo",
+        "mlb logo",
+        "nba logo",
+    ):
         register_logo(base_logo)
 
     bears = context.cache.get("bears") or {}

@@ -518,50 +518,128 @@ def _fetch_nhl_team_standings(team_abbr: str):
         payload = resp.json() or {}
         standings = payload.get("standings", []) or []
         entry = next((row for row in standings if row.get("teamAbbrev") == team_abbr), None)
-        if not entry:
-            logging.warning("Team %s not found in NHL standings", team_abbr)
-            return None
+        if entry:
+            record = {
+                "wins": _safe_int(entry.get("wins")),
+                "losses": _safe_int(entry.get("losses")),
+                "ot": _safe_int(entry.get("otLosses")),
+                "pct": entry.get("pointsPctg"),
+            }
 
-        record = {
-            "wins": _safe_int(entry.get("wins")),
-            "losses": _safe_int(entry.get("losses")),
-            "ot": _safe_int(entry.get("otLosses")),
-            "pct": entry.get("pointsPctg"),
-        }
+            home = {"wins": entry.get("homeWins"), "losses": entry.get("homeLosses")}
+            away = {"wins": entry.get("roadWins"), "losses": entry.get("roadLosses")}
+            l10 = {"wins": entry.get("l10Wins"), "losses": entry.get("l10Losses")}
 
-        home = {"wins": entry.get("homeWins"), "losses": entry.get("homeLosses")}
-        away = {"wins": entry.get("roadWins"), "losses": entry.get("roadLosses")}
-        l10 = {"wins": entry.get("l10Wins"), "losses": entry.get("l10Losses")}
+            splits = _extract_split_records(home=home, away=away, lastTen=l10)
 
-        splits = _extract_split_records(home=home, away=away, lastTen=l10)
+            streak_code = entry.get("streakCode") or _format_streak_code(entry.get("streakType"), entry.get("streakNumber"))
 
-        streak_code = entry.get("streakCode") or _format_streak_code(entry.get("streakType"), entry.get("streakNumber"))
-
-        return {
-            "leagueRecord": record,
-            "divisionRank": entry.get("divisionSeq") or entry.get("divisionRank"),
-            "divisionGamesBack": None,
-            "wildCardGamesBack": None,
-            "streak": {"streakCode": streak_code or "-"},
-            "records": {"splitRecords": splits},
-            "points": entry.get("points"),
-        }
+            return {
+                "leagueRecord": record,
+                "divisionRank": entry.get("divisionSeq") or entry.get("divisionRank"),
+                "divisionGamesBack": None,
+                "wildCardGamesBack": None,
+                "streak": {"streakCode": streak_code or "-"},
+                "records": {"splitRecords": splits},
+                "points": entry.get("points"),
+            }
+        logging.warning("Team %s not found in NHL standings; trying fallback", team_abbr)
     except Exception as exc:
         logging.error("Error fetching NHL standings for %s: %s", team_abbr, exc)
-        return None
+
+    return _fetch_nhl_team_standings_statsapi(team_abbr)
 
 
 def fetch_blackhawks_standings():
     return _fetch_nhl_team_standings("CHI")
 
 
-def _fetch_nba_team_standings(team_tricode: str):
+def _fetch_nhl_team_standings_statsapi(team_abbr: str):
     try:
-        url = "https://cdn.nba.com/static/json/liveData/standings/league.json"
-        resp = _session.get(url, timeout=10)
+        url = "https://statsapi.web.nhl.com/api/v1/standings"
+        resp = _session.get(url, timeout=10, headers=NHL_HEADERS)
         resp.raise_for_status()
         payload = resp.json() or {}
-        teams = payload.get("league", {}).get("standard", {}).get("teams", [])
+        for record in payload.get("records", []) or []:
+            for team in record.get("teamRecords", []) or []:
+                info = team.get("team", {}) or {}
+                abbr = info.get("abbreviation") or info.get("teamName")
+                if abbr != team_abbr:
+                    continue
+
+                league_record = team.get("leagueRecord", {}) or {}
+                streak = team.get("streak", {}) or {}
+                streak_code = streak.get("streakCode") or _format_streak_code(
+                    streak.get("streakType"), streak.get("streakNumber")
+                )
+
+                split_records = []
+                for split in (team.get("records") or {}).get("splitRecords", []) or []:
+                    wins = split.get("wins")
+                    losses = split.get("losses")
+                    if wins is None and losses is None:
+                        continue
+                    split_records.append(
+                        {"type": split.get("type"), "wins": wins, "losses": losses}
+                    )
+
+                logging.info("Using statsapi NHL standings fallback for %s", team_abbr)
+                return {
+                    "leagueRecord": {
+                        "wins": _safe_int(league_record.get("wins")),
+                        "losses": _safe_int(league_record.get("losses")),
+                        "ot": _safe_int(league_record.get("ot")),
+                        "pct": league_record.get("pct") or league_record.get("pointsPercentage"),
+                    },
+                    "divisionRank": team.get("divisionRank"),
+                    "divisionGamesBack": team.get("divisionGamesBack"),
+                    "wildCardGamesBack": team.get("wildCardRank"),
+                    "streak": {"streakCode": streak_code or "-"},
+                    "records": {"splitRecords": split_records},
+                    "points": team.get("points"),
+                }
+        logging.error("Team %s not found in NHL standings (statsapi fallback)", team_abbr)
+    except Exception as exc:
+        logging.error("Error fetching NHL standings (statsapi) for %s: %s", team_abbr, exc)
+    return None
+
+
+def _fetch_nba_team_standings(team_tricode: str):
+    def _load_json() -> Optional[dict]:
+        for base in (
+            "https://cdn.nba.com/static/json/liveData/standings",
+            "https://nba-prod-us-east-1-media.s3.amazonaws.com/json/liveData/standings",
+        ):
+            url = f"{base}/league.json"
+            try:
+                resp = _session.get(
+                    url,
+                    timeout=10,
+                    headers={
+                        "Origin": "https://www.nba.com",
+                        "Referer": "https://www.nba.com/",
+                    },
+                )
+                if resp.status_code == 403:
+                    logging.warning("NBA standings returned HTTP 403 from %s", base)
+                    continue
+                resp.raise_for_status()
+                data = resp.json() or {}
+                if data and base.endswith("s3.amazonaws.com/json/liveData/standings"):
+                    logging.info(
+                        "NBA standings fetched successfully from alternate base %s", base
+                    )
+                return data
+            except Exception as exc:
+                logging.error("Error fetching NBA standings from %s: %s", base, exc)
+        return None
+
+    payload = _load_json() or {}
+    teams = payload.get("league", {}).get("standard", {}).get("teams", [])
+    if not teams:
+        return None
+
+    try:
         entry = next((row for row in teams if row.get("teamTricode") == team_tricode), None)
         if not entry:
             logging.warning("Team %s not found in NBA standings", team_tricode)
