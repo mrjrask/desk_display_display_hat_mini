@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # reset_screenshots.sh
-# Deletes and recreates the local screenshots/ and screenshot_archive/ folders
-# relative to this script's directory.
+# Clears all contents of the local screenshots/ and screenshot_archive/ folders
+# relative to this script's directory, without deleting the folders themselves.
 
 set -Eeuo pipefail
 
@@ -33,16 +33,16 @@ echo "📂 Working in: $SCRIPT_DIR"
 for dir in "${TARGETS[@]}"; do
   refuse_dangerous_path "$dir"
 
-  if [[ -e "$dir" ]]; then
-    echo "🗑️  Removing: $dir"
-    rm -rf -- "$dir"
+  if [[ ! -d "$dir" ]]; then
+    echo "📁 Creating missing directory: $dir"
+    mkdir -p -- "$dir"
+    chmod 775 -- "$dir" || true
   else
-    echo "ℹ️  Not present (ok): $dir"
+    echo "🧹 Clearing contents of: $dir"
+    # Delete everything inside the directory (files, subdirs, hidden files),
+    # but not the directory itself.
+    find "$dir" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
   fi
-
-  echo "📁 Creating: $dir"
-  mkdir -p -- "$dir"
-  chmod 775 -- "$dir" || true
 done
 
-echo "✅ Done. Recreated: screenshots/ and screenshot_archive/"
+echo "✅ Done. Cleared contents of: screenshots/ and screenshot_archive/"
