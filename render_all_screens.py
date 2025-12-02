@@ -347,9 +347,13 @@ def render_all_screens(
                 continue
 
             if result is None:
-                logging.info("Screen '%s' returned no image.", screen_id)
-                continue
-            image = _extract_image(result, display)
+                logging.info(
+                    "Screen '%s' returned no image; capturing current frame.",
+                    screen_id,
+                )
+                image = display.current_image.copy()
+            else:
+                image = _extract_image(result, display)
             if image is None:
                 logging.warning("No image returned for '%s'", screen_id)
                 continue
