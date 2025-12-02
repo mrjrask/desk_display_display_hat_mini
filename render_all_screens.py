@@ -249,14 +249,14 @@ def _write_screenshots(
     os.makedirs(SCREENSHOT_DIR, exist_ok=True)
     saved: list[str] = []
     ts_suffix = timestamp.strftime("%Y%m%d_%H%M%S")
+    counts: Dict[str, int] = {}
 
     for screen_id, image in assets:
-        folder = _sanitize_directory_name(screen_id)
         prefix = _sanitize_filename_prefix(screen_id)
-        target_dir = os.path.join(SCREENSHOT_DIR, folder)
-        os.makedirs(target_dir, exist_ok=True)
-        filename = f"{prefix}_{ts_suffix}.png"
-        path = os.path.join(target_dir, filename)
+        counts[prefix] = counts.get(prefix, 0) + 1
+        suffix = "" if counts[prefix] == 1 else f"_{counts[prefix] - 1:02d}"
+        filename = f"{prefix}{suffix}_{ts_suffix}.png"
+        path = os.path.join(SCREENSHOT_DIR, filename)
         image.save(path)
         saved.append(path)
 
@@ -297,15 +297,12 @@ def render_all_screens(
         cache = build_cache()
 
         schedule_error: Optional[str] = None
-        if ignore_schedule:
-            logging.info("Ignoring schedule configuration (requested by flag)")
-            requested_ids: set[str] = set()
-            travel_requested = True
-        else:
+        requested_ids: set[str] = set()
+        travel_requested = True
+        if not ignore_schedule:
             requested_ids, schedule_error = load_requested_screen_ids()
             if schedule_error:
                 logging.info("Continuing without schedule data (%s)", schedule_error)
-            travel_requested = "travel" in requested_ids if requested_ids else True
 
         now = _dt.datetime.now(CENTRAL_TIME)
         context = ScreenContext(
@@ -325,9 +322,9 @@ def render_all_screens(
         for screen_id in sorted(registry):
             definition: ScreenDefinition = registry[screen_id]
             if not definition.available:
-                logging.info("Skipping '%s' (unavailable)", screen_id)
-                continue
-            logging.info("Rendering '%s'", screen_id)
+                logging.info("Rendering '%s' (marked unavailable)", screen_id)
+            else:
+                logging.info("Rendering '%s'", screen_id)
             try:
                 result = definition.render()
             except Exception as exc:
