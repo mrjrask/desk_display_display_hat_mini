@@ -263,6 +263,21 @@ def _write_screenshots(
     return saved
 
 
+def _cleanup_screenshots(paths: Iterable[str]) -> None:
+    removed = 0
+    for path in paths:
+        try:
+            os.remove(path)
+            removed += 1
+        except FileNotFoundError:
+            logging.debug("Screenshot already removed: %s", path)
+        except OSError as exc:
+            logging.warning("Failed to remove screenshot %s: %s", path, exc)
+
+    if removed:
+        logging.info("Cleaned up %d screenshot(s) from %s", removed, SCREENSHOT_DIR)
+
+
 def _suppress_animation_delay():
     if utils is None:
         return lambda: None
@@ -348,6 +363,7 @@ def render_all_screens(
         logging.error("No screen images were produced.")
         return 1
 
+    saved: list[str] = []
     if sync_screenshots:
         saved = _write_screenshots(assets, now)
         logging.info(
@@ -358,6 +374,8 @@ def render_all_screens(
         archive_path = _write_zip(assets, now)
         logging.info("Archived %d screen(s) → %s", len(assets), archive_path)
         print(archive_path)
+        if saved:
+            _cleanup_screenshots(saved)
     elif not create_archive and not sync_screenshots:
         logging.info("Rendered %d screen(s) (no outputs written)", len(assets))
 
