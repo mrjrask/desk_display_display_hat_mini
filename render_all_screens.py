@@ -35,7 +35,7 @@ except ImportError:  # pragma: no cover
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(SCRIPT_DIR, "screens_config.json")
 IMAGES_DIR = os.path.join(SCRIPT_DIR, "images")
-SCREENSHOT_DIR = os.path.join(SCRIPT_DIR, "screenshots")
+SCREENSHOT_DIR = os.path.join(SCRIPT_DIR, "Screenshot Archive")
 ARCHIVE_DIR = os.path.join(SCRIPT_DIR, "screenshot_archive")
 
 
@@ -244,7 +244,9 @@ def _write_zip(assets: Iterable[Tuple[str, Image.Image]], timestamp: _dt.datetim
 def _write_screenshots(
     assets: Iterable[Tuple[str, Image.Image]], timestamp: _dt.datetime
 ) -> list[str]:
-    os.makedirs(SCREENSHOT_DIR, exist_ok=True)
+    dated_dir = os.path.join(SCREENSHOT_DIR, timestamp.strftime("%Y%m%d"))
+    os.makedirs(dated_dir, exist_ok=True)
+
     saved: list[str] = []
     ts_suffix = timestamp.strftime("%Y%m%d_%H%M%S")
     counts: Dict[str, int] = {}
@@ -254,7 +256,7 @@ def _write_screenshots(
         counts[prefix] = counts.get(prefix, 0) + 1
         suffix = "" if counts[prefix] == 1 else f"_{counts[prefix] - 1:02d}"
         filename = f"{prefix}{suffix}_{ts_suffix}.png"
-        path = os.path.join(SCREENSHOT_DIR, filename)
+        path = os.path.join(dated_dir, filename)
         image.save(path)
         saved.append(path)
 
@@ -364,16 +366,15 @@ def render_all_screens(
     saved: list[str] = []
     if sync_screenshots:
         saved = _write_screenshots(assets, now)
+        target_dir = os.path.dirname(saved[0]) if saved else SCREENSHOT_DIR
         logging.info(
-            "Updated %d screenshot(s) in %s", len(saved), SCREENSHOT_DIR
+            "Updated %d screenshot(s) in %s", len(saved), target_dir
         )
 
     if create_archive:
         archive_path = _write_zip(assets, now)
         logging.info("Archived %d screen(s) → %s", len(assets), archive_path)
         print(archive_path)
-        if saved:
-            _cleanup_screenshots(saved)
     elif not create_archive and not sync_screenshots:
         logging.info("Rendered %d screen(s) (no outputs written)", len(assets))
 
