@@ -230,16 +230,14 @@ def _write_zip(assets: Iterable[Tuple[str, Image.Image]], timestamp: _dt.datetim
     counts: Dict[str, int] = {}
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for screen_id, image in assets:
-            folder = _sanitize_directory_name(screen_id)
             prefix = _sanitize_filename_prefix(screen_id)
             counts[prefix] = counts.get(prefix, 0) + 1
             suffix = "" if counts[prefix] == 1 else f"_{counts[prefix] - 1:02d}"
             filename = f"{prefix}{suffix}.png"
-            arcname = os.path.join(folder, filename)
 
             buf = io.BytesIO()
             image.save(buf, format="PNG")
-            zf.writestr(arcname, buf.getvalue())
+            zf.writestr(filename, buf.getvalue())
     return zip_path
 
 
