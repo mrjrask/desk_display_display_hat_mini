@@ -47,10 +47,8 @@ find . -type d -name "__pycache__" -prune -exec rm -rf {} +
 # 3) Archive any straggler screenshots/videos left behind
 SCREENSHOTS_DIR="screenshots"
 ARCHIVE_BASE="screenshot_archive"   # singular, to match main.py
-ARCHIVE_DATED_DIR="${ARCHIVE_BASE}/dated_folders"
 ARCHIVE_DEFAULT_FOLDER="Screens"
 timestamp="$(date +%Y%m%d_%H%M%S)"
-day="${timestamp%_*}"
 batch="${timestamp#*_}"
 
 declare -a leftover_files=()
@@ -65,7 +63,7 @@ if [[ -d "${SCREENSHOTS_DIR}" ]]; then
 fi
 
 if (( ${#leftover_files[@]} > 0 )); then
-  echo "    → Archiving leftover screenshots/videos to screenshot_archive/dated_folders/<screen>/${day}/cleanup_${batch}…"
+  echo "    → Archiving leftover screenshots/videos to screenshot_archive/<screen>/"
   for src in "${leftover_files[@]}"; do
     rel_path="${src#${SCREENSHOTS_DIR}/}"
     screen_folder="${ARCHIVE_DEFAULT_FOLDER}"
@@ -83,9 +81,16 @@ if (( ${#leftover_files[@]} > 0 )); then
       remainder="$(basename "${src}")"
     fi
 
-    dest_dir="${ARCHIVE_DATED_DIR}/${screen_folder}/${day}/cleanup_${batch}"
+    dest_dir="${ARCHIVE_BASE}/${screen_folder}"
     dest="${dest_dir}/${remainder}"
     mkdir -p "$(dirname "${dest}")"
+
+    if [[ -e "${dest}" ]]; then
+      ext="${dest##*.}"
+      base="${dest%.*}"
+      dest="${base}_cleanup_${batch}.${ext}"
+    fi
+
     mv -f "${src}" "${dest}"
   done
   if [[ -d "${SCREENSHOTS_DIR}" ]]; then

@@ -6,12 +6,11 @@ screen-config sequencing, and batch screenshot archiving.
 
 Changes:
 - Stop pruning single files; instead, when screenshots/ has >= ARCHIVE_THRESHOLD
-  images, archive the whole set into screenshot_archive/dated_folders/<screen>/
-  YYYYMMDD/HHMMSS/.
+  images, archive the whole set into screenshot_archive/<screen>/.
 - Avoid creating empty archive folders.
 - Guard logo screens when the image file is missing.
-- Sort archived screenshots inside screenshot_archive/dated_folders/<screen>/
-  YYYYMMDD/HHMMSS/ so they mirror the live screenshots/ folder structure.
+- Sort archived screenshots inside screenshot_archive/<screen>/ so they mirror
+  the live screenshots/ folder structure.
 """
 import warnings
 from gpiozero.exc import PinFactoryFallback, NativePinFactoryFallback
@@ -88,7 +87,7 @@ CONFIG_PATH = os.path.join(SCRIPT_DIR, "screens_config.json")
 # ─── Screenshot archiving (batch) ────────────────────────────────────────────
 ARCHIVE_THRESHOLD        = 500                  # archive when we reach this many images
 SCREENSHOT_ARCHIVE_BASE  = os.path.join(SCRIPT_DIR, "screenshot_archive")
-SCREENSHOT_ARCHIVE_DATED = os.path.join(SCREENSHOT_ARCHIVE_BASE, "dated_folders")
+SCREENSHOT_ARCHIVE_MIRROR = SCREENSHOT_ARCHIVE_BASE
 ARCHIVE_DEFAULT_FOLDER   = "Screens"
 ALLOWED_SCREEN_EXTS      = (".png", ".jpg", ".jpeg")  # images only
 
@@ -509,9 +508,8 @@ def _list_screenshot_files():
 def maybe_archive_screenshots():
     """
     When screenshots/ reaches ARCHIVE_THRESHOLD images, move the current images
-    into screenshot_archive/dated_folders/<screen>/YYYYMMDD/HHMMSS/ so the
-    archive mirrors the live screenshots/ folder layout. Avoid creating empty
-    archive folders.
+    into screenshot_archive/<screen>/ so the archive mirrors the live
+    screenshots/ folder layout. Avoid creating empty archive folders.
     """
     if not ENABLE_SCREENSHOTS:
         return
@@ -525,32 +523,24 @@ def maybe_archive_screenshots():
             return
 
         moved = 0
-        day_stamp = None
-        time_stamp = None
-        created_batch_dirs = set()
+        created_archive_dirs = set()
 
         for fname in files:
             src = os.path.join(SCREENSHOT_DIR, fname)
             try:
-                if day_stamp is None or time_stamp is None:
-                    now = datetime.datetime.now()
-                    day_stamp = now.strftime("%Y%m%d")
-                    time_stamp = now.strftime("%H%M%S")
-
                 parts = fname.split(os.sep)
                 if len(parts) > 1:
                     screen_folder, remainder = parts[0], os.path.join(*parts[1:])
                 else:
                     screen_folder, remainder = ARCHIVE_DEFAULT_FOLDER, parts[0]
 
-                batch_dir = os.path.join(
-                    SCREENSHOT_ARCHIVE_DATED,
+                archive_dir = os.path.join(
+                    SCREENSHOT_ARCHIVE_MIRROR,
                     screen_folder,
-                    day_stamp,
-                    time_stamp,
                 )
-                created_batch_dirs.add(batch_dir)
-                dest = os.path.join(batch_dir, remainder)
+                if not os.path.exists(archive_dir):
+                    created_archive_dirs.add(archive_dir)
+                dest = os.path.join(archive_dir, remainder)
                 dest_dir = os.path.dirname(dest)
                 if dest_dir and not os.path.exists(dest_dir):
                     os.makedirs(dest_dir, exist_ok=True)
@@ -560,19 +550,18 @@ def maybe_archive_screenshots():
                 logging.warning(f"⚠️  Could not move '{fname}' to archive: {e}")
 
         if moved == 0:
-            for batch_dir in sorted(created_batch_dirs, reverse=True):
-                if os.path.isdir(batch_dir):
+            for archive_dir in sorted(created_archive_dirs, reverse=True):
+                if os.path.isdir(archive_dir) and not os.listdir(archive_dir):
                     try:
-                        shutil.rmtree(batch_dir)
+                        shutil.rmtree(archive_dir)
                     except Exception:
                         pass
 
         if moved:
             logging.info(
-                "🗃️  Archived %s screenshot(s) → dated_folders/%s/%s",
+                "🗃️  Archived %s screenshot(s) → %s/",
                 moved,
-                day_stamp,
-                time_stamp,
+                SCREENSHOT_ARCHIVE_MIRROR,
             )
 
 # ─── SIGTERM handler ─────────────────────────────────────────────────────────
