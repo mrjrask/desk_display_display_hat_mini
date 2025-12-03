@@ -79,6 +79,24 @@ pip install -r requirements.txt
 
 The `venv` directory is ignored by Git. Re-run `source venv/bin/activate` whenever you start a new shell session to ensure the project uses the isolated Python environment.
 
+### Automated installers (Raspberry Pi OS Bookworm or Trixie)
+
+Two turnkey installers are provided for Raspberry Pi OS. Run the script that matches your OS release **from the project root**. Each script will enable SPI/I2C (when `raspi-config` is present), install the apt and pip dependencies, create a virtual environment in the project folder, and install+start the `desk_display.service` systemd unit that runs `main.py` under the current user.
+
+```bash
+# Bookworm (keeps the transitional libgdk-pixbuf2.0-dev package name)
+bash ./install_bookworm.sh
+
+# Trixie (uses libgdk-pixbuf-2.0-dev)
+bash ./install_trixie.sh
+```
+
+Override `PROJECT_DIR` when you want the installer to target a different checkout:
+
+```bash
+PROJECT_DIR=/home/pi/desk_display bash ./install_bookworm.sh
+```
+
 ---
 
 ## Project layout
