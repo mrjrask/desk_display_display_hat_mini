@@ -4,6 +4,18 @@ set -euo pipefail
 log() { printf '[INFO] %s\n' "$*"; }
 warn() { printf '[WARN] %s\n' "$*"; }
 
+ensure_executable() {
+  local file_path="$1"
+
+  if [[ -x "$file_path" ]]; then
+    log "$(basename "$file_path") already executable"
+  elif [[ -f "$file_path" ]]; then
+    chmod +x "$file_path" || warn "Could not mark $(basename "$file_path") as executable"
+  else
+    warn "Missing script: $file_path"
+  fi
+}
+
 # Return the preferred libtiff development package for the given codename.
 select_libtiff_pkg() {
   local codename="$1"

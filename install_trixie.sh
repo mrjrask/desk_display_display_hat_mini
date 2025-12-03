@@ -63,11 +63,8 @@ else
   warn "requirements.txt not found; skipping pip install."
 fi
 
-if [[ -x "$PROJECT_DIR/cleanup.sh" ]]; then
-  log "cleanup.sh already executable"
-else
-  chmod +x "$PROJECT_DIR/cleanup.sh" || warn "Could not mark cleanup.sh as executable"
-fi
+ensure_executable "$PROJECT_DIR/cleanup.sh"
+ensure_executable "$PROJECT_DIR/reset_screenshots.sh"
 
 deactivate
 
