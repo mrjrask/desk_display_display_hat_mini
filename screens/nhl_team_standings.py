@@ -20,6 +20,7 @@ def draw_nhl_standings_screen1(display, rec, logo_path, division_name, *, transi
         ot_label="OTL",
         points_label="points",
         conference_label="conference",
+        show_conference_rank=False,
         transition=transition,
     )
 
