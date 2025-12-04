@@ -38,6 +38,8 @@ def _ord(n):
         i = int(n)
     except:
         return f"{n}th"
+    if i <= 0:
+        return "-"
     if 10 <= i % 100 <= 20:
         suffix = "th"
     else:
@@ -104,9 +106,16 @@ def _format_streak(streak) -> str:
             return code
 
         number_val = float(number_part)
-        number_txt = f"{int(number_val)}"
+        number_txt = f"{int(abs(number_val))}"
 
-        return f"{prefix}{number_txt}"
+        if prefix:
+            return f"{prefix}{number_txt}"
+
+        if number_val > 0:
+            return f"W{number_txt}"
+        if number_val < 0:
+            return f"L{number_txt}"
+        return number_txt
     except Exception:
         return str(streak)
 

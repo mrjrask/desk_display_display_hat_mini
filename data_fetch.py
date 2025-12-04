@@ -657,6 +657,15 @@ def _fetch_nhl_team_standings_espn(team_abbr: str):
                 pass
 
             logging.info("Using ESPN NHL standings fallback for %s", team_abbr)
+
+            division_rank = _stat(stats, "divisionStanding")
+            if division_rank in (None, ""):
+                division_rank = _stat(stats, "divisionRank")
+            if division_rank in (None, ""):
+                division_rank = _stat(stats, "divisionPlace")
+            if division_rank in (None, ""):
+                division_rank = _stat(stats, "playoffSeed")
+
             return {
                 "leagueRecord": {
                     "wins": _safe_int(_stat(stats, "wins")),
@@ -664,8 +673,7 @@ def _fetch_nhl_team_standings_espn(team_abbr: str):
                     "ot": _safe_int(_stat(stats, "otLosses")),
                     "pct": pct,
                 },
-                "divisionRank": _stat(stats, "divisionWinPercent")
-                or _stat(stats, "playoffSeed"),
+                "divisionRank": division_rank,
                 "divisionGamesBack": _stat(stats, "divisionGamesBehind"),
                 "wildCardGamesBack": None,
                 "streak": {"streakCode": streak_code or "-"},
@@ -782,6 +790,10 @@ def _fetch_nba_team_standings(team_tricode: str):
                 away=entry.get("away"),
             )
 
+            conference = entry.get("conference") or {}
+            conference_name = conference.get("name") or conference.get("displayName")
+            conference_rank = conference.get("rank")
+
             return {
                 "leagueRecord": record,
                 "divisionRank": entry.get("divisionRank")
@@ -791,6 +803,8 @@ def _fetch_nba_team_standings(team_tricode: str):
                 "wildCardGamesBack": None,
                 "streak": {"streakCode": streak_code},
                 "records": {"splitRecords": splits},
+                "conferenceRank": conference_rank,
+                "conferenceName": conference_name,
             }
 
         if teams:
@@ -850,18 +864,27 @@ def _fetch_nba_team_standings_espn() -> Optional[dict]:
                 pass
 
             logging.info("Using ESPN NBA standings fallback for %s", NBA_TEAM_TRICODE)
+
+            division_rank = _stat(stats, "divisionStanding")
+            if division_rank in (None, ""):
+                division_rank = _stat(stats, "divisionRank")
+            if division_rank in (None, ""):
+                division_rank = _stat(stats, "divisionPlace")
+            if division_rank in (None, ""):
+                division_rank = _stat(stats, "playoffSeed")
+
             return {
                 "leagueRecord": {
                     "wins": _safe_int(_stat(stats, "wins")),
                     "losses": _safe_int(_stat(stats, "losses")),
                     "pct": pct,
                 },
-                "divisionRank": _stat(stats, "divisionWinPercent")
-                or _stat(stats, "playoffSeed"),
+                "divisionRank": division_rank,
                 "divisionGamesBack": _stat(stats, "gamesBehind"),
                 "wildCardGamesBack": None,
                 "streak": {"streakCode": streak_code or "-"},
                 "records": {"splitRecords": []},
+                "conferenceRank": _stat(stats, "playoffSeed"),
             }
     except Exception as exc:
         logging.error("Error fetching NBA standings (ESPN fallback) for %s: %s", NBA_TEAM_TRICODE, exc)
