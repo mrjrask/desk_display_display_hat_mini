@@ -129,9 +129,15 @@ def draw_standings_screen1(
     *,
     show_games_back=True,
     show_wild_card=True,
+    show_streak=False,
     ot_label="OT",
     points_label=None,
     conference_label=None,
+    show_conference_rank=True,
+    place_gb_before_rank=False,
+    show_pct=False,
+    pct_precision=None,
+    record_details_fn=None,
     transition=False,
 ):
     """
@@ -160,7 +166,20 @@ def draw_standings_screen1(
     bottom_limit = HEIGHT - MARGIN
 
     # W/L
-    wl_txt = _format_record_values(rec.get('leagueRecord', {}), ot_label=ot_label)
+    record_line = _format_record_values(rec.get("leagueRecord", {}), ot_label=ot_label)
+
+    if record_details_fn:
+        wl_txt = record_details_fn(rec, record_line)
+    elif show_pct:
+        pct_raw = rec.get("leagueRecord", {}).get("pct", "-")
+        precision = 3 if pct_precision is None else pct_precision
+        try:
+            pct_txt = f"{float(pct_raw):.{precision}f}"
+        except Exception:
+            pct_txt = str(pct_raw)
+        wl_txt = f"{record_line} ({pct_txt})"
+    else:
+        wl_txt = record_line
 
     points_txt = None
     if points_label is not None:
@@ -206,8 +225,10 @@ def draw_standings_screen1(
     ]
     if points_txt:
         lines.append((points_txt, FONT_STAND1_GB_VALUE))
+    if gb_txt and place_gb_before_rank:
+        lines.append((gb_txt, FONT_STAND1_GB_VALUE))
     lines.append((rank_txt, FONT_STAND1_RANK))
-    if conference_label:
+    if conference_label and show_conference_rank:
         conf_rank = rec.get("conferenceRank", "-")
         try:
             conf_lbl = "Last" if int(conf_rank) == 16 else _ord(conf_rank)
@@ -215,10 +236,13 @@ def draw_standings_screen1(
             conf_lbl = conf_rank
         conf_name = rec.get("conferenceName") or rec.get("conferenceAbbrev") or "conference"
         lines.append((f"{conf_lbl} in {conf_name}", FONT_STAND1_RANK))
-    if gb_txt:
+    if gb_txt and not place_gb_before_rank:
         lines.append((gb_txt, FONT_STAND1_GB_VALUE))
     if wc_txt:
         lines.append((wc_txt, FONT_STAND1_WCGB_VALUE))
+    if show_streak:
+        streak_raw = (rec.get("streak") or {}).get("streakCode", "-")
+        lines.append((f"Streak: {_format_streak(streak_raw)}", FONT_STAND1_RANK))
 
     # Layout text
     heights = [draw.textsize(txt,font)[1] for txt,font in lines]
