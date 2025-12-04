@@ -2,6 +2,7 @@
 from screens.mlb_team_standings import (
     draw_standings_screen1 as _base_screen1,
     draw_standings_screen2 as _base_screen2,
+    _format_int,
 )
 from utils import log_call
 
@@ -24,8 +25,7 @@ def draw_nhl_standings_screen1(display, rec, logo_path, division_name, *, transi
 
 
 def _nhl_record_details(rec, base_rec):
-    pts = rec.get("points")
-    pts_val = "-" if pts in (None, "") else pts
+    pts_val = _format_int(rec.get("points"))
     return f"{base_rec} ({pts_val} pts)"
 
 

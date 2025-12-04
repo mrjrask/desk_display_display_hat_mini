@@ -61,6 +61,18 @@ def format_games_back(gb):
         pass
     return str(gb)
 
+
+def _format_int(value, *, default="-") -> str:
+    """Return an integer-like string with no decimal places."""
+
+    try:
+        if value in (None, ""):
+            return default
+        return f"{int(float(value))}"
+    except Exception:
+        return str(value) if value not in (None, "") else default
+
+
 def _format_record_values(record, *, ot_label="OT"):
     w = record.get("wins", "-")
     l = record.get("losses", "-")
@@ -75,6 +87,28 @@ def _format_record_values(record, *, ot_label="OT"):
         parts.append(f"{tie_label}: {tie_val}")
 
     return " ".join(parts)
+
+
+def _format_streak(streak) -> str:
+    """Return a streak string without decimal places in the numeric portion."""
+
+    try:
+        if streak in (None, "", "-"):
+            return "-"
+
+        code = str(streak)
+        prefix = code[0] if code and code[0].isalpha() else ""
+        number_part = code[len(prefix) :] if prefix else code
+
+        if number_part == "":
+            return code
+
+        number_val = float(number_part)
+        number_txt = f"{int(number_val)}"
+
+        return f"{prefix}{number_txt}"
+    except Exception:
+        return str(streak)
 
 
 @log_call
@@ -121,8 +155,7 @@ def draw_standings_screen1(
 
     points_txt = None
     if points_label is not None:
-        pts = rec.get("points")
-        pts_val = "-" if pts in (None, "") else pts
+        pts_val = _format_int(rec.get("points"))
         points_txt = f"{pts_val} {points_label}"
 
     # Division rank
@@ -245,12 +278,10 @@ def draw_standings_screen2(
     if t in (None, '', '-', 0, '0'):
         t = record.get('ot') if record.get('ot') not in (0, '0') else None
     pct_raw = record.get("pct", "-")
-    if pct_precision is not None:
-        try:
-            pct = f"{float(pct_raw):.{pct_precision}f}".lstrip("0")
-        except Exception:
-            pct = str(pct_raw).lstrip("0")
-    else:
+    precision = 3 if pct_precision is None else pct_precision
+    try:
+        pct = f"{float(pct_raw):.{precision}f}".lstrip("0")
+    except Exception:
         pct = str(pct_raw).lstrip("0")
 
     base_rec = f"{w}-{l}"
@@ -275,10 +306,11 @@ def draw_standings_screen2(
 
     items = []
     if show_streak:
-        items.append(f"Streak: {rec.get('streak',{}).get('streakCode','-')}")
+        streak_raw = rec.get("streak", {}).get("streakCode", "-")
+        items.append(f"Streak: {_format_streak(streak_raw)}")
     pts = rec.get('points')
     if show_points and pts not in (None, ''):
-        items.append(f"Pts: {pts}")
+        items.append(f"Pts: {_format_int(pts)}")
     for split in split_order:
         label = {
             "lastTen": "L10",
