@@ -14,6 +14,7 @@ def draw_nba_standings_screen1(display, rec, logo_path, division_name, *, transi
         rec,
         logo_path,
         division_name,
+        conference_label="conference",
         transition=transition,
     )
 

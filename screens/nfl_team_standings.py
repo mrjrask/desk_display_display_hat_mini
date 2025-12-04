@@ -29,7 +29,6 @@ def draw_nfl_standings_screen2(display, rec, logo_path, *, transition=False):
         logo_path,
         pct_precision=3,
         split_order=("home", "away", "division", "conference"),
-        split_overrides={"home": "-", "away": "-"},
         show_streak=True,
         show_points=True,
         transition=transition,
