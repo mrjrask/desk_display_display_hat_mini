@@ -174,9 +174,9 @@ def draw_standings_screen1(
         pct_raw = rec.get("leagueRecord", {}).get("pct", "-")
         precision = 3 if pct_precision is None else pct_precision
         try:
-            pct_txt = f"{float(pct_raw):.{precision}f}"
+            pct_txt = f"{float(pct_raw):.{precision}f}".lstrip("0")
         except Exception:
-            pct_txt = str(pct_raw)
+            pct_txt = str(pct_raw).lstrip("0")
         wl_txt = f"{record_line} ({pct_txt})"
     else:
         wl_txt = record_line
