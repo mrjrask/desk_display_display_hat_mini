@@ -409,8 +409,10 @@ def _next_screen_from_registry(
 
 # ─── Screenshot / video outputs ──────────────────────────────────────────────
 SCREENSHOT_DIR = os.path.join(SCRIPT_DIR, "screenshots")
+CURRENT_SCREENSHOT_DIR = os.path.join(SCREENSHOT_DIR, "current")
 if ENABLE_SCREENSHOTS:
     os.makedirs(SCREENSHOT_DIR, exist_ok=True)
+    os.makedirs(CURRENT_SCREENSHOT_DIR, exist_ok=True)
     os.makedirs(SCREENSHOT_ARCHIVE_BASE, exist_ok=True)
 
 video_out = None
@@ -490,11 +492,27 @@ def _save_screenshot(sid: str, img: Image.Image) -> None:
     except Exception:
         logging.warning(f"⚠️ Screenshot save failed for '{sid}'")
 
+    try:
+        os.makedirs(CURRENT_SCREENSHOT_DIR, exist_ok=True)
+        for entry in os.scandir(CURRENT_SCREENSHOT_DIR):
+            if not entry.is_file():
+                continue
+            stem, ext = os.path.splitext(entry.name)
+            if stem == prefix and ext.lower() in ALLOWED_SCREEN_EXTS:
+                os.remove(entry.path)
+        current_path = os.path.join(CURRENT_SCREENSHOT_DIR, f"{prefix}.png")
+        img.save(current_path)
+    except Exception:
+        logging.warning(f"⚠️ Failed to update current screenshot for '{sid}'")
+
 
 def _list_screenshot_files():
     try:
         results = []
-        for root, _dirs, files in os.walk(SCREENSHOT_DIR):
+        for root, dirs, files in os.walk(SCREENSHOT_DIR):
+            if os.path.abspath(root) == os.path.abspath(CURRENT_SCREENSHOT_DIR):
+                dirs.clear()
+                continue
             for fname in files:
                 if not fname.lower().endswith(ALLOWED_SCREEN_EXTS):
                     continue

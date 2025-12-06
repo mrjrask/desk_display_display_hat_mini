@@ -24,6 +24,7 @@ from config import (
 from screens.draw_travel_time import get_travel_active_window, is_travel_screen_active
 from screens.registry import ScreenContext, ScreenDefinition, build_screen_registry
 from schedule import build_scheduler, load_schedule_config
+from screens_catalog import SCREEN_IDS
 from utils import ScreenImage
 
 try:
@@ -36,6 +37,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(SCRIPT_DIR, "screens_config.json")
 IMAGES_DIR = os.path.join(SCRIPT_DIR, "images")
 SCREENSHOT_DIR = os.path.join(SCRIPT_DIR, "Screenshot Archive")
+CURRENT_SCREENSHOT_DIR = os.path.join(SCREENSHOT_DIR, "current")
 ARCHIVE_DIR = os.path.join(SCRIPT_DIR, "screenshot_archive")
 
 
@@ -256,8 +258,10 @@ def _write_screenshots(
 ) -> list[str]:
     dated_dir = os.path.join(SCREENSHOT_DIR, timestamp.strftime("%Y%m%d"))
     os.makedirs(dated_dir, exist_ok=True)
+    os.makedirs(CURRENT_SCREENSHOT_DIR, exist_ok=True)
 
     saved: list[str] = []
+    current_written: set[str] = set()
     ts_suffix = timestamp.strftime("%Y%m%d_%H%M%S")
     counts: Dict[str, int] = {}
 
@@ -269,6 +273,20 @@ def _write_screenshots(
         path = os.path.join(dated_dir, filename)
         image.save(path)
         saved.append(path)
+
+        current_filename = f"{prefix}{suffix}.png"
+        current_path = os.path.join(CURRENT_SCREENSHOT_DIR, current_filename)
+        image.save(current_path)
+        current_written.add(current_path)
+
+    # Remove outdated current screenshots so the folder only reflects the latest run
+    for existing in os.listdir(CURRENT_SCREENSHOT_DIR):
+        existing_path = os.path.join(CURRENT_SCREENSHOT_DIR, existing)
+        if existing_path not in current_written:
+            try:
+                os.remove(existing_path)
+            except OSError as exc:
+                logging.warning("Failed to remove stale screenshot %s: %s", existing_path, exc)
 
     return saved
 
@@ -344,8 +362,16 @@ def render_all_screens(
 
         registry, _metadata = build_screen_registry(context)
 
-        for screen_id in sorted(registry):
-            definition: ScreenDefinition = registry[screen_id]
+        screen_ids = sorted(set(SCREEN_IDS) | set(registry.keys()))
+        for screen_id in screen_ids:
+            definition: Optional[ScreenDefinition] = registry.get(screen_id)
+            if definition is None:
+                logging.warning(
+                    "No renderer registered for '%s'; creating placeholder image.",
+                    screen_id,
+                )
+                assets.append((screen_id, Image.new("RGB", (display.width, display.height), "black")))
+                continue
             if not definition.available:
                 logging.info("Rendering '%s' (marked unavailable)", screen_id)
             else:
