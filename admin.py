@@ -18,6 +18,7 @@ from config_store import ConfigStore
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(SCRIPT_DIR, "screens_config.json")
 SCREENSHOT_DIR = os.path.join(SCRIPT_DIR, "screenshots")
+CURRENT_SCREENSHOT_DIR = os.path.join(SCREENSHOT_DIR, "current")
 STYLE_CONFIG_PATH = os.environ.get(
     "SCREENS_STYLE_PATH", os.path.join(SCRIPT_DIR, "screens_style.json")
 )
@@ -46,6 +47,22 @@ def _sanitize_directory_name(name: str) -> str:
 
 
 def _latest_screenshot(screen_id: str) -> Optional[tuple[str, datetime]]:
+    prefix = _sanitize_directory_name(screen_id).replace(" ", "_")
+    if os.path.isdir(CURRENT_SCREENSHOT_DIR):
+        latest_current: Optional[tuple[str, float]] = None
+        for entry in os.scandir(CURRENT_SCREENSHOT_DIR):
+            if not entry.is_file():
+                continue
+            name, ext = os.path.splitext(entry.name)
+            if name != prefix or ext.lower() not in ALLOWED_EXTENSIONS:
+                continue
+            mtime = entry.stat().st_mtime
+            if latest_current is None or mtime > latest_current[1]:
+                latest_current = (os.path.join("current", entry.name), mtime)
+        if latest_current:
+            rel_path, mtime = latest_current
+            return rel_path.replace(os.sep, "/"), datetime.fromtimestamp(mtime)
+
     folder = os.path.join(SCREENSHOT_DIR, _sanitize_directory_name(screen_id))
     if not os.path.isdir(folder):
         return None

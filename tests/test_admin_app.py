@@ -18,6 +18,7 @@ def app_client(tmp_path, monkeypatch):
 
     monkeypatch.setattr(admin, "CONFIG_PATH", str(config_path))
     monkeypatch.setattr(admin, "SCREENSHOT_DIR", str(screenshot_dir))
+    monkeypatch.setattr(admin, "CURRENT_SCREENSHOT_DIR", str(screenshot_dir / "current"))
     admin.app.static_folder = str(screenshot_dir)
 
     admin.app.config.update(TESTING=True)
@@ -43,6 +44,11 @@ def test_index_lists_screens(app_client):
 def test_api_screens_reports_latest_file(app_client):
     client, screenshot_dir, _ = app_client
 
+    current_dir = screenshot_dir / "current"
+    current_dir.mkdir(exist_ok=True)
+    (current_dir / "date.png").write_bytes(b"newest")
+    os.utime(current_dir / "date.png", (5, 5))
+
     folder = screenshot_dir / admin._sanitize_directory_name("date")
     folder.mkdir(exist_ok=True)
     first = folder / "date_1.png"
@@ -58,7 +64,7 @@ def test_api_screens_reports_latest_file(app_client):
     assert payload["status"] == "ok"
 
     screens = {entry["id"]: entry for entry in payload["screens"]}
-    assert screens["date"]["last_screenshot"].endswith("date_2.png")
+    assert screens["date"]["last_screenshot"].endswith("current/date.png")
     assert screens["travel"]["last_screenshot"] is None
 
 
