@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 import admin
+from screenshot_paths import current_screenshot_folder_name
 
 
 @pytest.fixture()
@@ -16,18 +17,20 @@ def app_client(tmp_path, monkeypatch):
     screenshot_dir = tmp_path / "screenshots"
     screenshot_dir.mkdir()
 
+    current_folder = current_screenshot_folder_name()
+
     monkeypatch.setattr(admin, "CONFIG_PATH", str(config_path))
     monkeypatch.setattr(admin, "SCREENSHOT_DIR", str(screenshot_dir))
-    monkeypatch.setattr(admin, "CURRENT_SCREENSHOT_DIR", str(screenshot_dir / "current"))
+    monkeypatch.setattr(admin, "CURRENT_SCREENSHOT_DIR", str(screenshot_dir / current_folder))
     admin.app.static_folder = str(screenshot_dir)
 
     admin.app.config.update(TESTING=True)
     with admin.app.test_client() as client:
-        yield client, screenshot_dir, config_path
+        yield client, screenshot_dir, config_path, current_folder
 
 
 def test_index_lists_screens(app_client):
-    client, screenshot_dir, _ = app_client
+    client, screenshot_dir, _, _ = app_client
 
     folder = screenshot_dir / admin._sanitize_directory_name("date")
     folder.mkdir()
@@ -42,9 +45,9 @@ def test_index_lists_screens(app_client):
 
 
 def test_api_screens_reports_latest_file(app_client):
-    client, screenshot_dir, _ = app_client
+    client, screenshot_dir, _, current_folder = app_client
 
-    current_dir = screenshot_dir / "current"
+    current_dir = screenshot_dir / current_folder
     current_dir.mkdir(exist_ok=True)
     (current_dir / "date.png").write_bytes(b"newest")
     os.utime(current_dir / "date.png", (5, 5))
@@ -64,12 +67,14 @@ def test_api_screens_reports_latest_file(app_client):
     assert payload["status"] == "ok"
 
     screens = {entry["id"]: entry for entry in payload["screens"]}
-    assert screens["date"]["last_screenshot"].endswith("current/date.png")
+    assert screens["date"]["last_screenshot"].endswith(
+        f"{current_folder}/date.png"
+    )
     assert screens["travel"]["last_screenshot"] is None
 
 
 def test_api_config_returns_current_config(app_client):
-    client, _, config_path = app_client
+    client, _, config_path, _ = app_client
     resp = client.get("/api/config")
     payload = resp.get_json()
     assert resp.status_code == 200

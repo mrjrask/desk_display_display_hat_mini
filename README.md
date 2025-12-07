@@ -427,8 +427,8 @@ trigger a fresh boot after cleanup completes.
 ## Screenshots & archiving
 
 - Screenshots land in `./screenshots/` when `ENABLE_SCREENSHOTS=True`.
-- `./screenshots/current/` always mirrors the latest capture per screen (flat files, no subfolders) so the admin UI can serve a
-  stable, up-to-date view.
+- `./screenshots/<hostname>current/` always mirrors the latest capture per screen (flat files, no subfolders) so the admin UI can
+  serve a stable, up-to-date view.
 - **Batch archiving:** once the live folder reaches **500** images, the program moves the **entire batch** into `./screenshot_archive/<screen>/` (images only) so the archive mirrors the folder layout under `./screenshots/`.
 - You will **not** see per‑image pruning logs; instead you’ll see a single archive log like: `🗃️ Archived 500 screenshot(s) → …`
 
