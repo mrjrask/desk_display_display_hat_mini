@@ -56,7 +56,9 @@ if [[ -d "${SCREENSHOTS_DIR}" ]]; then
   while IFS= read -r -d $'\0' file; do
     leftover_files+=("$file")
   done < <(
-    find "${SCREENSHOTS_DIR}" -type f \
+    find "${SCREENSHOTS_DIR}" \
+      -path "${SCREENSHOTS_DIR}/current" -prune -o \
+      -type f \
       \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \
          -o -iname '*.mp4' -o -iname '*.avi' \) -print0 | sort -z
   )
