@@ -26,6 +26,7 @@ from screens.registry import ScreenContext, ScreenDefinition, build_screen_regis
 from schedule import build_scheduler, load_schedule_config
 from screens_catalog import SCREEN_IDS
 from utils import ScreenImage
+from screenshot_paths import current_screenshot_dir
 
 try:
     import utils
@@ -37,7 +38,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(SCRIPT_DIR, "screens_config.json")
 IMAGES_DIR = os.path.join(SCRIPT_DIR, "images")
 SCREENSHOT_DIR = os.path.join(SCRIPT_DIR, "Screenshot Archive")
-CURRENT_SCREENSHOT_DIR = os.path.join(SCREENSHOT_DIR, "current")
+CURRENT_SCREENSHOT_DIR = current_screenshot_dir(SCREENSHOT_DIR)
 ARCHIVE_DIR = os.path.join(SCRIPT_DIR, "screenshot_archive")
 
 

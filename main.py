@@ -61,6 +61,7 @@ from utils import (
 )
 import data_fetch
 from services import wifi_utils
+from screenshot_paths import current_screenshot_dir
 
 from screens.draw_date_time import draw_date, draw_time
 from screens.draw_travel_time import (
@@ -409,7 +410,7 @@ def _next_screen_from_registry(
 
 # ─── Screenshot / video outputs ──────────────────────────────────────────────
 SCREENSHOT_DIR = os.path.join(SCRIPT_DIR, "screenshots")
-CURRENT_SCREENSHOT_DIR = os.path.join(SCREENSHOT_DIR, "current")
+CURRENT_SCREENSHOT_DIR = current_screenshot_dir(SCREENSHOT_DIR)
 if ENABLE_SCREENSHOTS:
     os.makedirs(SCREENSHOT_DIR, exist_ok=True)
     os.makedirs(CURRENT_SCREENSHOT_DIR, exist_ok=True)
