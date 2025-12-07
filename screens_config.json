@@ -54,14 +54,14 @@
       "frequency": 2,
       "alt": {
         "screen": "NFL Standings NFC",
-        "frequency": 4
+        "frequency": 1
       }
     },
     "NFL Overview AFC": {
       "frequency": 2,
       "alt": {
         "screen": "NFL Standings AFC",
-        "frequency": 4
+        "frequency": 1
       }
     },
     "NFL Standings NFC": 0,
@@ -76,7 +76,7 @@
           "NHL Standings West",
           "NHL Standings East"
         ],
-        "frequency": 2
+        "frequency": 1
       }
     },
     "NHL Standings West": 0,
