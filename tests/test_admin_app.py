@@ -1,12 +1,14 @@
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
 import pytest
 
 import admin
-from screenshot_paths import current_screenshot_folder_name
+import paths
+from paths import resolve_storage_paths
 
 
 @pytest.fixture()
@@ -14,14 +16,20 @@ def app_client(tmp_path, monkeypatch):
     config_path = tmp_path / "screens_config.json"
     config_path.write_text(json.dumps({"screens": {"date": 0, "travel": 2}}))
 
-    screenshot_dir = tmp_path / "screenshots"
-    screenshot_dir.mkdir()
+    monkeypatch.setenv("DESK_DISPLAY_DATA_DIR", str(tmp_path))
+    if paths._SHARED_HINT_PATH.exists():
+        paths._SHARED_HINT_PATH.unlink()
+    storage_paths = resolve_storage_paths(logger=None)
+    shutil.rmtree(storage_paths.screenshot_dir, ignore_errors=True)
+    storage_paths = resolve_storage_paths(logger=None)
 
-    current_folder = current_screenshot_folder_name()
+    screenshot_dir = storage_paths.screenshot_dir
+    current_folder = os.path.basename(storage_paths.current_screenshot_dir)
 
     monkeypatch.setattr(admin, "CONFIG_PATH", str(config_path))
     monkeypatch.setattr(admin, "SCREENSHOT_DIR", str(screenshot_dir))
-    monkeypatch.setattr(admin, "CURRENT_SCREENSHOT_DIR", str(screenshot_dir / current_folder))
+    monkeypatch.setattr(admin, "CURRENT_SCREENSHOT_DIR", str(storage_paths.current_screenshot_dir))
+    monkeypatch.setattr(admin, "_storage_paths", storage_paths)
     admin.app.static_folder = str(screenshot_dir)
 
     admin.app.config.update(TESTING=True)

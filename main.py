@@ -61,7 +61,7 @@ from utils import (
 )
 import data_fetch
 from services import wifi_utils
-from screenshot_paths import current_screenshot_dir
+from paths import resolve_storage_paths
 
 from screens.draw_date_time import draw_date, draw_time
 from screens.draw_travel_time import (
@@ -86,11 +86,15 @@ SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(SCRIPT_DIR, "screens_config.json")
 
 # ─── Screenshot archiving (batch) ────────────────────────────────────────────
-ARCHIVE_THRESHOLD        = 500                  # archive when we reach this many images
-SCREENSHOT_ARCHIVE_BASE  = os.path.join(SCRIPT_DIR, "screenshot_archive")
+ARCHIVE_THRESHOLD = 500  # archive when we reach this many images
+ARCHIVE_DEFAULT_FOLDER = "Screens"
+ALLOWED_SCREEN_EXTS = (".png", ".jpg", ".jpeg")  # images only
+
+_storage_paths = resolve_storage_paths(logger=logging.getLogger(__name__))
+SCREENSHOT_DIR = str(_storage_paths.screenshot_dir)
+CURRENT_SCREENSHOT_DIR = str(_storage_paths.current_screenshot_dir)
+SCREENSHOT_ARCHIVE_BASE = str(_storage_paths.archive_base)
 SCREENSHOT_ARCHIVE_MIRROR = SCREENSHOT_ARCHIVE_BASE
-ARCHIVE_DEFAULT_FOLDER   = "Screens"
-ALLOWED_SCREEN_EXTS      = (".png", ".jpg", ".jpeg")  # images only
 
 _screen_config_mtime: Optional[float] = None
 screen_scheduler: Optional[ScreenScheduler] = None
@@ -409,8 +413,6 @@ def _next_screen_from_registry(
     return entry
 
 # ─── Screenshot / video outputs ──────────────────────────────────────────────
-SCREENSHOT_DIR = os.path.join(SCRIPT_DIR, "screenshots")
-CURRENT_SCREENSHOT_DIR = current_screenshot_dir(SCREENSHOT_DIR)
 if ENABLE_SCREENSHOTS:
     os.makedirs(SCREENSHOT_DIR, exist_ok=True)
     os.makedirs(CURRENT_SCREENSHOT_DIR, exist_ok=True)
