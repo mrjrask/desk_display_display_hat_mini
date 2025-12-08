@@ -594,8 +594,10 @@ signal.signal(signal.SIGTERM, _handle_sigterm)
 
 # ─── Logos ───────────────────────────────────────────────────────────────────
 IMAGES_DIR = os.path.join(SCRIPT_DIR, "images")
-LOGO_SCREEN_HEIGHT = 148  # 80px base increased by ~85%
-TEAM_LOGO_HEIGHT   = 128  # tuned to match Bears animation scale
+# Logos scroll across the screen; keep them just a bit shorter than the display
+# while preserving aspect ratio during resize.
+LOGO_SCREEN_HEIGHT = max(1, HEIGHT - 30)
+TEAM_LOGO_HEIGHT   = LOGO_SCREEN_HEIGHT
 
 
 def load_logo(fn, height=LOGO_SCREEN_HEIGHT):
