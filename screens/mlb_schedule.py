@@ -367,7 +367,7 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
         block_top = grid_top + grid_h + 2
         block_h   = FLAG_BLOCK_H
         flag_h    = SMALL_RESULT_FLAG_H
-        flag_path = os.path.join(IMAGES_DIR, f"{winner_flag}.png")  # W.png / L.png
+        flag_path = os.path.join(IMAGES_DIR, "mlb", f"{winner_flag}.png")  # mlb/W.png / mlb/L.png
         if os.path.exists(flag_path):
             try:
                 flag = Image.open(flag_path).convert("RGBA")

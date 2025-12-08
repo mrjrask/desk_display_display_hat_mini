@@ -146,8 +146,8 @@ desk_display/
 │  ├─ mlb/<ABBR>.png              # MLB team logos (e.g., CUBS.png)
 │  ├─ nfl/<ABBR>.png              # NFL logos used by Bears screen
 │  ├─ W_flag.webp / L_flag.webp   # animated WebP flags (preferred)
-│  ├─ W.png / L.png               # fallback PNG flags
-│  ├─ cubs.jpg, sox.jpg, hawks.jpg, mlb.jpg, weather.jpg, verano.jpg, bears.png
+│  ├─ mlb/W.png / mlb/L.png       # fallback PNG flags
+│  ├─ mlb/CUBS.png, mlb/SOX.png, nhl/CHI.png, mlb/MLB.png, weather.jpg, verano.jpg, nfl/chi.png
 └─ fonts/
    ├─ TimesSquare-m105.ttf
    ├─ DejaVuSans.ttf
@@ -336,7 +336,7 @@ Or copy `.env.example` to `.env` and load it with your preferred process manager
 
 - **MLB logos:** put team PNGs into `images/mlb/` named with your abbreviations (e.g., `CUBS.png`, `MIL.png`).
 - **NFL logos:** for the Bears screen, `images/nfl/<abbr>.png` (e.g., `gb.png`, `min.png`).
-- **Cubs W/L flag:** use `images/W_flag.webp` and `images/L_flag.webp` (animated). If missing, the code falls back to `images/W.png` / `images/L.png`.
+- **Cubs W/L flag:** use `images/W_flag.webp` and `images/L_flag.webp` (animated). If missing, the code falls back to `images/mlb/W.png` / `images/mlb/L.png`.
 - **Fonts:** copy `TimesSquare-m105.ttf`, `DejaVuSans.ttf`, `DejaVuSans-Bold.ttf`, and `NotoColorEmoji.ttf` into `fonts/`.
 - **Travel font:** the Google Maps travel screen loads `HWYGNRRW.TTF` (Highway Gothic) directly from `fonts/`. Without this
   file the app will exit on startup, so copy your licensed copy into that folder alongside the other fonts.
