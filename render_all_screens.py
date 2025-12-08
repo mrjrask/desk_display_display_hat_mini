@@ -26,7 +26,7 @@ from screens.registry import ScreenContext, ScreenDefinition, build_screen_regis
 from schedule import build_scheduler, load_schedule_config
 from screens_catalog import SCREEN_IDS
 from utils import ScreenImage
-from screenshot_paths import current_screenshot_dir
+from paths import resolve_storage_paths
 
 try:
     import utils
@@ -37,9 +37,11 @@ except ImportError:  # pragma: no cover
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(SCRIPT_DIR, "screens_config.json")
 IMAGES_DIR = os.path.join(SCRIPT_DIR, "images")
-SCREENSHOT_DIR = os.path.join(SCRIPT_DIR, "Screenshot Archive")
-CURRENT_SCREENSHOT_DIR = current_screenshot_dir(SCREENSHOT_DIR)
-ARCHIVE_DIR = os.path.join(SCRIPT_DIR, "screenshot_archive")
+
+_storage_paths = resolve_storage_paths(logger=logging.getLogger(__name__))
+SCREENSHOT_DIR = str(_storage_paths.screenshot_dir)
+CURRENT_SCREENSHOT_DIR = str(_storage_paths.current_screenshot_dir)
+ARCHIVE_DIR = str(_storage_paths.archive_base)
 
 
 class HeadlessDisplay:

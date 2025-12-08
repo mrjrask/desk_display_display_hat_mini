@@ -1,11 +1,12 @@
 Flask 
 requests 
 pytz 
-Pillow 
+Pillow
 waitress
-yfinance 
+yfinance
 numpy
-adafruit-blinka 
+mock
+adafruit-blinka
 adafruit-circuitpython-bme680
 adafruit-circuitpython-sht4x
 spidev

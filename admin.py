@@ -14,20 +14,25 @@ from flask import Flask, abort, jsonify, render_template, request
 
 from schedule import build_scheduler
 from config_store import ConfigStore
-from screenshot_paths import current_screenshot_dir
+from paths import resolve_storage_paths
+
+_logger = logging.getLogger(__name__)
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(SCRIPT_DIR, "screens_config.json")
-SCREENSHOT_DIR = os.path.join(SCRIPT_DIR, "screenshots")
-CURRENT_SCREENSHOT_DIR = current_screenshot_dir(SCREENSHOT_DIR)
 STYLE_CONFIG_PATH = os.environ.get(
     "SCREENS_STYLE_PATH", os.path.join(SCRIPT_DIR, "screens_style.json")
 )
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg"}
 FONTS_DIR = os.path.join(SCRIPT_DIR, "fonts")
 
-app = Flask(__name__, static_folder="screenshots", static_url_path="/screenshots")
-_logger = logging.getLogger(__name__)
+_storage_paths = resolve_storage_paths(logger=_logger)
+SCREENSHOT_DIR = str(_storage_paths.screenshot_dir)
+CURRENT_SCREENSHOT_DIR = str(_storage_paths.current_screenshot_dir)
+
+app = Flask(
+    __name__, static_folder=SCREENSHOT_DIR, static_url_path="/screenshots"
+)
 _auto_render_lock = threading.Lock()
 _auto_render_done = False
 _STYLE_STORE = ConfigStore(STYLE_CONFIG_PATH)
