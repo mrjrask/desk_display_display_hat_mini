@@ -16,14 +16,27 @@ ensure_executable() {
   fi
 }
 
-# Return the preferred libtiff development package for the given codename.
+# Return the preferred libtiff development package for the given codename,
+# falling back gracefully when a codename-specific package is unavailable.
 select_libtiff_pkg() {
   local codename="$1"
+  local candidates=()
+
   case "$codename" in
-    bookworm) echo "libtiff5-dev" ;;
-    trixie) echo "libtiff6-dev" ;;
-    *) echo "libtiff-dev" ;;
+    bookworm) candidates=(libtiff5-dev libtiff-dev) ;;
+    trixie) candidates=(libtiff6-dev libtiff5-dev libtiff-dev) ;;
+    *) candidates=(libtiff5-dev libtiff-dev) ;;
   esac
+
+  for pkg in "${candidates[@]}"; do
+    if apt-cache show "$pkg" >/dev/null 2>&1; then
+      echo "$pkg"
+      return 0
+    fi
+  done
+
+  warn "Could not find a libtiff dev package; defaulting to ${candidates[-1]}"
+  echo "${candidates[-1]}"
 }
 
 # Choose the gdk-pixbuf development package for the given codename, preferring
@@ -57,6 +70,9 @@ install_apt_packages() {
     codename=$(lsb_release -sc 2>/dev/null || echo "")
   fi
 
+  log "Updating apt package index."
+  ${SUDO:-} apt-get update
+
   local shared_packages=(
     python3-venv python3-pip python3-dev python3-opencv
     build-essential libjpeg-dev libopenblas0 libopenblas-dev
@@ -68,9 +84,6 @@ install_apt_packages() {
   local packages=("${shared_packages[@]}")
   packages+=("$(select_libtiff_pkg "$codename")")
   packages+=("$(select_gdk_pixbuf_pkg "$codename")")
-
-  log "Updating apt package index."
-  ${SUDO:-} apt-get update
 
   log "Installing apt dependencies: ${packages[*]}"
   ${SUDO:-} apt-get install -y "${packages[@]}"
