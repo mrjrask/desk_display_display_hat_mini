@@ -7,7 +7,7 @@ APT_PACKAGES=(
   liblgpio-dev
   libopenjp2-7-dev libtiff5-dev libcairo2-dev libpango1.0-dev
   libgdk-pixbuf-2.0-dev libffi-dev network-manager wireless-tools
-  i2c-tools fonts-dejavu-core libgl1 libx264-dev ffmpeg git
+  i2c-tools fonts-dejavu-core fonts-noto-color-emoji libgl1 libx264-dev ffmpeg git
 )
 
 DEFAULT_REPO_URL="https://github.com/mrjrask/desk_display.git"
