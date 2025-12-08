@@ -39,7 +39,7 @@ A tiny, always‑on scoreboard and info display that runs on a Raspberry Pi and 
   sudo apt-get update
   sudo apt-get install -y \
       python3-venv python3-pip python3-dev python3-opencv \
-      build-essential libjpeg-dev libopenblas0 libopenblas-dev \
+      build-essential libjpeg-dev libopenblas0 libopenblas-dev swig \
       libopenjp2-7-dev libtiff5-dev libcairo2-dev libpango1.0-dev \
       libgdk-pixbuf-2.0-dev libffi-dev network-manager wireless-tools \
       i2c-tools fonts-dejavu-core libgl1 libx264-dev ffmpeg git
@@ -48,6 +48,10 @@ A tiny, always‑on scoreboard and info display that runs on a Raspberry Pi and 
   > **Note:** Debian Trixie removed the legacy Xlib-flavoured package that used the
   > older `libgdk-pixbuf2.0-dev` name. Users on Bookworm or earlier may still see the
   > transitional package in documentation or when resolving dependencies.
+
+  > **SWIG required:** The `lgpio` dependency is built from source on Raspberry Pi OS
+  > images. Ensure `swig` is installed (included in the apt list above) to avoid
+  > build failures when installing `requirements.txt`.
 
   Create and activate a virtual environment before installing the Python dependencies:
 
