@@ -464,8 +464,10 @@ NBA_FALLBACK_LOGO  = os.path.join(NBA_IMAGES_DIR, "NBA.png")
 CENTRAL_TIME = pytz.timezone("America/Chicago")
 
 # ─── Fonts ────────────────────────────────────────────────────────────────────
-# Drop your TimesSquare-m105.ttf, DejaVuSans.ttf, DejaVuSans-Bold.ttf and
-# NotoColorEmoji.ttf into a new folder named `fonts` alongside this file.
+# Drop your TimesSquare-m105.ttf, DejaVuSans.ttf, and DejaVuSans-Bold.ttf into
+# a folder named `fonts` alongside this file. Emoji glyphs are provided by the
+# system Noto Color Emoji font (installed via package managers) or another
+# system emoji font fallback.
 FONTS_DIR = os.path.join(SCRIPT_DIR, "fonts")
 
 def _load_font(name, size):
@@ -632,6 +634,15 @@ def _load_emoji_font(size: int) -> ImageFont.ImageFont:
                     native_size,
                     exc,
                 )
+
+    noto_system_paths = glob.glob(
+        "/usr/share/fonts/**/NotoColorEmoji.ttf", recursive=True
+    )
+    for path in noto_system_paths:
+        try:
+            return ImageFont.truetype(path, size)
+        except OSError as exc:
+            logging.debug("Unable to load system emoji font %s: %s", path, exc)
 
     symbola_paths = glob.glob("/usr/share/fonts/**/*.ttf", recursive=True)
     for path in symbola_paths:

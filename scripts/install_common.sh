@@ -79,7 +79,7 @@ install_apt_packages() {
     liblgpio-dev
     libopenjp2-7-dev libcairo2-dev libpango1.0-dev
     libffi-dev network-manager wireless-tools swig
-    i2c-tools fonts-dejavu-core libgl1 libx264-dev ffmpeg git
+    i2c-tools fonts-dejavu-core fonts-noto-color-emoji libgl1 libx264-dev ffmpeg git
   )
 
   local packages=("${shared_packages[@]}")

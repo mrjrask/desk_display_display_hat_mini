@@ -42,7 +42,7 @@ A tiny, always‑on scoreboard and info display that runs on a Raspberry Pi and 
       build-essential libjpeg-dev libopenblas0 libopenblas-dev swig liblgpio-dev \
       libopenjp2-7-dev libtiff5-dev libcairo2-dev libpango1.0-dev \
       libgdk-pixbuf-2.0-dev libffi-dev network-manager wireless-tools \
-      i2c-tools fonts-dejavu-core libgl1 libx264-dev ffmpeg git
+      i2c-tools fonts-dejavu-core fonts-noto-color-emoji libgl1 libx264-dev ffmpeg git
   ```
 
   > **Note:** Debian Trixie removed the legacy Xlib-flavoured package that used the
@@ -151,8 +151,7 @@ desk_display/
 └─ fonts/
    ├─ TimesSquare-m105.ttf
    ├─ DejaVuSans.ttf
-   ├─ DejaVuSans-Bold.ttf
-   └─ NotoColorEmoji.ttf
+   └─ DejaVuSans-Bold.ttf
 ```
 
 ---
@@ -337,10 +336,10 @@ Or copy `.env.example` to `.env` and load it with your preferred process manager
 - **MLB logos:** put team PNGs into `images/mlb/` named with your abbreviations (e.g., `CUBS.png`, `MIL.png`).
 - **NFL logos:** for the Bears screen, `images/nfl/<abbr>.png` (e.g., `gb.png`, `min.png`).
 - **Cubs W/L flag:** use `images/W_flag.webp` and `images/L_flag.webp` (animated). If missing, the code falls back to `images/mlb/W.png` / `images/mlb/L.png`.
-- **Fonts:** copy `TimesSquare-m105.ttf`, `DejaVuSans.ttf`, `DejaVuSans-Bold.ttf`, and `NotoColorEmoji.ttf` into `fonts/`.
+- **Fonts:** copy `TimesSquare-m105.ttf`, `DejaVuSans.ttf`, and `DejaVuSans-Bold.ttf` into `fonts/`.
 - **Travel font:** the Google Maps travel screen loads `HWYGNRRW.TTF` (Highway Gothic) directly from `fonts/`. Without this
   file the app will exit on startup, so copy your licensed copy into that folder alongside the other fonts.
-- **Emoji font:** `NotoColorEmoji.ttf` is used by default; if unavailable, install the Symbola font (package `ttf-ancient-fonts` on Debian/Ubuntu) or place `Symbola.ttf` in your system font directory so precipitation/cloud icons render correctly.
+- **Emoji font:** the app prefers the system `fonts-noto-color-emoji` package for emoji glyphs. If unavailable, install the Symbola font (`ttf-ancient-fonts` on Debian/Ubuntu) or place `Symbola.ttf` in your system font directory so precipitation/cloud icons render correctly.
 
 ---
 
