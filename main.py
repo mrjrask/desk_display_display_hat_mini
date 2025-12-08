@@ -615,17 +615,17 @@ def load_logo(fn, height=LOGO_SCREEN_HEIGHT):
         logging.warning(f"Logo load failed '{fn}': {e}")
         return None
 
-cubs_logo   = load_logo("cubs.jpg", height=TEAM_LOGO_HEIGHT)
-hawks_logo  = load_logo("hawks.jpg", height=TEAM_LOGO_HEIGHT)
+cubs_logo   = load_logo("mlb/CUBS.png", height=TEAM_LOGO_HEIGHT)
+hawks_logo  = load_logo("nhl/CHI.png", height=TEAM_LOGO_HEIGHT)
 bulls_logo  = load_logo("nba/CHI.png", height=TEAM_LOGO_HEIGHT)
-sox_logo    = load_logo("sox.jpg", height=TEAM_LOGO_HEIGHT)
+sox_logo    = load_logo("mlb/SOX.png", height=TEAM_LOGO_HEIGHT)
 weather_img = load_logo("weather.jpg")
-mlb_logo    = load_logo("mlb.jpg")
+mlb_logo    = load_logo("mlb/MLB.png")
 nba_logo    = load_logo("nba/NBA.png")
 nhl_logo    = load_logo("nhl/nhl.png") or load_logo("nhl/NHL.png")
 nfl_logo    = load_logo("nfl/nfl.png")
 verano_img  = load_logo("verano.jpg")
-bears_logo  = load_logo("bears.png")
+bears_logo  = load_logo("nfl/chi.png")
 _WOLVES_TRI = (AHL_TEAM_TRICODE or "CHI").strip() or "CHI"
 wolves_logo = None
 for variant in {_WOLVES_TRI.upper(), _WOLVES_TRI.lower()}:
