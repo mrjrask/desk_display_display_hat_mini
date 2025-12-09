@@ -882,6 +882,34 @@ def _mix_color(color: Tuple[int, int, int], target: Tuple[int, int, int], factor
     factor = max(0.0, min(1.0, factor))
     return tuple(int(round(color[idx] * (1 - factor) + target[idx] * factor)) for idx in range(3))
 
+
+def _interpolate_color(
+    stops: Sequence[Tuple[float, Tuple[int, int, int]]],
+    value: float,
+) -> Tuple[int, int, int]:
+    """Linearly interpolate *value* across a gradient defined by *stops*.
+
+    ``stops`` should contain ``(position, color)`` pairs sorted by position in the
+    inclusive range ``[0.0, 1.0]``. Values outside the range are clamped to the
+    nearest stop.
+    """
+
+    if not stops:
+        return (0, 0, 0)
+
+    value = max(0.0, min(1.0, value))
+
+    previous_pos, previous_color = stops[0]
+    for pos, color in stops[1:]:
+        if value <= pos:
+            span = pos - previous_pos or 1e-6
+            alpha = (value - previous_pos) / span
+            return _mix_color(previous_color, color, alpha)
+        previous_pos, previous_color = pos, color
+
+    return stops[-1][1]
+
+
 def _draw_temperature_panel(
     img: Image.Image,
     draw: ImageDraw.ImageDraw,
@@ -1145,6 +1173,91 @@ def _draw_metric_row(
     draw.text((value_x, value_y), value, font=value_font, fill=value_color)
 
 
+def _draw_voc_tile(
+    draw: ImageDraw.ImageDraw,
+    rect: Tuple[int, int, int, int],
+    label: str,
+    value: str,
+    descriptor: str,
+    score: float,
+    label_base,
+    value_base,
+) -> None:
+    x0, y0, x1, y1 = rect
+    width = max(1, x1 - x0)
+    height = max(1, y1 - y0)
+    radius = max(10, min(20, min(width, height) // 4))
+
+    bg = _voc_quality_color(score)
+    outline = _mix_color(bg, config.INSIDE_COL_BG, 0.25)
+    draw.rounded_rectangle(rect, radius=radius, fill=bg, outline=outline, width=1)
+
+    padding_x = max(12, width // 12)
+    padding_y = max(8, height // 10)
+
+    label_base_size = getattr(label_base, "size", 18)
+    label_font = fit_font(
+        draw,
+        label,
+        label_base,
+        max_width=width - 2 * padding_x,
+        max_height=max(12, int(height * 0.24)),
+        min_pt=min(label_base_size, 10),
+        max_pt=label_base_size,
+    )
+    label_w, label_h = measure_text(draw, label, label_font)
+    label_x = x0 + padding_x
+    label_y = y0 + padding_y
+
+    descriptor = descriptor.strip()
+    has_descriptor = bool(descriptor)
+    if has_descriptor:
+        desc_font = fit_font(
+            draw,
+            descriptor,
+            label_base,
+            max_width=width - 2 * padding_x,
+            max_height=max(12, int(height * 0.22)),
+            min_pt=min(label_base_size, 10),
+            max_pt=label_base_size,
+        )
+        desc_w, desc_h = measure_text(draw, descriptor, desc_font)
+        desc_x = x0 + padding_x
+        desc_y = y1 - padding_y - desc_h
+    else:
+        desc_font = None
+        desc_w, desc_h = 0, 0
+        desc_x = x0 + padding_x
+        desc_y = y1 - padding_y
+
+    available_value_height = max(24, height - (label_h + desc_h + 3 * padding_y))
+    value_base_size = getattr(value_base, "size", 24)
+    value_font = fit_font(
+        draw,
+        value,
+        value_base,
+        max_width=width - 2 * padding_x,
+        max_height=available_value_height,
+        min_pt=min(value_base_size, 14),
+        max_pt=value_base_size,
+    )
+    value_w, value_h = measure_text(draw, value, value_font)
+    value_x = x0 + padding_x
+    value_y = max(label_y + label_h + max(8, height // 14), y0 + (height - value_h) // 2)
+    if has_descriptor:
+        max_value_y = desc_y - max(8, height // 16) - value_h
+        value_y = min(value_y, max_value_y)
+
+    label_color = _mix_color(bg, config.INSIDE_COL_TEXT, 0.3)
+    value_color = config.INSIDE_COL_TEXT
+    desc_color = _mix_color(bg, config.INSIDE_COL_TEXT, 0.32)
+
+    draw.text((label_x, label_y), label, font=label_font, fill=label_color)
+    draw.text((value_x, value_y), value, font=value_font, fill=value_color)
+    if has_descriptor and desc_font:
+        draw.text((desc_x, desc_y), descriptor, font=desc_font, fill=desc_color)
+
+
 def _metric_grid_dimensions(count: int) -> Tuple[int, int]:
     if count <= 0:
         return 0, 0
@@ -1159,23 +1272,18 @@ def _metric_grid_dimensions(count: int) -> Tuple[int, int]:
     return columns, rows
 
 
-def _draw_metric_rows(
-    draw: ImageDraw.ImageDraw,
-    rect: Tuple[int, int, int, int],
-    metrics: Sequence[Dict[str, Any]],
-    label_base,
-    value_base,
-) -> None:
+def _metric_grid_cells(
+    rect: Tuple[int, int, int, int], count: int
+) -> List[Tuple[int, int, int, int]]:
     x0, y0, x1, y1 = rect
-    count = len(metrics)
     width = max(0, x1 - x0)
     height = max(0, y1 - y0)
     if count <= 0 or width <= 0 or height <= 0:
-        return
+        return []
 
     columns, rows = _metric_grid_dimensions(count)
     if columns <= 0 or rows <= 0:
-        return
+        return []
 
     if columns > 1:
         desired_h_gap = max(8, width // 30)
@@ -1208,7 +1316,8 @@ def _draw_metric_rows(
     start_x = x0 + max(0, (width - grid_width) // 2)
     start_y = y0 + max(0, (height - grid_height) // 2)
 
-    for index, metric in enumerate(metrics):
+    cells: List[Tuple[int, int, int, int]] = []
+    for index in range(count):
         row = index // columns
         col = index % columns
         left = start_x + col * (cell_width + h_gap)
@@ -1217,9 +1326,27 @@ def _draw_metric_rows(
         bottom = min(y1, top + cell_height)
         if right <= left or bottom <= top:
             continue
+        cells.append((left, top, right, bottom))
+
+    return cells
+
+
+def _draw_metric_rows(
+    draw: ImageDraw.ImageDraw,
+    rect: Tuple[int, int, int, int],
+    metrics: Sequence[Dict[str, Any]],
+    label_base,
+    value_base,
+    *,
+    cells: Optional[Sequence[Tuple[int, int, int, int]]] = None,
+) -> None:
+    count = len(metrics)
+    cell_rects = list(cells) if cells is not None else _metric_grid_cells(rect, count)
+
+    for metric, cell_rect in zip(metrics, cell_rects):
         _draw_metric_row(
             draw,
-            (left, top, right, bottom),
+            cell_rect,
             metric["label"],
             metric["value"],
             metric["color"],
@@ -1278,6 +1405,52 @@ def _format_generic_metric_value(key: str, value: float) -> str:
     if magnitude >= 10:
         return f"{value:.1f}"
     return f"{value:.2f}"
+
+
+def _voc_quality_score(value: Optional[float], scale: str) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        numeric = float(value)
+    except Exception:
+        return None
+    if not math.isfinite(numeric):
+        return None
+
+    if scale == "index":
+        normalized = 1.0 - max(0.0, min(numeric, 500.0)) / 500.0
+    else:
+        clean_min = 5_000.0
+        clean_max = 800_000.0
+        numeric = max(1.0, numeric)
+        normalized = (
+            math.log10(numeric) - math.log10(clean_min)
+        ) / (math.log10(clean_max) - math.log10(clean_min))
+
+    return max(0.0, min(1.0, normalized))
+
+
+def _voc_quality_color(score: float) -> Tuple[int, int, int]:
+    gradient = (
+        (0.0, (190, 38, 44)),
+        (0.25, (225, 118, 32)),
+        (0.5, (230, 198, 64)),
+        (0.75, (38, 184, 132)),
+        (1.0, (64, 156, 255)),
+    )
+    return _interpolate_color(gradient, score)
+
+
+def _describe_voc(score: float) -> str:
+    if score >= 0.82:
+        return "Excellent air"
+    if score >= 0.64:
+        return "Good air"
+    if score >= 0.46:
+        return "Fair air"
+    if score >= 0.28:
+        return "Poor air"
+    return "Very poor"
 
 # ── Main render ──────────────────────────────────────────────────────────────
 def _clean_metric(value: Optional[float]) -> Optional[float]:
@@ -1356,6 +1529,29 @@ def _build_metric_entries(data: Dict[str, Optional[float]]) -> List[Dict[str, An
     return metrics
 
 
+def _build_voc_tile(data: Dict[str, Optional[float]], provider: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not provider or "Pimoroni BME68" not in provider:
+        return None
+
+    voc_index = data.get("voc_index")
+    voc_ohms = data.get("voc_ohms")
+
+    scale = "index" if voc_index is not None else "ohms"
+    value = voc_index if voc_index is not None else voc_ohms
+    if value is None:
+        return None
+
+    score = _voc_quality_score(value, scale)
+    if score is None:
+        return None
+
+    descriptor = _describe_voc(score)
+    label = "VOC Index" if scale == "index" else "VOC"
+    display_value = f"{value:.0f}" if scale == "index" else format_voc_ohms(value)
+
+    return dict(label=label, value=display_value, descriptor=descriptor, score=score)
+
+
 def draw_inside(display, transition: bool=False):
     provider, read_fn = _probe_sensor()
     if not read_fn:
@@ -1384,6 +1580,9 @@ def draw_inside(display, transition: bool=False):
         return None
 
     metrics = _build_metric_entries(cleaned)
+    voc_tile = _build_voc_tile(cleaned, provider)
+    if voc_tile:
+        metrics = [m for m in metrics if not m["label"].lower().startswith("voc")]
 
     # Title text
     title = "Inside"
@@ -1460,7 +1659,7 @@ def draw_inside(display, transition: bool=False):
     content_bottom = H - bottom_margin
     content_height = max(1, content_bottom - content_top)
 
-    metric_count = len(metrics)
+    metric_count = len(metrics) + (1 if voc_tile else 0)
     _, grid_rows = _metric_grid_dimensions(metric_count)
     if metric_count:
         temp_ratio = max(0.42, 0.58 - 0.03 * min(metric_count, 6))
@@ -1502,14 +1701,37 @@ def draw_inside(display, transition: bool=False):
         label_base,
     )
 
-    if metrics:
+    if metric_count:
         metrics_rect = (
             side_pad,
             min(content_bottom, temp_rect[3] + metric_block_gap),
             W - side_pad,
             content_bottom,
         )
-        _draw_metric_rows(draw, metrics_rect, metrics, label_base, value_base)
+        total_tiles = metric_count
+        cells = _metric_grid_cells(metrics_rect, total_tiles)
+        metric_cells = cells[: len(metrics)] if metrics else []
+        if metrics and metric_cells:
+            _draw_metric_rows(
+                draw,
+                metrics_rect,
+                metrics,
+                label_base,
+                value_base,
+                cells=metric_cells,
+            )
+        if voc_tile and cells:
+            voc_rect = cells[-1]
+            _draw_voc_tile(
+                draw,
+                voc_rect,
+                voc_tile["label"],
+                voc_tile["value"],
+                voc_tile["descriptor"],
+                voc_tile["score"],
+                label_base,
+                value_base,
+            )
 
     if transition:
         return img
