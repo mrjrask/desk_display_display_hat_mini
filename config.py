@@ -642,7 +642,19 @@ def _load_emoji_font(size: int) -> ImageFont.ImageFont:
         try:
             return ImageFont.truetype(path, size)
         except OSError as exc:
+            message = str(exc).lower()
             logging.debug("Unable to load system emoji font %s: %s", path, exc)
+            if "invalid pixel size" in message:
+                for native_size in (109, 128, 160):
+                    try:
+                        return _BitmapEmojiFont(path, native_size, size)
+                    except OSError as inner_exc:
+                        logging.debug(
+                            "Unable to load system bitmap emoji font %s at native size %s: %s",
+                            path,
+                            native_size,
+                            inner_exc,
+                        )
 
     symbola_paths = glob.glob("/usr/share/fonts/**/*.ttf", recursive=True)
     for path in symbola_paths:
