@@ -15,8 +15,13 @@ Screen 2:
 """
 
 import datetime
+import logging
+import math
+import time
+from io import BytesIO
 from typing import Optional, Tuple
 
+import requests
 from PIL import Image, ImageDraw
 
 from config import (
@@ -32,6 +37,9 @@ from config import (
     FONT_EMOJI_SMALL,
     WEATHER_ICON_SIZE,
     WEATHER_DESC_GAP,
+    HOURLY_FORECAST_HOURS,
+    LATITUDE,
+    LONGITUDE,
 )
 from utils import (
     LED_INDICATOR_LEVEL,
@@ -57,6 +65,23 @@ ALERT_ICON_COLORS = {
     "watch": (255, 165, 0),
     "hazard": (255, 215, 0),
 }
+
+
+def _pop_pct_from(entry):
+    if not isinstance(entry, dict):
+        return None
+    pop_raw = entry.get("pop")
+    if pop_raw is None:
+        pop_raw = entry.get("probabilityOfPrecipitation")
+    if pop_raw is None:
+        return None
+    try:
+        pop_val = float(pop_raw)
+    except Exception:
+        return None
+    if 0 <= pop_val <= 1:
+        pop_val *= 100
+    return int(round(pop_val))
 
 
 def _normalise_alerts(weather: object) -> list:
@@ -173,22 +198,6 @@ def draw_weather_screen_1(display, weather, transition=False):
         cloud_cover = int(round(float(cloud_cover)))
     except Exception:
         cloud_cover = None
-
-    def _pop_pct_from(entry):
-        if not isinstance(entry, dict):
-            return None
-        pop_raw = entry.get("pop")
-        if pop_raw is None:
-            pop_raw = entry.get("probabilityOfPrecipitation")
-        if pop_raw is None:
-            return None
-        try:
-            pop_val = float(pop_raw)
-        except Exception:
-            return None
-        if 0 <= pop_val <= 1:
-            pop_val *= 100
-        return int(round(pop_val))
 
     pop_pct = None
     next_hour = None
@@ -330,6 +339,121 @@ def draw_weather_screen_1(display, weather, transition=False):
     return None
 
 
+def _format_hour_label(timestamp: Optional[int], *, index: int) -> str:
+    dt = timestamp_to_datetime(timestamp, CENTRAL_TIME)
+    if dt:
+        return dt.strftime("%-I%p").lower()
+    return f"+{index}h"
+
+
+def _normalise_condition(hour: dict) -> str:
+    if not isinstance(hour, dict):
+        return ""
+    weather_list = hour.get("weather") if isinstance(hour.get("weather"), list) else []
+    if weather_list:
+        main_val = weather_list[0].get("main") or weather_list[0].get("description")
+        if isinstance(main_val, str) and main_val.strip():
+            return main_val.title()
+    return ""
+
+
+def _gather_hourly_forecast(weather: object, hours: int) -> list[dict]:
+    if not isinstance(weather, dict):
+        return []
+    hourly = weather.get("hourly") if isinstance(weather.get("hourly"), list) else []
+    forecast = []
+    for idx, hour in enumerate(hourly[:hours]):
+        if not isinstance(hour, dict):
+            continue
+        entry = {
+            "temp": round(hour.get("temp", 0)),
+            "time": _format_hour_label(hour.get("dt"), index=idx + 1),
+            "condition": _normalise_condition(hour),
+            "icon": None,
+            "pop": _pop_pct_from(hour),
+        }
+        weather_list = hour.get("weather") if isinstance(hour.get("weather"), list) else []
+        if weather_list:
+            entry["icon"] = weather_list[0].get("icon")
+        forecast.append(entry)
+    return forecast
+
+
+@log_call
+def draw_weather_hourly(display, weather, transition: bool = False, hours: int = HOURLY_FORECAST_HOURS):
+    forecast = _gather_hourly_forecast(weather, hours)
+    if not forecast:
+        img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+        draw = ImageDraw.Draw(img)
+        msg = "No hourly data"
+        w, h = draw.textsize(msg, font=FONT_WEATHER_DETAILS_BOLD)
+        draw.text(((WIDTH - w) // 2, (HEIGHT - h) // 2), msg, font=FONT_WEATHER_DETAILS_BOLD, fill=(255, 255, 255))
+        return ScreenImage(img, displayed=False)
+
+    clear_display(display)
+    img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    draw = ImageDraw.Draw(img)
+
+    hours_to_show = len(forecast)
+    title = f"Next {hours_to_show} Hours"
+    title_w, title_h = draw.textsize(title, font=FONT_WEATHER_LABEL)
+    draw.text(((WIDTH - title_w) // 2, 2), title, font=FONT_WEATHER_LABEL, fill=(200, 200, 200))
+
+    col_w = max(1, WIDTH // hours_to_show)
+    icon_cache: dict[str, Optional[Image.Image]] = {}
+    icon_size = max(24, min(WEATHER_ICON_SIZE, col_w - 12))
+
+    for idx, hour in enumerate(forecast):
+        cx = idx * col_w + col_w // 2
+        y_cursor = title_h + 8
+
+        time_label = hour.get("time", "")
+        time_w, time_h = draw.textsize(time_label, font=FONT_WEATHER_DETAILS_BOLD)
+        draw.text((cx - time_w // 2, y_cursor), time_label, font=FONT_WEATHER_DETAILS_BOLD, fill=(255, 255, 255))
+        y_cursor += time_h + 6
+
+        icon_code = hour.get("icon")
+        icon_img = None
+        if icon_code:
+            if icon_code not in icon_cache:
+                icon_cache[icon_code] = fetch_weather_icon(icon_code, icon_size)
+            icon_img = icon_cache[icon_code]
+
+        if icon_img:
+            img.paste(icon_img, (cx - icon_size // 2, y_cursor), icon_img)
+            y_cursor += icon_size + 4
+        else:
+            condition = hour.get("condition", "")
+            if condition:
+                display_text = condition
+                cond_w, cond_h = draw.textsize(display_text, font=FONT_WEATHER_DETAILS)
+                while cond_w > col_w - 6 and len(display_text) > 3:
+                    display_text = display_text[:-1]
+                    cond_w, cond_h = draw.textsize(display_text + "…", font=FONT_WEATHER_DETAILS)
+                if display_text != condition:
+                    display_text = display_text + "…"
+                    cond_w, cond_h = draw.textsize(display_text, font=FONT_WEATHER_DETAILS)
+                draw.text((cx - cond_w // 2, y_cursor), display_text, font=FONT_WEATHER_DETAILS, fill=(180, 180, 255))
+                y_cursor += cond_h + 4
+
+        pop = hour.get("pop")
+        if pop is not None:
+            pop_str = f"💧 {max(0, min(pop, 100))}%"
+            pop_w, pop_h = draw.textsize(pop_str, font=FONT_WEATHER_DETAILS)
+            draw.text((cx - pop_w // 2, HEIGHT - 32), pop_str, font=FONT_WEATHER_DETAILS, fill=(135, 206, 250))
+
+        temp_str = f"{hour.get('temp', 0)}°"
+        temp_w, temp_h = draw.textsize(temp_str, font=FONT_WEATHER_DETAILS_BOLD)
+        draw.text((cx - temp_w // 2, HEIGHT - temp_h - 6), temp_str, font=FONT_WEATHER_DETAILS_BOLD, fill=(255, 255, 255))
+
+    if transition:
+        return ScreenImage(img, displayed=False)
+
+    display.image(img)
+    display.show()
+    return None
+
+
 # ─── Screen 2: Detailed (with UV index) ───────────────────────────────────────
 def draw_weather_screen_2(display, weather, transition=False):
     if not weather:
@@ -417,4 +541,88 @@ def draw_weather_screen_2(display, weather, transition=False):
             _render_screen()
     else:
         _render_screen()
+    return None
+
+
+def _latlon_to_tile(lat: float, lon: float, zoom: int) -> tuple[int, int, float, float]:
+    lat_rad = math.radians(lat)
+    n = 2 ** zoom
+    x_float = (lon + 180.0) / 360.0 * n
+    y_float = (1.0 - math.log(math.tan(lat_rad) + 1.0 / math.cos(lat_rad)) / math.pi) / 2.0 * n
+    x_tile = int(x_float)
+    y_tile = int(y_float)
+    return x_tile, y_tile, x_float - x_tile, y_float - y_tile
+
+
+def _fetch_radar_frames(zoom: int = 6, max_frames: int = 6) -> list[Image.Image]:
+    try:
+        meta_resp = requests.get(
+            "https://api.rainviewer.com/public/weather-maps.json", timeout=6
+        )
+        meta_resp.raise_for_status()
+        metadata = meta_resp.json()
+    except Exception as exc:
+        logging.warning("Radar metadata fetch failed: %s", exc)
+        return []
+
+    host = metadata.get("host", "https://tilecache.rainviewer.com")
+    radar_info = metadata.get("radar") or {}
+    frames = (radar_info.get("past") or []) + (radar_info.get("nowcast") or [])
+    frames = frames[-max_frames:]
+
+    x_tile, y_tile, x_offset, y_offset = _latlon_to_tile(LATITUDE, LONGITUDE, zoom)
+    images: list[Image.Image] = []
+
+    for frame in frames:
+        path = frame.get("path") if isinstance(frame, dict) else None
+        if not path:
+            continue
+        url = f"{host}{path}256/{zoom}/{x_tile}/{y_tile}/2/1_1.png"
+        try:
+            tile_resp = requests.get(url, timeout=6)
+            tile_resp.raise_for_status()
+            tile = Image.open(BytesIO(tile_resp.content)).convert("RGBA")
+        except Exception as exc:  # pragma: no cover - network failures are non-fatal
+            logging.warning("Radar tile fetch failed: %s", exc)
+            continue
+
+        frame_img = Image.new("RGBA", tile.size, (0, 0, 0, 255))
+        frame_img.alpha_composite(tile)
+        marker_x = int((x_offset or 0.5) * tile.width)
+        marker_y = int((y_offset or 0.5) * tile.height)
+        draw = ImageDraw.Draw(frame_img)
+        draw.ellipse((marker_x - 3, marker_y - 3, marker_x + 3, marker_y + 3), fill=(255, 0, 0, 255))
+
+        final_frame = frame_img.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGB")
+        images.append(final_frame)
+
+    return images
+
+
+@log_call
+def draw_weather_radar(display, weather=None, transition: bool = False):
+    frames = _fetch_radar_frames()
+    if not frames:
+        img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+        draw = ImageDraw.Draw(img)
+        msg = "Radar unavailable"
+        w, h = draw.textsize(msg, font=FONT_WEATHER_DETAILS_BOLD)
+        draw.text(((WIDTH - w) // 2, (HEIGHT - h) // 2), msg, font=FONT_WEATHER_DETAILS_BOLD, fill=(255, 255, 255))
+        return ScreenImage(img, displayed=False)
+
+    clear_display(display)
+    loops = 2
+    delay = 0.5
+    for _ in range(loops):
+        for frame in frames:
+            display.image(frame)
+            display.show()
+            time.sleep(delay)
+
+    last_frame = frames[-1]
+    if transition:
+        return ScreenImage(last_frame, displayed=True)
+
+    display.image(last_frame)
+    display.show()
     return None

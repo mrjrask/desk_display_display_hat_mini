@@ -33,7 +33,12 @@ from screens.draw_inside import draw_inside
 from screens.draw_sensors import draw_sensors
 from screens.draw_travel_time import draw_travel_time_screen
 from screens.draw_vrnof import draw_vrnof_screen
-from screens.draw_weather import draw_weather_screen_1, draw_weather_screen_2
+from screens.draw_weather import (
+    draw_weather_hourly,
+    draw_weather_radar,
+    draw_weather_screen_1,
+    draw_weather_screen_2,
+)
 from screens.draw_date_time import draw_date, draw_time
 from screens.mlb_schedule import (
     draw_box_score,
@@ -199,6 +204,16 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         "weather2",
         lambda data=weather_data: draw_weather_screen_2(context.display, data, transition=True),
         available=bool(weather_data),
+    )
+    register(
+        "weather hourly",
+        lambda data=weather_data: draw_weather_hourly(context.display, data, transition=True),
+        available=bool(weather_data),
+    )
+    register(
+        "weather radar",
+        lambda: draw_weather_radar(context.display, weather_data, transition=True),
+        available=True,
     )
     register("inside", lambda: draw_inside(context.display, transition=True))
     register("sensors", lambda: draw_sensors(context, transition=True))
