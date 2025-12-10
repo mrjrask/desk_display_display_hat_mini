@@ -5,6 +5,8 @@
     "weather logo": 0,
     "weather1": 1,
     "weather2": 1,
+    "weather hourly": 1,
+    "weather radar": 1,
     "inside": 1,
     "sensors": 0,
     "verano logo": 0,
