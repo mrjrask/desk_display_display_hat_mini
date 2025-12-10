@@ -286,6 +286,18 @@ def _probe_pimoroni_bme68x(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
         temp_c = _extract_field(data, "temperature")
         hum = _extract_field(data, "humidity")
         pres_raw = _extract_field(data, "pressure")
+
+        voc_index = None
+        bsec_data = getattr(data, "bsec_data", None)
+        if bsec_data is None and isinstance(data, dict):
+            bsec_data = data.get("bsec_data")
+
+        if isinstance(bsec_data, dict):
+            voc_index = _extract_field(bsec_data, "breath_voc_equivalent")
+
+        if voc_index is None:
+            voc_index = _extract_field(data, "breath_voc_equivalent")
+
         voc_raw = _extract_field(data, "gas_resistance")
 
         temp_f = temp_c * 9 / 5 + 32 if temp_c is not None else None
@@ -294,6 +306,7 @@ def _probe_pimoroni_bme68x(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
             raise RuntimeError(f"BME68X pressure sanity check failed: {pres_hpa:.1f} hPa")
 
         voc = voc_raw if voc_raw not in (None, 0) else None
+        voc_index = voc_index if voc_index not in (None, 0) else None
 
         if temp_f is None:
             raise RuntimeError("BME68X temperature reading missing")
@@ -304,6 +317,7 @@ def _probe_pimoroni_bme68x(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
             pressure_inhg=pres,
             pressure_hpa=pres_hpa,
             voc_ohms=voc,
+            voc_index=voc_index,
         )
 
     return provider, read

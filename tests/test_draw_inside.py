@@ -1,6 +1,5 @@
 import math
 
-
 from screens.draw_inside import (
     _build_metric_entries,
     _build_voc_tile,
@@ -35,3 +34,13 @@ def test_build_voc_tile_includes_bme680_providers():
     assert voc_tile, "Expected VOC tile to be built when VOC data is present"
     assert voc_tile["label"] == "VOC"
     assert "kΩ" in voc_tile["value"]
+
+
+def test_build_voc_tile_uses_bsec_voc_index():
+    data = {"voc_index": 125.0}
+
+    voc_tile = _build_voc_tile(data, "Pimoroni BME688")
+
+    assert voc_tile, "Expected VOC tile to render from BSEC VOC index"
+    assert voc_tile["label"] == "VOC Index"
+    assert voc_tile["value"].startswith("125")
