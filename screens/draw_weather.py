@@ -403,11 +403,11 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
     available_width = WIDTH - gap * (hours_to_show + 1)
     col_w = max(1, available_width // hours_to_show)
     icon_cache: dict[str, Optional[Image.Image]] = {}
-    icon_size = max(28, min(WEATHER_ICON_SIZE, col_w - 14))
+    icon_size = max(32, min(WEATHER_ICON_SIZE, col_w - 10))
 
     card_top = title_h + 6
-    card_bottom = HEIGHT - 4
-    content_height = card_bottom - card_top - 12
+    card_bottom = HEIGHT - 6
+    card_height = card_bottom - card_top
     x_start = (WIDTH - (hours_to_show * col_w + gap * (hours_to_show - 1))) // 2
 
     for idx, hour in enumerate(forecast):
@@ -422,12 +422,17 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
             outline=(40, 40, 60),
         )
 
-        y_cursor = card_top + 6
         time_label = hour.get("time", "")
         time_w, time_h = draw.textsize(time_label, font=FONT_WEATHER_DETAILS_BOLD)
-        draw.text((cx - time_w // 2, y_cursor), time_label, font=FONT_WEATHER_DETAILS_BOLD, fill=(235, 235, 235))
-        y_cursor += time_h + 4
+        draw.text((cx - time_w // 2, card_top + 6), time_label, font=FONT_WEATHER_DETAILS_BOLD, fill=(235, 235, 235))
 
+        temp_str = f"{hour.get('temp', 0)}°"
+        temp_w, temp_h = draw.textsize(temp_str, font=FONT_CONDITION)
+        temp_y = card_top + 8 + time_h
+        draw.text((cx - temp_w // 2, temp_y), temp_str, font=FONT_CONDITION, fill=(255, 255, 255))
+
+        icon_area_top = temp_y + temp_h + 4
+        icon_area_bottom = card_top + int(card_height * 0.6)
         icon_code = hour.get("icon")
         icon_img = None
         if icon_code:
@@ -436,8 +441,8 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
             icon_img = icon_cache[icon_code]
 
         if icon_img:
-            img.paste(icon_img, (cx - icon_size // 2, y_cursor), icon_img)
-            y_cursor += icon_size + 6
+            icon_y = icon_area_top + max(0, (icon_area_bottom - icon_area_top - icon_size) // 2)
+            img.paste(icon_img, (cx - icon_size // 2, icon_y), icon_img)
         else:
             condition = hour.get("condition", "")
             if condition:
@@ -449,16 +454,17 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
                 if display_text != condition:
                     display_text = display_text + "…"
                     cond_w, cond_h = draw.textsize(display_text, font=FONT_WEATHER_DETAILS)
-                draw.text((cx - cond_w // 2, y_cursor), display_text, font=FONT_WEATHER_DETAILS, fill=(170, 180, 240))
-                y_cursor += cond_h + 6
+                cond_y = icon_area_top + max(0, (icon_area_bottom - icon_area_top - cond_h) // 2)
+                draw.text((cx - cond_w // 2, cond_y), display_text, font=FONT_WEATHER_DETAILS, fill=(170, 180, 240))
 
         pop = hour.get("pop")
         if pop is not None:
             clamped_pop = max(0, min(pop, 100))
-            bar_height = max(4, int(content_height * clamped_pop / 100))
+            bar_max_height = int(card_height * 0.22)
+            bar_height = max(4, int(bar_max_height * clamped_pop / 100))
             bar_x0 = x0 + 4
             bar_x1 = bar_x0 + 8
-            bar_y1 = card_bottom - 6
+            bar_y1 = card_bottom - 8
             bar_y0 = bar_y1 - bar_height
             draw.rounded_rectangle(
                 (bar_x0, bar_y0, bar_x1, bar_y1),
@@ -470,9 +476,6 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
             pop_w, pop_h = draw.textsize(pop_str, font=FONT_WEATHER_DETAILS)
             draw.text((bar_x0 + (bar_x1 - bar_x0 - pop_w) // 2, bar_y0 - pop_h - 2), pop_str, font=FONT_WEATHER_DETAILS, fill=(135, 206, 250))
 
-        temp_str = f"{hour.get('temp', 0)}°"
-        temp_w, temp_h = draw.textsize(temp_str, font=FONT_WEATHER_DETAILS_BOLD)
-        draw.text((cx - temp_w // 2, card_bottom - temp_h - 6), temp_str, font=FONT_WEATHER_DETAILS_BOLD, fill=(255, 255, 255))
 
     if transition:
         return ScreenImage(img, displayed=False)
@@ -582,7 +585,7 @@ def _latlon_to_tile(lat: float, lon: float, zoom: int) -> tuple[int, int, float,
     return x_tile, y_tile, x_float - x_tile, y_float - y_tile
 
 
-def _fetch_radar_frames(zoom: int = 6, max_frames: int = 6) -> list[Image.Image]:
+def _fetch_radar_frames(zoom: int = 7, max_frames: int = 6) -> list[Image.Image]:
     try:
         meta_resp = requests.get(
             "https://api.rainviewer.com/public/weather-maps.json", timeout=6
@@ -629,9 +632,30 @@ def _fetch_radar_frames(zoom: int = 6, max_frames: int = 6) -> list[Image.Image]
     return images
 
 
+def _fetch_base_map(zoom: int = 7) -> Optional[Image.Image]:
+    try:
+        x_tile, y_tile, x_offset, y_offset = _latlon_to_tile(LATITUDE, LONGITUDE, zoom)
+        url = f"https://tile.openstreetmap.org/{zoom}/{x_tile}/{y_tile}.png"
+        resp = requests.get(url, timeout=6)
+        resp.raise_for_status()
+        tile = Image.open(BytesIO(resp.content)).convert("RGBA")
+    except Exception as exc:  # pragma: no cover - network failures are non-fatal
+        logging.warning("Base map fetch failed: %s", exc)
+        return None
+
+    marker_x = int((x_offset or 0.5) * tile.width)
+    marker_y = int((y_offset or 0.5) * tile.height)
+    draw = ImageDraw.Draw(tile)
+    draw.ellipse((marker_x - 3, marker_y - 3, marker_x + 3, marker_y + 3), fill=(255, 64, 64, 255), outline=(255, 255, 255, 255))
+    draw.text((marker_x + 6, marker_y - 8), "You", font=FONT_WEATHER_DETAILS, fill=(255, 255, 255, 255))
+    return tile.convert("RGB")
+
+
 @log_call
 def draw_weather_radar(display, weather=None, transition: bool = False):
-    frames = _fetch_radar_frames()
+    zoom_level = 7
+    frames = _fetch_radar_frames(zoom=zoom_level)
+    base_map = _fetch_base_map(zoom=zoom_level)
     if not frames:
         img = Image.new("RGB", (WIDTH, HEIGHT), "black")
         draw = ImageDraw.Draw(img)
@@ -643,13 +667,33 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
     clear_display(display)
     loops = 2
     delay = 0.5
+    radar_height = int(HEIGHT * 0.65)
+    separator_y = radar_height
+    map_section = None
+    if base_map:
+        map_section = base_map.resize((WIDTH, HEIGHT - radar_height), Image.LANCZOS)
+
+    def _compose_frame(frame: Image.Image) -> Image.Image:
+        if map_section is None:
+            return frame
+        combined = Image.new("RGB", (WIDTH, HEIGHT), "black")
+        radar_resized = frame.resize((WIDTH, radar_height), Image.LANCZOS)
+        combined.paste(radar_resized, (0, 0))
+        combined.paste(map_section, (0, radar_height))
+        draw = ImageDraw.Draw(combined)
+        draw.line((0, separator_y, WIDTH, separator_y), fill=(60, 60, 60))
+        draw.text((4, radar_height + 4), "Map overview", font=FONT_WEATHER_DETAILS_BOLD, fill=(220, 220, 220))
+        return combined
+
+    composed_frames = [_compose_frame(frame) for frame in frames]
+
     for _ in range(loops):
-        for frame in frames:
+        for frame in composed_frames:
             display.image(frame)
             display.show()
             time.sleep(delay)
 
-    last_frame = frames[-1]
+    last_frame = composed_frames[-1]
     if transition:
         return ScreenImage(last_frame, displayed=True)
 
