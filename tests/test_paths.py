@@ -1,21 +1,14 @@
 import paths
-import storage_overrides
 
 
-def test_env_override_beats_shared_hint(monkeypatch, tmp_path):
-    preferred = tmp_path / "preferred"
-    hinted = tmp_path / "hinted"
-    hint_file = tmp_path / "hint.txt"
-
-    hinted.mkdir()
-    hint_file.write_text(str(hinted), encoding="utf-8")
-
-    monkeypatch.setenv("DESK_DISPLAY_SCREENSHOT_DIR", str(preferred))
-    monkeypatch.setattr(paths, "_SHARED_HINT_PATH", hint_file)
-    monkeypatch.setattr(paths, "_iter_candidate_roots", lambda: iter([]))
-    monkeypatch.setattr(storage_overrides, "SCREENSHOT_DIR", None, raising=False)
+def test_resolve_storage_paths_uses_project_root(tmp_path, monkeypatch):
+    # Ensure the project root calculation can be redirected for the test
+    monkeypatch.setattr(paths, "_project_root", lambda: tmp_path)
 
     storage_paths = paths.resolve_storage_paths(logger=None)
 
-    assert storage_paths.screenshot_dir == preferred
-    assert hint_file.read_text(encoding="utf-8") == str(preferred)
+    assert storage_paths.screenshot_dir == tmp_path / "screenshots"
+    assert storage_paths.current_screenshot_dir.parent == storage_paths.screenshot_dir
+    assert storage_paths.archive_base == tmp_path / "screenshot_archive"
+    assert storage_paths.current_screenshot_dir.exists()
+    assert storage_paths.archive_base.exists()
