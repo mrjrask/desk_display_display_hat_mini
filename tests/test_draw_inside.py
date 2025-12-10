@@ -1,7 +1,11 @@
 import math
 
 
-from screens.draw_inside import _build_metric_entries, _normalize_pressure
+from screens.draw_inside import (
+    _build_metric_entries,
+    _build_voc_tile,
+    _normalize_pressure,
+)
 
 
 def test_normalize_pressure_returns_hpa_and_inhg():
@@ -21,3 +25,13 @@ def test_build_metric_entries_prefers_inhg():
     first_metric = metrics[0]
     assert first_metric["label"] == "Pressure"
     assert "inHg" in first_metric["value"]
+
+
+def test_build_voc_tile_includes_bme680_providers():
+    data = {"voc_ohms": 12_000.0}
+
+    voc_tile = _build_voc_tile(data, "Adafruit BME680")
+
+    assert voc_tile, "Expected VOC tile to be built when VOC data is present"
+    assert voc_tile["label"] == "VOC"
+    assert "kΩ" in voc_tile["value"]
