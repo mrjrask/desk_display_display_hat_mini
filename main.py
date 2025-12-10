@@ -855,24 +855,34 @@ def main_loop():
                     continue
                 continue
 
+            already_displayed = False
+            led_override = None
+            img = None
+
             if result is None:
-                logging.info("Screen '%s' returned no image.", sid)
+                logging.info(
+                    "Screen '%s' returned no image; using current display buffer for outputs.",
+                    sid,
+                )
+                current = getattr(display, "current_image", None)
+                if isinstance(current, Image.Image):
+                    img = current.copy()
+                    already_displayed = True
+            elif isinstance(result, ScreenImage):
+                img = result.image
+                already_displayed = result.displayed
+                led_override = result.led_override
+            elif isinstance(result, Image.Image):
+                img = result
+
+            if img is None:
+                logging.info("Screen '%s' produced no drawable image.", sid)
                 gc.collect()
                 if _shutdown_event.is_set():
                     break
                 if _wait_with_button_checks(SCREEN_DELAY):
                     continue
                 continue
-
-            already_displayed = False
-            led_override = None
-            img = None
-            if isinstance(result, ScreenImage):
-                img = result.image
-                already_displayed = result.displayed
-                led_override = result.led_override
-            elif isinstance(result, Image.Image):
-                img = result
 
             skip_delay = False
             led_context = (

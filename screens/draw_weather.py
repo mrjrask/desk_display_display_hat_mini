@@ -399,18 +399,34 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
     title_w, title_h = draw.textsize(title, font=FONT_WEATHER_LABEL)
     draw.text(((WIDTH - title_w) // 2, 2), title, font=FONT_WEATHER_LABEL, fill=(200, 200, 200))
 
-    col_w = max(1, WIDTH // hours_to_show)
+    gap = 4
+    available_width = WIDTH - gap * (hours_to_show + 1)
+    col_w = max(1, available_width // hours_to_show)
     icon_cache: dict[str, Optional[Image.Image]] = {}
-    icon_size = max(24, min(WEATHER_ICON_SIZE, col_w - 12))
+    icon_size = max(28, min(WEATHER_ICON_SIZE, col_w - 14))
+
+    card_top = title_h + 6
+    card_bottom = HEIGHT - 4
+    content_height = card_bottom - card_top - 12
+    x_start = (WIDTH - (hours_to_show * col_w + gap * (hours_to_show - 1))) // 2
 
     for idx, hour in enumerate(forecast):
-        cx = idx * col_w + col_w // 2
-        y_cursor = title_h + 8
+        x0 = x_start + idx * (col_w + gap)
+        x1 = x0 + col_w
+        cx = (x0 + x1) // 2
 
+        draw.rounded_rectangle(
+            (x0, card_top, x1, card_bottom),
+            radius=6,
+            fill=(18, 18, 28),
+            outline=(40, 40, 60),
+        )
+
+        y_cursor = card_top + 6
         time_label = hour.get("time", "")
         time_w, time_h = draw.textsize(time_label, font=FONT_WEATHER_DETAILS_BOLD)
-        draw.text((cx - time_w // 2, y_cursor), time_label, font=FONT_WEATHER_DETAILS_BOLD, fill=(255, 255, 255))
-        y_cursor += time_h + 6
+        draw.text((cx - time_w // 2, y_cursor), time_label, font=FONT_WEATHER_DETAILS_BOLD, fill=(235, 235, 235))
+        y_cursor += time_h + 4
 
         icon_code = hour.get("icon")
         icon_img = None
@@ -421,30 +437,42 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
 
         if icon_img:
             img.paste(icon_img, (cx - icon_size // 2, y_cursor), icon_img)
-            y_cursor += icon_size + 4
+            y_cursor += icon_size + 6
         else:
             condition = hour.get("condition", "")
             if condition:
                 display_text = condition
                 cond_w, cond_h = draw.textsize(display_text, font=FONT_WEATHER_DETAILS)
-                while cond_w > col_w - 6 and len(display_text) > 3:
+                while cond_w > col_w - 10 and len(display_text) > 3:
                     display_text = display_text[:-1]
                     cond_w, cond_h = draw.textsize(display_text + "…", font=FONT_WEATHER_DETAILS)
                 if display_text != condition:
                     display_text = display_text + "…"
                     cond_w, cond_h = draw.textsize(display_text, font=FONT_WEATHER_DETAILS)
-                draw.text((cx - cond_w // 2, y_cursor), display_text, font=FONT_WEATHER_DETAILS, fill=(180, 180, 255))
-                y_cursor += cond_h + 4
+                draw.text((cx - cond_w // 2, y_cursor), display_text, font=FONT_WEATHER_DETAILS, fill=(170, 180, 240))
+                y_cursor += cond_h + 6
 
         pop = hour.get("pop")
         if pop is not None:
-            pop_str = f"💧 {max(0, min(pop, 100))}%"
+            clamped_pop = max(0, min(pop, 100))
+            bar_height = max(4, int(content_height * clamped_pop / 100))
+            bar_x0 = x0 + 4
+            bar_x1 = bar_x0 + 8
+            bar_y1 = card_bottom - 6
+            bar_y0 = bar_y1 - bar_height
+            draw.rounded_rectangle(
+                (bar_x0, bar_y0, bar_x1, bar_y1),
+                radius=3,
+                fill=(60, 150, 210),
+                outline=None,
+            )
+            pop_str = f"{clamped_pop}%"
             pop_w, pop_h = draw.textsize(pop_str, font=FONT_WEATHER_DETAILS)
-            draw.text((cx - pop_w // 2, HEIGHT - 32), pop_str, font=FONT_WEATHER_DETAILS, fill=(135, 206, 250))
+            draw.text((bar_x0 + (bar_x1 - bar_x0 - pop_w) // 2, bar_y0 - pop_h - 2), pop_str, font=FONT_WEATHER_DETAILS, fill=(135, 206, 250))
 
         temp_str = f"{hour.get('temp', 0)}°"
         temp_w, temp_h = draw.textsize(temp_str, font=FONT_WEATHER_DETAILS_BOLD)
-        draw.text((cx - temp_w // 2, HEIGHT - temp_h - 6), temp_str, font=FONT_WEATHER_DETAILS_BOLD, fill=(255, 255, 255))
+        draw.text((cx - temp_w // 2, card_bottom - temp_h - 6), temp_str, font=FONT_WEATHER_DETAILS_BOLD, fill=(255, 255, 255))
 
     if transition:
         return ScreenImage(img, displayed=False)
@@ -577,7 +605,9 @@ def _fetch_radar_frames(zoom: int = 6, max_frames: int = 6) -> list[Image.Image]
         path = frame.get("path") if isinstance(frame, dict) else None
         if not path:
             continue
-        url = f"{host}{path}256/{zoom}/{x_tile}/{y_tile}/2/1_1.png"
+        url = (
+            f"{host.rstrip('/')}/{path.strip('/')}/256/{zoom}/{x_tile}/{y_tile}/2/1_1.png"
+        )
         try:
             tile_resp = requests.get(url, timeout=6)
             tile_resp.raise_for_status()
