@@ -366,12 +366,26 @@ def _gather_hourly_forecast(weather: object, hours: int) -> list[dict]:
     for idx, hour in enumerate(hourly[:hours]):
         if not isinstance(hour, dict):
             continue
+        wind_speed = None
+        try:
+            wind_speed = int(round(float(hour.get("wind_speed", 0))))
+        except Exception:
+            wind_speed = None
+        wind_dir = wind_direction(hour.get("wind_deg")) if hour.get("wind_deg") is not None else ""
+        uvi_val = None
+        try:
+            uvi_val = int(round(float(hour.get("uvi", 0))))
+        except Exception:
+            uvi_val = None
         entry = {
             "temp": round(hour.get("temp", 0)),
             "time": _format_hour_label(hour.get("dt"), index=idx + 1),
             "condition": _normalise_condition(hour),
             "icon": None,
             "pop": _pop_pct_from(hour),
+            "wind_speed": wind_speed,
+            "wind_dir": wind_dir,
+            "uvi": uvi_val,
         }
         weather_list = hour.get("weather") if isinstance(hour.get("weather"), list) else []
         if weather_list:
@@ -458,14 +472,17 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
                 cond_y = icon_area_top + max(0, (icon_area_bottom - icon_area_top - cond_h) // 2)
                 draw.text((cx - cond_w // 2, cond_y), display_text, font=FONT_WEATHER_DETAILS, fill=(170, 180, 240))
 
+        stat_area_top = card_bottom - 50
+        draw.line((x0 + 6, stat_area_top, x1 - 6, stat_area_top), fill=(50, 50, 80), width=1)
+
         pop = hour.get("pop")
         if pop is not None:
             clamped_pop = max(0, min(pop, 100))
-            bar_max_height = int(card_height * 0.22)
+            bar_max_height = int((card_height * 0.22))
             bar_height = max(4, int(bar_max_height * clamped_pop / 100))
-            bar_x0 = x0 + 4
-            bar_x1 = bar_x0 + 8
-            bar_y1 = card_bottom - 8
+            bar_x0 = x0 + 6
+            bar_x1 = bar_x0 + 10
+            bar_y1 = card_bottom - 10
             bar_y0 = bar_y1 - bar_height
             draw.rounded_rectangle(
                 (bar_x0, bar_y0, bar_x1, bar_y1),
@@ -475,7 +492,28 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
             )
             pop_str = f"{clamped_pop}%"
             pop_w, pop_h = draw.textsize(pop_str, font=FONT_WEATHER_DETAILS)
-            draw.text((bar_x0 + (bar_x1 - bar_x0 - pop_w) // 2, bar_y0 - pop_h - 2), pop_str, font=FONT_WEATHER_DETAILS, fill=(135, 206, 250))
+            draw.text((bar_x0 + (bar_x1 - bar_x0 - pop_w) // 2, bar_y0 - pop_h - 4), pop_str, font=FONT_WEATHER_DETAILS, fill=(135, 206, 250))
+            drop_w, drop_h = draw.textsize("💧", font=FONT_EMOJI_SMALL)
+            draw.text((bar_x0 + (bar_x1 - bar_x0 - drop_w) // 2, bar_y1 + 2), "💧", font=FONT_EMOJI_SMALL, fill=(90, 190, 255))
+
+        stat_text_x = x0 + 22
+        stat_text_width = x1 - stat_text_x - 6
+
+        wind_speed = hour.get("wind_speed")
+        wind_dir = hour.get("wind_dir", "") or ""
+        if wind_speed is not None:
+            wind_text = f"{wind_speed} mph"
+            if wind_dir:
+                wind_text = f"{wind_text} {wind_dir}"
+            wind_w, wind_h = draw.textsize(wind_text, font=FONT_WEATHER_DETAILS)
+            draw.text((stat_text_x + (stat_text_width - wind_w) // 2, stat_area_top + 6), wind_text, font=FONT_WEATHER_DETAILS_BOLD, fill=(180, 225, 255))
+
+        uvi_val = hour.get("uvi")
+        if uvi_val is not None:
+            uv_color = uv_index_color(uvi_val)
+            uv_text = f"UV {uvi_val}"
+            uv_w, uv_h = draw.textsize(uv_text, font=FONT_WEATHER_DETAILS)
+            draw.text((stat_text_x + (stat_text_width - uv_w) // 2, stat_area_top + 24), uv_text, font=FONT_WEATHER_DETAILS, fill=uv_color)
 
 
     if transition:

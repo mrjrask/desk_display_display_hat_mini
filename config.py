@@ -187,14 +187,14 @@ WIDTH                    = 320
 HEIGHT                   = 240
 SCREEN_DELAY             = 4
 try:
-    HOURLY_FORECAST_HOURS = int(os.environ.get("HOURLY_FORECAST_HOURS", "6"))
+    HOURLY_FORECAST_HOURS = int(os.environ.get("HOURLY_FORECAST_HOURS", "5"))
     if HOURLY_FORECAST_HOURS < 1:
         HOURLY_FORECAST_HOURS = 1
 except (TypeError, ValueError):
     logging.warning(
-        "Invalid HOURLY_FORECAST_HOURS value; defaulting to 6 hours."
+        "Invalid HOURLY_FORECAST_HOURS value; defaulting to 5 hours."
     )
-    HOURLY_FORECAST_HOURS = 6
+    HOURLY_FORECAST_HOURS = 5
 if HOURLY_FORECAST_HOURS > 12:
     HOURLY_FORECAST_HOURS = 12
 try:
