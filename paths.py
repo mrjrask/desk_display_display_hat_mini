@@ -2,12 +2,12 @@ from __future__ import annotations
 
 """Shared helpers for locating writable storage directories."""
 
-import socket
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 APP_DIR_NAME = "desk_display_display_hat_mini"
+_SHARED_HINT_PATH = Path(__file__).resolve().parent / ".data_dir_hint"
 
 
 @dataclass(frozen=True)
@@ -23,25 +23,19 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parent
 
 
-def _hostname() -> str:
-    return socket.gethostname()
-
-
 def resolve_storage_paths(*, logger: Optional[object] = None) -> StoragePaths:
     """Return filesystem paths for screenshots and archives.
 
     Screenshots always write to ``<project_root>/screenshots`` and archives live
-    in ``<project_root>/screenshot_archive``. A ``<hostname>current`` folder
-    mirrors the latest capture for each screen.
+    in ``<project_root>/screenshot_archive``. A ``current`` folder mirrors the
+    latest capture for each screen.
     """
 
     base_dir = _project_root()
     screenshot_dir = base_dir / "screenshots"
     archive_base = base_dir / "screenshot_archive"
 
-    hostname = _hostname()
-    current_name = f"{hostname}current" if hostname else "current"
-    current_screenshot_dir = screenshot_dir / current_name
+    current_screenshot_dir = screenshot_dir / "current"
 
     screenshot_dir.mkdir(parents=True, exist_ok=True)
     current_screenshot_dir.mkdir(parents=True, exist_ok=True)
