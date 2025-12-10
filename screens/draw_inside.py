@@ -1530,9 +1530,6 @@ def _build_metric_entries(data: Dict[str, Optional[float]]) -> List[Dict[str, An
 
 
 def _build_voc_tile(data: Dict[str, Optional[float]], provider: Optional[str]) -> Optional[Dict[str, Any]]:
-    if not provider or "Pimoroni BME68" not in provider:
-        return None
-
     voc_index = data.get("voc_index")
     voc_ohms = data.get("voc_ohms")
 
