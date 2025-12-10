@@ -425,6 +425,9 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
     card_height = card_bottom - card_top
     x_start = (WIDTH - (hours_to_show * col_w + gap * (hours_to_show - 1))) // 2
 
+    card_layouts = []
+    temps = []
+
     for idx, hour in enumerate(forecast):
         x0 = x_start + idx * (col_w + gap)
         x1 = x0 + col_w
@@ -439,15 +442,83 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
 
         time_label = hour.get("time", "")
         time_w, time_h = draw.textsize(time_label, font=FONT_WEATHER_DETAILS_BOLD)
+
+        trend_area_top = card_top + 6 + time_h + 6
+        trend_area_bottom = card_top + int(card_height * 0.4)
+        if trend_area_bottom - trend_area_top < 16:
+            trend_area_bottom = trend_area_top + 16
+
+        icon_area_top = trend_area_bottom + 6
+        icon_area_bottom = card_top + int(card_height * 0.68)
+
+        stat_area_top = icon_area_bottom + 8
+        stat_area_bottom = card_bottom - 6
+
+        card_layouts.append(
+            {
+                "hour": hour,
+                "x0": x0,
+                "x1": x1,
+                "cx": cx,
+                "time_label": time_label,
+                "time_size": (time_w, time_h),
+                "trend_area": (trend_area_top, trend_area_bottom),
+                "icon_area": (icon_area_top, icon_area_bottom),
+                "stat_area": (stat_area_top, stat_area_bottom),
+            }
+        )
+        temps.append(hour.get("temp", 0))
+
+    if temps:
+        min_temp = min(temps)
+        max_temp = max(temps)
+    else:
+        min_temp = max_temp = 0
+
+    temp_range = max(1, max_temp - min_temp)
+
+    for layout in card_layouts:
+        hour = layout["hour"]
+        x0, x1 = layout["x0"], layout["x1"]
+        cx = layout["cx"]
+        time_label = layout["time_label"]
+        time_w, time_h = layout["time_size"]
+        trend_top, trend_bottom = layout["trend_area"]
+        icon_area_top, icon_area_bottom = layout["icon_area"]
+        stat_area_top, stat_area_bottom = layout["stat_area"]
+        stat_area_height = max(1, stat_area_bottom - stat_area_top)
+
+        temp_val = hour.get("temp", 0)
+        temp_frac = (temp_val - min_temp) / temp_range
+        temp_y = int(trend_bottom - temp_frac * (trend_bottom - trend_top))
+        layout["temp_y"] = temp_y
+
         draw.text((cx - time_w // 2, card_top + 6), time_label, font=FONT_WEATHER_DETAILS_BOLD, fill=(235, 235, 235))
 
-        temp_str = f"{hour.get('temp', 0)}°"
-        temp_w, temp_h = draw.textsize(temp_str, font=FONT_CONDITION)
-        temp_y = card_top + 8 + time_h
-        draw.text((cx - temp_w // 2, temp_y), temp_str, font=FONT_CONDITION, fill=(255, 255, 255))
+    trend_points = [(layout["cx"], layout["temp_y"]) for layout in card_layouts]
+    if len(trend_points) > 1:
+        draw.line(trend_points, fill=(255, 160, 110), width=2)
 
-        icon_area_top = temp_y + temp_h + 4
-        icon_area_bottom = card_top + int(card_height * 0.6)
+    for layout in card_layouts:
+        hour = layout["hour"]
+        x0, x1 = layout["x0"], layout["x1"]
+        cx = layout["cx"]
+        trend_top, trend_bottom = layout["trend_area"]
+        icon_area_top, icon_area_bottom = layout["icon_area"]
+        stat_area_top, stat_area_bottom = layout["stat_area"]
+        stat_area_height = max(1, stat_area_bottom - stat_area_top)
+        temp_y = layout.get("temp_y", trend_bottom)
+
+        temp_val = hour.get("temp", 0)
+        temp_str = f"{temp_val}°"
+        temp_w, temp_h = draw.textsize(temp_str, font=FONT_CONDITION)
+        label_y = temp_y - temp_h - 4
+        if label_y < trend_top:
+            label_y = temp_y + 8
+        draw.text((cx - temp_w // 2, label_y), temp_str, font=FONT_CONDITION, fill=(255, 255, 255))
+
+        draw.ellipse((cx - 5, temp_y - 5, cx + 5, temp_y + 5), fill=(255, 120, 90), outline=(255, 200, 180))
+
         icon_code = hour.get("icon")
         icon_img = None
         if icon_code:
@@ -472,18 +543,17 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
                 cond_y = icon_area_top + max(0, (icon_area_bottom - icon_area_top - cond_h) // 2)
                 draw.text((cx - cond_w // 2, cond_y), display_text, font=FONT_WEATHER_DETAILS, fill=(170, 180, 240))
 
-        stat_area_top = card_bottom - 50
         draw.line((x0 + 6, stat_area_top, x1 - 6, stat_area_top), fill=(50, 50, 80), width=1)
 
         pop = hour.get("pop")
         if pop is not None:
             clamped_pop = max(0, min(pop, 100))
-            bar_max_height = int((card_height * 0.22))
+            bar_max_height = int(stat_area_height * 0.55)
             bar_height = max(4, int(bar_max_height * clamped_pop / 100))
             bar_x0 = x0 + 6
             bar_x1 = bar_x0 + 10
-            bar_y1 = card_bottom - 10
-            bar_y0 = bar_y1 - bar_height
+            bar_y0 = stat_area_top + (stat_area_height - bar_max_height) // 2 + (bar_max_height - bar_height)
+            bar_y1 = bar_y0 + bar_height
             draw.rounded_rectangle(
                 (bar_x0, bar_y0, bar_x1, bar_y1),
                 radius=3,
@@ -492,28 +562,38 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
             )
             pop_str = f"{clamped_pop}%"
             pop_w, pop_h = draw.textsize(pop_str, font=FONT_WEATHER_DETAILS)
-            draw.text((bar_x0 + (bar_x1 - bar_x0 - pop_w) // 2, bar_y0 - pop_h - 4), pop_str, font=FONT_WEATHER_DETAILS, fill=(135, 206, 250))
+            pop_y = max(stat_area_top, bar_y0 - pop_h - 4)
+            draw.text((bar_x0 + (bar_x1 - bar_x0 - pop_w) // 2, pop_y), pop_str, font=FONT_WEATHER_DETAILS, fill=(135, 206, 250))
             drop_w, drop_h = draw.textsize("💧", font=FONT_EMOJI_SMALL)
-            draw.text((bar_x0 + (bar_x1 - bar_x0 - drop_w) // 2, bar_y1 + 2), "💧", font=FONT_EMOJI_SMALL, fill=(90, 190, 255))
+            drop_y = min(stat_area_bottom - drop_h, bar_y1 + 2)
+            draw.text((bar_x0 + (bar_x1 - bar_x0 - drop_w) // 2, drop_y), "💧", font=FONT_EMOJI_SMALL, fill=(90, 190, 255))
 
         stat_text_x = x0 + 22
         stat_text_width = x1 - stat_text_x - 6
 
         wind_speed = hour.get("wind_speed")
         wind_dir = hour.get("wind_dir", "") or ""
+        stat_lines = []
         if wind_speed is not None:
             wind_text = f"{wind_speed} mph"
             if wind_dir:
                 wind_text = f"{wind_text} {wind_dir}"
-            wind_w, wind_h = draw.textsize(wind_text, font=FONT_WEATHER_DETAILS)
-            draw.text((stat_text_x + (stat_text_width - wind_w) // 2, stat_area_top + 6), wind_text, font=FONT_WEATHER_DETAILS_BOLD, fill=(180, 225, 255))
+            stat_lines.append((wind_text, FONT_WEATHER_DETAILS_BOLD, (180, 225, 255)))
 
         uvi_val = hour.get("uvi")
         if uvi_val is not None:
             uv_color = uv_index_color(uvi_val)
             uv_text = f"UV {uvi_val}"
-            uv_w, uv_h = draw.textsize(uv_text, font=FONT_WEATHER_DETAILS)
-            draw.text((stat_text_x + (stat_text_width - uv_w) // 2, stat_area_top + 24), uv_text, font=FONT_WEATHER_DETAILS, fill=uv_color)
+            stat_lines.append((uv_text, FONT_WEATHER_DETAILS, uv_color))
+
+        if stat_lines:
+            spacing = 6
+            total_text_h = sum(draw.textsize(text, font=font)[1] for text, font, _ in stat_lines) + spacing * (len(stat_lines) - 1)
+            text_y = stat_area_top + max(4, (stat_area_height - total_text_h) // 2)
+            for text, font, color in stat_lines:
+                text_w, text_h = draw.textsize(text, font=font)
+                draw.text((stat_text_x + (stat_text_width - text_w) // 2, text_y), text, font=font, fill=color)
+                text_y += text_h + spacing
 
 
     if transition:
