@@ -671,14 +671,26 @@ def _fetch_openweather_frame(zoom: int = 7) -> list[Image.Image]:
 
 
 def _fetch_base_map(zoom: int = 7) -> Optional[Image.Image]:
-    try:
-        x_tile, y_tile, x_offset, y_offset = _latlon_to_tile(LATITUDE, LONGITUDE, zoom)
-        url = f"https://tile.openstreetmap.org/{zoom}/{x_tile}/{y_tile}.png"
-        resp = requests.get(url, timeout=6)
-        resp.raise_for_status()
-        tile = Image.open(BytesIO(resp.content)).convert("RGBA")
-    except Exception as exc:  # pragma: no cover - network failures are non-fatal
-        logging.warning("Base map fetch failed: %s", exc)
+    x_tile, y_tile, x_offset, y_offset = _latlon_to_tile(LATITUDE, LONGITUDE, zoom)
+    headers = {
+        "User-Agent": "desk-display/1.0 (+https://github.com/lukemaryon/desk_display)",
+    }
+    tile_urls = [
+        f"https://tile.open-meteo.com/v1/osm/{zoom}/{x_tile}/{y_tile}.png",
+        f"https://tile.openstreetmap.org/{zoom}/{x_tile}/{y_tile}.png",
+    ]
+
+    tile: Optional[Image.Image] = None
+    for url in tile_urls:
+        try:
+            resp = requests.get(url, timeout=6, headers=headers)
+            resp.raise_for_status()
+            tile = Image.open(BytesIO(resp.content)).convert("RGBA")
+            break
+        except Exception as exc:  # pragma: no cover - network failures are non-fatal
+            logging.warning("Base map fetch failed from %s: %s", url, exc)
+
+    if tile is None:
         return None
 
     marker_x = int((x_offset or 0.5) * tile.width)
