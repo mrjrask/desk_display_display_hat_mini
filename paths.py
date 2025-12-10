@@ -66,14 +66,6 @@ def _write_shared_hint(path: Path, logger: Optional[logging.Logger]) -> None:
 
 
 def _iter_candidate_screenshot_dirs() -> Iterable[Path]:
-    env_override = os.environ.get("DESK_DISPLAY_SCREENSHOT_DIR")
-    if env_override:
-        yield _expand(env_override)
-
-    config_override = storage_overrides.SCREENSHOT_DIR
-    if config_override:
-        yield _expand(config_override)
-
     for root in _iter_candidate_roots():
         yield root / "screenshots"
 
@@ -109,6 +101,20 @@ def _hostname() -> str:
 
 
 def _select_screenshot_dir(logger: Optional[logging.Logger]) -> Path:
+    overrides = []
+    env_override = os.environ.get("DESK_DISPLAY_SCREENSHOT_DIR")
+    if env_override:
+        overrides.append(_expand(env_override))
+
+    config_override = storage_overrides.SCREENSHOT_DIR
+    if config_override:
+        overrides.append(_expand(config_override))
+
+    for override in overrides:
+        if _ensure_writable(override, logger):
+            _write_shared_hint(override, logger)
+            return override
+
     shared_hint = _read_shared_hint(logger)
     if shared_hint is not None:
         return shared_hint
