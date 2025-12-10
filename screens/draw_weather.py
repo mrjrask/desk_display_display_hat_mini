@@ -28,6 +28,7 @@ from config import (
     WIDTH,
     HEIGHT,
     CENTRAL_TIME,
+    OWM_API_KEY,
     FONT_TEMP,
     FONT_CONDITION,
     FONT_WEATHER_LABEL,
@@ -586,6 +587,14 @@ def _latlon_to_tile(lat: float, lon: float, zoom: int) -> tuple[int, int, float,
 
 
 def _fetch_radar_frames(zoom: int = 7, max_frames: int = 6) -> list[Image.Image]:
+    frames = _fetch_rainviewer_frames(zoom=zoom, max_frames=max_frames)
+    if frames:
+        return frames
+
+    return _fetch_openweather_frame(zoom=zoom)
+
+
+def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[Image.Image]:
     try:
         meta_resp = requests.get(
             "https://api.rainviewer.com/public/weather-maps.json", timeout=6
@@ -630,6 +639,35 @@ def _fetch_radar_frames(zoom: int = 7, max_frames: int = 6) -> list[Image.Image]
         images.append(final_frame)
 
     return images
+
+
+def _fetch_openweather_frame(zoom: int = 7) -> list[Image.Image]:
+    if not OWM_API_KEY:
+        logging.warning("Radar fallback requires OpenWeatherMap API key; skipping fetch")
+        return []
+
+    try:
+        x_tile, y_tile, x_offset, y_offset = _latlon_to_tile(LATITUDE, LONGITUDE, zoom)
+        url = (
+            "https://tile.openweathermap.org/map/precipitation_new/"
+            f"{zoom}/{x_tile}/{y_tile}.png?appid={OWM_API_KEY}"
+        )
+        resp = requests.get(url, timeout=6)
+        resp.raise_for_status()
+        tile = Image.open(BytesIO(resp.content)).convert("RGBA")
+    except Exception as exc:  # pragma: no cover - network failures are non-fatal
+        logging.warning("OpenWeather radar fetch failed: %s", exc)
+        return []
+
+    frame_img = Image.new("RGBA", tile.size, (0, 0, 0, 255))
+    frame_img.alpha_composite(tile)
+    marker_x = int((x_offset or 0.5) * tile.width)
+    marker_y = int((y_offset or 0.5) * tile.height)
+    draw = ImageDraw.Draw(frame_img)
+    draw.ellipse((marker_x - 3, marker_y - 3, marker_x + 3, marker_y + 3), fill=(255, 0, 0, 255))
+
+    final_frame = frame_img.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGB")
+    return [final_frame]
 
 
 def _fetch_base_map(zoom: int = 7) -> Optional[Image.Image]:
