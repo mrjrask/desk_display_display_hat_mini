@@ -488,6 +488,8 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
     if sensor_cls is None:
         raise RuntimeError(f"{module.__name__} is missing the BME280 class")
 
+    expected_chip_id = 0x60
+
     # Import SMBus for proper sensor initialization
     try:
         from smbus2 import SMBus
@@ -508,6 +510,14 @@ def _probe_pimoroni_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
     successful_addr: Optional[int] = None
     last_error: Optional[Exception] = None
     for addr in candidate_addresses:
+        chip_id = _read_chip_id(i2c, addr)
+        if chip_id is not None and chip_id != expected_chip_id:
+            logging.debug(
+                "draw_inside: skipping Pimoroni BME280 probe at 0x%02X due to chip ID 0x%02X",
+                addr,
+                chip_id,
+            )
+            continue
         try:
             candidate = sensor_cls(i2c_addr=addr, i2c_dev=bus)  # type: ignore[call-arg]
             try:
@@ -713,6 +723,17 @@ def _probe_adafruit_bme280(i2c: Any, addresses: Set[int]) -> Optional[SensorProb
     import adafruit_bme280  # type: ignore
 
     dev = adafruit_bme280.Adafruit_BME280_I2C(i2c)
+
+    expected_chip_id = 0x60
+
+    chip_id = _read_chip_id(i2c, getattr(dev, "address", 0x76))
+    if chip_id is not None and chip_id != expected_chip_id:
+        logging.debug(
+            "draw_inside: skipping Adafruit BME280 probe at 0x%02X due to chip ID 0x%02X",
+            getattr(dev, "address", 0x76),
+            chip_id,
+        )
+        return None
 
     def read() -> SensorReadings:
         temp_f = float(dev.temperature) * 9 / 5 + 32
