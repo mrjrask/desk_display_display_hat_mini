@@ -561,7 +561,14 @@ def _fetch_nhl_team_standings(team_abbr: str):
         resp.raise_for_status()
         payload = resp.json() or {}
         standings = payload.get("standings", []) or []
-        entry = next((row for row in standings if row.get("teamAbbrev") == team_abbr), None)
+        entry = None
+        for row in standings:
+            abbr = row.get("teamAbbrev")
+            if isinstance(abbr, dict):
+                abbr = abbr.get("default") or abbr.get("alternate")
+            if abbr == team_abbr:
+                entry = row
+                break
         if entry:
             record = {
                 "wins": _safe_int(entry.get("wins")),
@@ -739,32 +746,33 @@ def _fetch_nhl_team_standings_statsapi(team_abbr: str):
 
 def _fetch_nba_team_standings(team_tricode: str):
     def _load_json() -> Optional[dict]:
-        for base in (
-            "https://cdn.nba.com/static/json/liveData/standings",
-            "https://nba-prod-us-east-1-media.s3.amazonaws.com/json/liveData/standings",
-        ):
-            url = f"{base}/league.json"
-            try:
-                resp = _session.get(
-                    url,
-                    timeout=10,
-                    headers={
-                        "Origin": "https://www.nba.com",
-                        "Referer": "https://www.nba.com/",
-                    },
+        endpoints = {
+            "cdn": "https://cdn.nba.com/static/json/liveData/standings/league.json",
+            "espn": "https://site.web.api.espn.com/apis/v2/sports/basketball/nba/standings",
+        }
+
+        headers = {
+            "Origin": "https://www.nba.com",
+            "Referer": "https://www.nba.com/",
+            "User-Agent": "Mozilla/5.0 (compatible; DeskDisplay/1.0)",
+        }
+
+        # Try the NBA CDN first because it matches the data shape the rest of the
+        # parsing code expects. If it is blocked (403) or missing (404), fall back
+        # to ESPN without emitting warnings on every launch.
+        try:
+            resp = _session.get(endpoints["cdn"], timeout=10, headers=headers)
+            if resp.status_code == 403:
+                logging.info(
+                    "NBA CDN standings blocked (HTTP 403); using ESPN fallback instead"
                 )
-                if resp.status_code == 403:
-                    logging.warning("NBA standings returned HTTP 403 from %s", base)
-                    continue
+            else:
                 resp.raise_for_status()
-                data = resp.json() or {}
-                if data and base.endswith("s3.amazonaws.com/json/liveData/standings"):
-                    logging.info(
-                        "NBA standings fetched successfully from alternate base %s", base
-                    )
-                return data
-            except Exception as exc:
-                logging.error("Error fetching NBA standings from %s: %s", base, exc)
+                return resp.json() or {}
+        except Exception as exc:
+            logging.info("NBA CDN standings unavailable: %s", exc)
+
+        logging.info("Using ESPN NBA standings fallback")
         return _fetch_nba_team_standings_espn()
 
     payload = _load_json() or {}
