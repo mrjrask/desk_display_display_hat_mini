@@ -30,6 +30,8 @@ import subprocess
 from contextlib import nullcontext
 from typing import Callable, Dict, Optional, Set, Tuple
 
+os.environ.setdefault("CONFIG_LOAD_DOTENV", "1")
+
 gc = __import__('gc')
 
 from PIL import Image, ImageDraw
