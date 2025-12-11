@@ -34,6 +34,8 @@ from config import (
     FONT_WEATHER_LABEL,
     FONT_WEATHER_DETAILS,
     FONT_WEATHER_DETAILS_BOLD,
+    FONT_WEATHER_DETAILS_SMALL,
+    FONT_WEATHER_DETAILS_SMALL_BOLD,
     FONT_EMOJI,
     FONT_EMOJI_SMALL,
     WEATHER_ICON_SIZE,
@@ -358,6 +360,17 @@ def _normalise_condition(hour: dict) -> str:
     return ""
 
 
+def _wind_arrow(degrees: Optional[float]) -> str:
+    try:
+        deg_val = float(degrees)
+    except (TypeError, ValueError):
+        return ""
+
+    arrows = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"]
+    idx = int((deg_val % 360) / 45.0 + 0.5) % len(arrows)
+    return arrows[idx]
+
+
 def _gather_hourly_forecast(weather: object, hours: int) -> list[dict]:
     if not isinstance(weather, dict):
         return []
@@ -371,7 +384,9 @@ def _gather_hourly_forecast(weather: object, hours: int) -> list[dict]:
             wind_speed = int(round(float(hour.get("wind_speed", 0))))
         except Exception:
             wind_speed = None
-        wind_dir = wind_direction(hour.get("wind_deg")) if hour.get("wind_deg") is not None else ""
+        wind_dir = ""
+        if hour.get("wind_deg") is not None:
+            wind_dir = _wind_arrow(hour.get("wind_deg")) or wind_direction(hour.get("wind_deg"))
         uvi_val = None
         try:
             uvi_val = int(round(float(hour.get("uvi", 0))))
@@ -451,7 +466,7 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         icon_area_top = trend_area_bottom + 6
         icon_area_bottom = card_top + int(card_height * 0.68)
 
-        stat_area_top = icon_area_bottom + 8
+        stat_area_top = icon_area_bottom + 6
         stat_area_bottom = card_bottom - 6
 
         card_layouts.append(
@@ -495,10 +510,6 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
 
         draw.text((cx - time_w // 2, card_top + 6), time_label, font=FONT_WEATHER_DETAILS_BOLD, fill=(235, 235, 235))
 
-    trend_points = [(layout["cx"], layout["temp_y"]) for layout in card_layouts]
-    if len(trend_points) > 1:
-        draw.line(trend_points, fill=(255, 160, 110), width=2)
-
     for layout in card_layouts:
         hour = layout["hour"]
         x0, x1 = layout["x0"], layout["x1"]
@@ -512,12 +523,8 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         temp_val = hour.get("temp", 0)
         temp_str = f"{temp_val}°"
         temp_w, temp_h = draw.textsize(temp_str, font=FONT_CONDITION)
-        label_y = temp_y - temp_h - 4
-        if label_y < trend_top:
-            label_y = temp_y + 8
-        draw.text((cx - temp_w // 2, label_y), temp_str, font=FONT_CONDITION, fill=(255, 255, 255))
-
-        draw.ellipse((cx - 5, temp_y - 5, cx + 5, temp_y + 5), fill=(255, 120, 90), outline=(255, 200, 180))
+        temp_text_y = max(trend_top, min(trend_bottom - temp_h, temp_y - temp_h // 2))
+        draw.text((cx - temp_w // 2, temp_text_y), temp_str, font=FONT_CONDITION, fill=(255, 255, 255))
 
         icon_code = hour.get("icon")
         icon_img = None
@@ -561,9 +568,9 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
                 outline=None,
             )
             pop_str = f"{clamped_pop}%"
-            pop_w, pop_h = draw.textsize(pop_str, font=FONT_WEATHER_DETAILS)
+            pop_w, pop_h = draw.textsize(pop_str, font=FONT_WEATHER_DETAILS_SMALL_BOLD)
             pop_y = max(stat_area_top, bar_y0 - pop_h - 4)
-            draw.text((bar_x0 + (bar_x1 - bar_x0 - pop_w) // 2, pop_y), pop_str, font=FONT_WEATHER_DETAILS, fill=(135, 206, 250))
+            draw.text((bar_x0 + (bar_x1 - bar_x0 - pop_w) // 2, pop_y), pop_str, font=FONT_WEATHER_DETAILS_SMALL_BOLD, fill=(135, 206, 250))
             drop_w, drop_h = draw.textsize("💧", font=FONT_EMOJI_SMALL)
             drop_y = min(stat_area_bottom - drop_h, bar_y1 + 2)
             draw.text((bar_x0 + (bar_x1 - bar_x0 - drop_w) // 2, drop_y), "💧", font=FONT_EMOJI_SMALL, fill=(90, 190, 255))
@@ -578,18 +585,21 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
             wind_text = f"{wind_speed} mph"
             if wind_dir:
                 wind_text = f"{wind_text} {wind_dir}"
-            stat_lines.append((wind_text, FONT_WEATHER_DETAILS_BOLD, (180, 225, 255)))
+            stat_lines.append((wind_text, FONT_WEATHER_DETAILS_SMALL_BOLD, (180, 225, 255)))
 
         uvi_val = hour.get("uvi")
         if uvi_val is not None:
             uv_color = uv_index_color(uvi_val)
             uv_text = f"UV {uvi_val}"
-            stat_lines.append((uv_text, FONT_WEATHER_DETAILS, uv_color))
+            stat_lines.append((uv_text, FONT_WEATHER_DETAILS_SMALL, uv_color))
 
         if stat_lines:
-            spacing = 6
+            spacing = 2
             total_text_h = sum(draw.textsize(text, font=font)[1] for text, font, _ in stat_lines) + spacing * (len(stat_lines) - 1)
-            text_y = stat_area_top + max(4, (stat_area_height - total_text_h) // 2)
+            text_y = max(
+                stat_area_top + 2,
+                min(stat_area_top + max(0, (stat_area_height - total_text_h) // 2), stat_area_bottom - total_text_h - 2),
+            )
             for text, font, color in stat_lines:
                 text_w, text_h = draw.textsize(text, font=font)
                 draw.text((stat_text_x + (stat_text_width - text_w) // 2, text_y), text, font=font, fill=color)
