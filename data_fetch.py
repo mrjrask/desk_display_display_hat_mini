@@ -595,16 +595,23 @@ def _fetch_nhl_team_standings(team_abbr: str):
 
             streak_code = entry.get("streakCode") or _format_streak_code(entry.get("streakType"), entry.get("streakNumber"))
 
+            # Properly handle division and conference rankings
+            # Use Seq (sequence) if available and valid (> 0), otherwise fall back
+            div_seq = entry.get("divisionSeq")
+            div_rank = div_seq if (div_seq is not None and div_seq > 0) else entry.get("divisionRank")
+
+            conf_seq = entry.get("conferenceSeq")
+            conf_rank = conf_seq if (conf_seq is not None and conf_seq > 0) else entry.get("conferenceRank")
+
             return {
                 "leagueRecord": record,
-                "divisionRank": entry.get("divisionSeq") or entry.get("divisionRank"),
+                "divisionRank": div_rank,
                 "divisionGamesBack": None,
                 "wildCardGamesBack": None,
                 "streak": {"streakCode": streak_code or "-"},
                 "records": {"splitRecords": splits},
                 "points": entry.get("points"),
-                "conferenceRank": entry.get("conferenceSeq")
-                or entry.get("conferenceRank"),
+                "conferenceRank": conf_rank,
                 "conferenceName": entry.get("conferenceName")
                 or entry.get("conferenceAbbrev"),
             }
@@ -673,6 +680,12 @@ def _fetch_nhl_team_standings_espn(team_abbr: str):
             if division_rank in (None, ""):
                 division_rank = _stat(stats, "playoffSeed")
 
+            conference_rank = _stat(stats, "conferenceStanding")
+            if conference_rank in (None, ""):
+                conference_rank = _stat(stats, "conferenceRank")
+            if conference_rank in (None, ""):
+                conference_rank = _stat(stats, "playoffSeed")
+
             return {
                 "leagueRecord": {
                     "wins": _safe_int(_stat(stats, "wins")),
@@ -686,7 +699,7 @@ def _fetch_nhl_team_standings_espn(team_abbr: str):
                 "streak": {"streakCode": streak_code or "-"},
                 "records": {"splitRecords": []},
                 "points": _stat(stats, "points"),
-                "conferenceRank": _stat(stats, "playoffSeed"),
+                "conferenceRank": conference_rank,
             }
     except Exception as exc:
         logging.error("Error fetching NHL standings (ESPN fallback) for %s: %s", team_abbr, exc)
