@@ -170,36 +170,37 @@ def _render_precip_icon(is_snow: bool, size: int, color: Tuple[int, int, int]) -
         # Draw a smooth water droplet shape
         center_x = size / 2
 
-        # Create points for a smooth teardrop using parametric curves
+        # Create a teardrop using a circle at the bottom and curved sides to a point at top
         points = []
-        num_points = 24
+        num_points = 32
 
-        # Top half - creates the pointed tip and curved sides
+        # Bottom circular portion (lower 60% is round)
+        bottom_center_y = size * 0.65
+        radius = size * 0.35
+
+        # Create the rounded bottom and sides
         for i in range(num_points + 1):
-            t = i / num_points
-            # Parametric teardrop curve
-            angle = math.pi * (1 - t) + math.pi
-            r = size * 0.35 * (1 - 0.7 * math.cos(angle / 2))
-            x = center_x + r * math.sin(angle)
-            y = size * (0.15 + 0.75 * t)
+            # Angle from -135 to +135 degrees (270 degrees total, leaving top open)
+            angle = math.radians(-135 + (270 * i / num_points))
+            x = center_x + radius * math.cos(angle)
+            y = bottom_center_y + radius * math.sin(angle)
+
+            # For the upper portion, taper to the point at top
+            if y < bottom_center_y - radius * 0.5:
+                # Smoothly narrow towards the top point
+                taper_factor = (bottom_center_y - radius - y) / (radius * 1.5)
+                taper_factor = max(0, min(1, taper_factor))
+                x = center_x + (x - center_x) * (1 - taper_factor * 0.7)
+                y = max(size * 0.1, y)
+
             points.append((x, y))
 
-        # Draw the filled droplet shape
+        # Add the pointed top
+        points.insert(len(points) // 2, (center_x, size * 0.1))
+
+        # Draw the filled droplet
         if len(points) > 2:
             icon_draw.polygon(points, fill=color)
-
-        # Add a highlight ellipse for a glossy effect (optional, makes it look nicer)
-        highlight_color = tuple(min(255, int(c * 1.3)) for c in color[:3])
-        highlight_size = size * 0.15
-        icon_draw.ellipse(
-            (
-                center_x - highlight_size / 2,
-                size * 0.35,
-                center_x + highlight_size / 2,
-                size * 0.35 + highlight_size * 0.8,
-            ),
-            fill=highlight_color,
-        )
 
     return icon
 
@@ -655,10 +656,12 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         if pop is not None:
             clamped_pop = max(0, min(pop, 100))
             is_snow = hour.get("is_snow", False)
-            precip_label = "Snow" if is_snow else "Rain"
             precip_color = (173, 216, 230) if is_snow else (135, 206, 250)
-            pop_text = f"{precip_label} {clamped_pop}%"
-            stat_items.append((pop_text, FONT_WEATHER_DETAILS_TINY, precip_color))
+            pop_text = f"{clamped_pop}%"
+            # Render small precipitation icon
+            precip_icon_size = 10
+            precip_icon = _render_precip_icon(is_snow, precip_icon_size, precip_color)
+            stat_items.append((pop_text, FONT_WEATHER_DETAILS_TINY, precip_color, precip_icon))
 
         uvi_val = hour.get("uvi")
         if uvi_val is not None:
@@ -668,11 +671,31 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
 
         if stat_items:
             slots = len(stat_items) + 1
-            for idx, (text, font, color) in enumerate(stat_items, start=1):
+            for idx, item in enumerate(stat_items, start=1):
+                # Support both (text, font, color) and (text, font, color, icon)
+                if len(item) == 4:
+                    text, font, color, icon = item
+                else:
+                    text, font, color = item
+                    icon = None
+
                 text_w, text_h = draw.textsize(text, font=font)
                 text_y = int(stat_area_top + (stat_area_height * idx / slots) - text_h / 2)
                 text_y = max(stat_area_top, min(text_y, stat_area_bottom - text_h))
-                draw.text((cx - text_w // 2, text_y), text, font=font, fill=color)
+
+                if icon:
+                    # Render icon + text side by side
+                    icon_w, icon_h = icon.size
+                    gap = 2
+                    total_w = icon_w + gap + text_w
+                    icon_x = cx - total_w // 2
+                    text_x = icon_x + icon_w + gap
+                    icon_y = text_y + (text_h - icon_h) // 2
+                    img.paste(icon, (icon_x, icon_y), icon)
+                    draw.text((text_x, text_y), text, font=font, fill=color)
+                else:
+                    # Just render text centered
+                    draw.text((cx - text_w // 2, text_y), text, font=font, fill=color)
 
 
     if transition:
