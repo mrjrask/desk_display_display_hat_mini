@@ -12,6 +12,7 @@ import argparse
 import json
 import logging
 import pathlib
+import os
 import sys
 import time
 from dataclasses import dataclass
@@ -19,6 +20,9 @@ from typing import Any, Callable, Iterable, List
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
+
+# Ensure the project's .env is loaded for API credentials and feature flags.
+os.environ.setdefault("CONFIG_LOAD_DOTENV", "1")
 
 from data_fetch import (
     fetch_bears_standings,
