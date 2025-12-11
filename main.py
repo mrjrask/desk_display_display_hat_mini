@@ -27,7 +27,7 @@ import signal
 import shutil
 import subprocess
 from contextlib import nullcontext
-from typing import Dict, Optional, Set
+from typing import Callable, Dict, Optional, Set
 
 gc = __import__('gc')
 
@@ -617,40 +617,48 @@ def load_logo(fn, height=LOGO_SCREEN_HEIGHT):
         logging.warning(f"Logo load failed '{fn}': {e}")
         return None
 
-cubs_logo   = load_logo("mlb/CUBS.png", height=TEAM_LOGO_HEIGHT)
-hawks_logo  = load_logo("nhl/CHI.png", height=TEAM_LOGO_HEIGHT)
-bulls_logo  = load_logo("nba/CHI.png", height=TEAM_LOGO_HEIGHT)
-sox_logo    = load_logo("mlb/SOX.png", height=TEAM_LOGO_HEIGHT)
-weather_img = load_logo("weather.jpg")
-mlb_logo    = load_logo("mlb/MLB.png")
-nba_logo    = load_logo("nba/NBA.png")
-nhl_logo    = load_logo("nhl/nhl.png") or load_logo("nhl/NHL.png")
-nfl_logo    = load_logo("nfl/nfl.png")
-verano_img  = load_logo("verano.jpg")
-bears_logo  = load_logo("nfl/chi.png")
-_WOLVES_TRI = (AHL_TEAM_TRICODE or "CHI").strip() or "CHI"
-wolves_logo = None
-for variant in {_WOLVES_TRI.upper(), _WOLVES_TRI.lower()}:
-    wolves_logo = load_logo(f"ahl/{variant}.png", height=TEAM_LOGO_HEIGHT)
-    if wolves_logo:
-        break
-if wolves_logo is None:
-    wolves_logo = load_logo("wolves.jpg", height=TEAM_LOGO_HEIGHT)
 
-LOGOS = {
-    "weather logo": weather_img,
-    "verano logo": verano_img,
-    "bears logo": bears_logo,
-    "nfl logo": nfl_logo,
-    "hawks logo": hawks_logo,
-    "nhl logo": nhl_logo,
-    "wolves logo": wolves_logo,
-    "cubs logo": cubs_logo,
-    "sox logo": sox_logo,
-    "mlb logo": mlb_logo,
-    "nba logo": nba_logo,
-    "bulls logo": bulls_logo,
+def _load_wolves_logo() -> Optional[Image.Image]:
+    wolves_tri = (AHL_TEAM_TRICODE or "CHI").strip() or "CHI"
+    for variant in {wolves_tri.upper(), wolves_tri.lower()}:
+        wolves_logo = load_logo(f"ahl/{variant}.png", height=TEAM_LOGO_HEIGHT)
+        if wolves_logo:
+            return wolves_logo
+    return load_logo("wolves.jpg", height=TEAM_LOGO_HEIGHT)
+
+
+_LOGO_LOADERS: Dict[str, Callable[[], Optional[Image.Image]]] = {
+    "weather logo": lambda: load_logo("weather.jpg"),
+    "verano logo": lambda: load_logo("verano.jpg"),
+    "bears logo": lambda: load_logo("nfl/chi.png"),
+    "nfl logo": lambda: load_logo("nfl/nfl.png"),
+    "hawks logo": lambda: load_logo("nhl/CHI.png", height=TEAM_LOGO_HEIGHT),
+    "nhl logo": lambda: load_logo("nhl/nhl.png") or load_logo("nhl/NHL.png"),
+    "wolves logo": _load_wolves_logo,
+    "cubs logo": lambda: load_logo("mlb/CUBS.png", height=TEAM_LOGO_HEIGHT),
+    "sox logo": lambda: load_logo("mlb/SOX.png", height=TEAM_LOGO_HEIGHT),
+    "mlb logo": lambda: load_logo("mlb/MLB.png"),
+    "nba logo": lambda: load_logo("nba/NBA.png"),
+    "bulls logo": lambda: load_logo("nba/CHI.png", height=TEAM_LOGO_HEIGHT),
 }
+
+
+class LogoCache:
+    def __init__(self, loaders: Dict[str, Callable[[], Optional[Image.Image]]]):
+        self._loaders = loaders
+        self._cache: Dict[str, Optional[Image.Image]] = {}
+
+    def get(self, name: str) -> Optional[Image.Image]:
+        if name in self._cache:
+            return self._cache[name]
+
+        loader = self._loaders.get(name)
+        image = loader() if loader else None
+        self._cache[name] = image
+        return image
+
+
+logo_cache = LogoCache(_LOGO_LOADERS)
 
 # ─── Data cache & refresh ────────────────────────────────────────────────────
 cache = {
@@ -816,7 +824,7 @@ def main_loop():
             context = ScreenContext(
                 display=display,
                 cache=cache,
-                logos=LOGOS,
+                logos=logo_cache,
                 image_dir=IMAGES_DIR,
                 travel_requested=travel_requested,
                 travel_active=is_travel_screen_active(),
