@@ -903,13 +903,30 @@ def dns_diagnostics() -> dict:
         (
             f"https://{STATSAPI_HOST}/api/v1/schedule?date={datetime.date.today().isoformat()}",
             "statsapi_schedule",
+            STATSAPI_HOST,
         ),
-        (API_WEB_SCOREBOARD_NOW_URL, "api_web_scoreboard_now"),
+        (API_WEB_SCOREBOARD_NOW_URL, "api_web_scoreboard_now", API_WEB_HOST),
     ]
 
-    for url, name in urls:
+    resolved_hosts = {entry.get("host"): entry for entry in report["hosts"]}
+
+    for url, name, host in urls:
         check: dict[str, Any] = {"url": url, "name": name}
         start = time.perf_counter()
+
+        # Avoid HTTP retries/noise when DNS resolution is already failing.
+        host_status = resolved_hosts.get(host, {})
+        if host_status.get("status") == "error":
+            check.update(
+                {
+                    "status": "skipped",
+                    "reason": f"DNS resolution failed for {host}",
+                }
+            )
+            check["duration_ms"] = round((time.perf_counter() - start) * 1000, 2)
+            report["http_checks"].append(check)
+            continue
+
         try:
             response = _SESSION.get(url, timeout=min(REQUEST_TIMEOUT, 5))
             response.raise_for_status()
