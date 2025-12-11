@@ -18,6 +18,7 @@ from gpiozero.exc import PinFactoryFallback, NativePinFactoryFallback
 warnings.filterwarnings("ignore", category=PinFactoryFallback)
 warnings.filterwarnings("ignore", category=NativePinFactoryFallback)
 
+import glob
 import os
 import time
 import logging
@@ -27,7 +28,7 @@ import signal
 import shutil
 import subprocess
 from contextlib import nullcontext
-from typing import Callable, Dict, Optional, Set
+from typing import Callable, Dict, Optional, Set, Tuple
 
 gc = __import__('gc')
 
@@ -434,6 +435,9 @@ if ENABLE_VIDEO:
         video_out = None
 
 _archive_lock = threading.Lock()
+_screenshot_count_lock = threading.Lock()
+_screenshot_count: Optional[int] = None
+_archive_pending = False
 
 
 def _release_video_writer() -> None:
@@ -486,7 +490,55 @@ def _sanitize_filename_prefix(name: str) -> str:
     return safe or "screen"
 
 
-def _save_screenshot(sid: str, img: Image.Image) -> None:
+def _compute_existing_screenshot_count() -> int:
+    count = 0
+    try:
+        for root, _, files in os.walk(SCREENSHOT_DIR):
+            if os.path.abspath(root) == os.path.abspath(CURRENT_SCREENSHOT_DIR):
+                continue
+            count += sum(
+                1
+                for fname in files
+                if fname.lower().endswith(ALLOWED_SCREEN_EXTS)
+            )
+    except Exception:
+        count = 0
+    return count
+
+
+def _ensure_screenshot_counter_locked() -> int:
+    global _screenshot_count, _archive_pending
+
+    if _screenshot_count is None:
+        _screenshot_count = _compute_existing_screenshot_count()
+        _archive_pending = _screenshot_count >= ARCHIVE_THRESHOLD
+    return _screenshot_count or 0
+
+
+def _register_screenshot_saved() -> Tuple[int, bool]:
+    global _screenshot_count, _archive_pending
+
+    with _screenshot_count_lock:
+        current = _ensure_screenshot_counter_locked()
+        _screenshot_count = current + 1
+        if _screenshot_count >= ARCHIVE_THRESHOLD:
+            _archive_pending = True
+        return _screenshot_count, _archive_pending
+
+
+def _register_screenshots_removed(count: int) -> Tuple[int, bool]:
+    global _screenshot_count, _archive_pending
+
+    count = max(0, count)
+    with _screenshot_count_lock:
+        current = _ensure_screenshot_counter_locked()
+        if count:
+            _screenshot_count = max(0, current - count)
+        _archive_pending = (_screenshot_count or 0) >= ARCHIVE_THRESHOLD
+        return _screenshot_count or 0, _archive_pending
+
+
+def _save_screenshot(sid: str, img: Image.Image) -> Optional[Tuple[str, bool]]:
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     folder = _sanitize_directory_name(sid)
     prefix = _sanitize_filename_prefix(sid)
@@ -494,10 +546,16 @@ def _save_screenshot(sid: str, img: Image.Image) -> None:
     os.makedirs(target_dir, exist_ok=True)
     path = os.path.join(target_dir, f"{prefix}_{ts}.png")
 
+    saved = False
     try:
         img.save(path)
+        saved = True
     except Exception:
         logging.warning(f"⚠️ Screenshot save failed for '{sid}'")
+
+    archive_needed = False
+    if saved:
+        _, archive_needed = _register_screenshot_saved()
 
     try:
         os.makedirs(CURRENT_SCREENSHOT_DIR, exist_ok=True)
@@ -512,67 +570,59 @@ def _save_screenshot(sid: str, img: Image.Image) -> None:
     except Exception:
         logging.warning(f"⚠️ Failed to update current screenshot for '{sid}'")
 
+    if saved:
+        return folder, archive_needed
+    return None
 
-def _list_screenshot_files():
-    try:
-        results = []
-        for root, dirs, files in os.walk(SCREENSHOT_DIR):
-            if os.path.abspath(root) == os.path.abspath(CURRENT_SCREENSHOT_DIR):
-                dirs.clear()
-                continue
-            for fname in files:
-                if not fname.lower().endswith(ALLOWED_SCREEN_EXTS):
-                    continue
-                rel_dir = os.path.relpath(root, SCREENSHOT_DIR)
-                rel_path = fname if rel_dir == "." else os.path.join(rel_dir, fname)
-                results.append(rel_path)
-        return sorted(results)
-    except Exception:
-        return []
+def maybe_archive_screenshots(latest_folder: str) -> None:
+    """Archive the newest screen's folder once the rolling counter hits the threshold."""
 
-def maybe_archive_screenshots():
-    """
-    When screenshots/ reaches ARCHIVE_THRESHOLD images, move the current images
-    into screenshot_archive/<screen>/ so the archive mirrors the live
-    screenshots/ folder layout. Avoid creating empty archive folders.
-    """
     if not ENABLE_SCREENSHOTS:
         return
-    files = _list_screenshot_files()
-    if len(files) < ARCHIVE_THRESHOLD:
+    if not latest_folder:
         return
 
+    target_dir = os.path.join(SCREENSHOT_DIR, latest_folder)
+    if not os.path.isdir(target_dir):
+        return
+
+    with _screenshot_count_lock:
+        _ensure_screenshot_counter_locked()
+        if not _archive_pending:
+            return
+
     with _archive_lock:
-        files = _list_screenshot_files()
-        if len(files) < ARCHIVE_THRESHOLD:
+        with _screenshot_count_lock:
+            _ensure_screenshot_counter_locked()
+            if not _archive_pending:
+                return
+            _archive_pending = False
+
+        files = [
+            path
+            for path in glob.glob(os.path.join(target_dir, "**", "*"), recursive=True)
+            if os.path.isfile(path) and path.lower().endswith(ALLOWED_SCREEN_EXTS)
+        ]
+
+        if not files:
+            _register_screenshots_removed(0)
             return
 
         moved = 0
         created_archive_dirs = set()
 
-        for fname in files:
-            src = os.path.join(SCREENSHOT_DIR, fname)
+        for src in files:
+            rel_path = os.path.relpath(src, SCREENSHOT_DIR)
             try:
-                parts = fname.split(os.sep)
-                if len(parts) > 1:
-                    screen_folder, remainder = parts[0], os.path.join(*parts[1:])
-                else:
-                    screen_folder, remainder = ARCHIVE_DEFAULT_FOLDER, parts[0]
-
-                archive_dir = os.path.join(
-                    SCREENSHOT_ARCHIVE_MIRROR,
-                    screen_folder,
-                )
-                if not os.path.exists(archive_dir):
-                    created_archive_dirs.add(archive_dir)
-                dest = os.path.join(archive_dir, remainder)
+                dest = os.path.join(SCREENSHOT_ARCHIVE_MIRROR, rel_path)
                 dest_dir = os.path.dirname(dest)
                 if dest_dir and not os.path.exists(dest_dir):
                     os.makedirs(dest_dir, exist_ok=True)
+                    created_archive_dirs.add(dest_dir)
                 shutil.move(src, dest)
                 moved += 1
             except Exception as e:
-                logging.warning(f"⚠️  Could not move '{fname}' to archive: {e}")
+                logging.warning(f"⚠️  Could not move '{rel_path}' to archive: {e}")
 
         if moved == 0:
             for archive_dir in sorted(created_archive_dirs, reverse=True):
@@ -582,10 +632,13 @@ def maybe_archive_screenshots():
                     except Exception:
                         pass
 
+        _register_screenshots_removed(moved)
+
         if moved:
             logging.info(
-                "🗃️  Archived %s screenshot(s) → %s/",
+                "🗃️  Archived %s screenshot(s) from %s → %s/",
                 moved,
+                latest_folder,
                 SCREENSHOT_ARCHIVE_MIRROR,
             )
 
@@ -1023,8 +1076,9 @@ def main_loop():
                 if isinstance(img, Image.Image):
                     if "logo" in sid:
                         if ENABLE_SCREENSHOTS:
-                            _save_screenshot(sid, img)
-                            maybe_archive_screenshots()
+                            saved = _save_screenshot(sid, img)
+                            if saved and saved[1]:
+                                maybe_archive_screenshots(saved[0])
                         if ENABLE_VIDEO and video_out:
                             import cv2, numpy as np
 
@@ -1034,8 +1088,9 @@ def main_loop():
                         if not already_displayed:
                             animate_fade_in(display, img, steps=8, delay=0.015)
                         if ENABLE_SCREENSHOTS:
-                            _save_screenshot(sid, img)
-                            maybe_archive_screenshots()
+                            saved = _save_screenshot(sid, img)
+                            if saved and saved[1]:
+                                maybe_archive_screenshots(saved[0])
                         if ENABLE_VIDEO and video_out:
                             import cv2, numpy as np
 
