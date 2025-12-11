@@ -35,6 +35,7 @@ from config import (
     FONT_WEATHER_DETAILS,
     FONT_WEATHER_DETAILS_BOLD,
     FONT_WEATHER_DETAILS_SMALL,
+    FONT_WEATHER_DETAILS_TINY,
     FONT_WEATHER_DETAILS_SMALL_BOLD,
     FONT_EMOJI,
     FONT_EMOJI_SMALL,
@@ -552,58 +553,35 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
 
         draw.line((x0 + 6, stat_area_top, x1 - 6, stat_area_top), fill=(50, 50, 80), width=1)
 
-        pop = hour.get("pop")
-        if pop is not None:
-            clamped_pop = max(0, min(pop, 100))
-            bar_max_height = int(stat_area_height * 0.55)
-            bar_height = max(4, int(bar_max_height * clamped_pop / 100))
-            bar_x0 = x0 + 6
-            bar_x1 = bar_x0 + 10
-            bar_y0 = stat_area_top + (stat_area_height - bar_max_height) // 2 + (bar_max_height - bar_height)
-            bar_y1 = bar_y0 + bar_height
-            draw.rounded_rectangle(
-                (bar_x0, bar_y0, bar_x1, bar_y1),
-                radius=3,
-                fill=(60, 150, 210),
-                outline=None,
-            )
-            pop_str = f"{clamped_pop}%"
-            pop_w, pop_h = draw.textsize(pop_str, font=FONT_WEATHER_DETAILS_SMALL_BOLD)
-            pop_y = max(stat_area_top, bar_y0 - pop_h - 4)
-            draw.text((bar_x0 + (bar_x1 - bar_x0 - pop_w) // 2, pop_y), pop_str, font=FONT_WEATHER_DETAILS_SMALL_BOLD, fill=(135, 206, 250))
-            drop_w, drop_h = draw.textsize("💧", font=FONT_EMOJI_SMALL)
-            drop_y = min(stat_area_bottom - drop_h, bar_y1 + 2)
-            draw.text((bar_x0 + (bar_x1 - bar_x0 - drop_w) // 2, drop_y), "💧", font=FONT_EMOJI_SMALL, fill=(90, 190, 255))
-
-        stat_text_x = x0 + 22
-        stat_text_width = x1 - stat_text_x - 6
+        stat_items = []
 
         wind_speed = hour.get("wind_speed")
         wind_dir = hour.get("wind_dir", "") or ""
-        stat_lines = []
         if wind_speed is not None:
             wind_text = f"{wind_speed} mph"
             if wind_dir:
                 wind_text = f"{wind_text} {wind_dir}"
-            stat_lines.append((wind_text, FONT_WEATHER_DETAILS_SMALL_BOLD, (180, 225, 255)))
+            stat_items.append((wind_text, FONT_WEATHER_DETAILS_TINY, (180, 225, 255)))
+
+        pop = hour.get("pop")
+        if pop is not None:
+            clamped_pop = max(0, min(pop, 100))
+            pop_text = f"💧 {clamped_pop}%"
+            stat_items.append((pop_text, FONT_WEATHER_DETAILS_TINY, (135, 206, 250)))
 
         uvi_val = hour.get("uvi")
         if uvi_val is not None:
             uv_color = uv_index_color(uvi_val)
             uv_text = f"UV {uvi_val}"
-            stat_lines.append((uv_text, FONT_WEATHER_DETAILS_SMALL, uv_color))
+            stat_items.append((uv_text, FONT_WEATHER_DETAILS_TINY, uv_color))
 
-        if stat_lines:
-            spacing = 2
-            total_text_h = sum(draw.textsize(text, font=font)[1] for text, font, _ in stat_lines) + spacing * (len(stat_lines) - 1)
-            text_y = max(
-                stat_area_top + 2,
-                min(stat_area_top + max(0, (stat_area_height - total_text_h) // 2), stat_area_bottom - total_text_h - 2),
-            )
-            for text, font, color in stat_lines:
+        if stat_items:
+            slots = len(stat_items) + 1
+            for idx, (text, font, color) in enumerate(stat_items, start=1):
                 text_w, text_h = draw.textsize(text, font=font)
-                draw.text((stat_text_x + (stat_text_width - text_w) // 2, text_y), text, font=font, fill=color)
-                text_y += text_h + spacing
+                text_y = int(stat_area_top + (stat_area_height * idx / slots) - text_h / 2)
+                text_y = max(stat_area_top, min(text_y, stat_area_bottom - text_h))
+                draw.text((cx - text_w // 2, text_y), text, font=font, fill=color)
 
 
     if transition:

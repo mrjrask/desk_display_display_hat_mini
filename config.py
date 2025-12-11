@@ -587,6 +587,7 @@ FONT_WEATHER_DETAILS    = _load_font("DejaVuSans.ttf",      22)
 FONT_WEATHER_DETAILS_BOLD = _load_font("DejaVuSans-Bold.ttf", 18)
 FONT_WEATHER_DETAILS_SMALL = _load_font("DejaVuSans.ttf",      14)
 FONT_WEATHER_DETAILS_SMALL_BOLD = _load_font("DejaVuSans-Bold.ttf", 14)
+FONT_WEATHER_DETAILS_TINY = _load_font("DejaVuSans.ttf",      12)
 FONT_WEATHER_LABEL      = _load_font("DejaVuSans.ttf",      18)
 
 FONT_TITLE_SPORTS       = _load_font("TimesSquare-m105.ttf", 30)
