@@ -131,6 +131,61 @@ def _classify_alert(alert: dict) -> Optional[str]:
     return None
 
 
+def _render_precip_icon(is_snow: bool, size: int, color: Tuple[int, int, int]) -> Image.Image:
+    """Return a simple precipitation marker that doesn't rely on emoji fonts.
+
+    Some systems don't ship an emoji font Pillow can render, which results in
+    an empty box for the precipitation glyph. Drawing a small vector icon keeps
+    the UI legible regardless of available fonts.
+    """
+
+    size = max(8, size)
+    icon = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    icon_draw = ImageDraw.Draw(icon)
+
+    if is_snow:
+        center = size / 2
+        radius = size * 0.42
+        arm_width = max(1, int(round(size * 0.09)))
+        branch = radius * 0.4
+        for idx in range(6):
+            angle = math.radians(idx * 60)
+            end_x = center + radius * math.cos(angle)
+            end_y = center + radius * math.sin(angle)
+            icon_draw.line((center, center, end_x, end_y), fill=color, width=arm_width)
+
+            branch_dx = branch * math.sin(angle)
+            branch_dy = branch * math.cos(angle)
+            icon_draw.line(
+                (end_x, end_y, end_x - branch_dx, end_y + branch_dy),
+                fill=color,
+                width=max(1, arm_width - 1),
+            )
+            icon_draw.line(
+                (end_x, end_y, end_x + branch_dx, end_y - branch_dy),
+                fill=color,
+                width=max(1, arm_width - 1),
+            )
+    else:
+        top = (size * 0.5, size * 0.05)
+        left = (size * 0.24, size * 0.58)
+        right = (size * 0.76, size * 0.58)
+        bottom = (size * 0.5, size * 0.95)
+        icon_draw.polygon([top, left, bottom, right], fill=color)
+        ellipse_height = size * 0.32
+        icon_draw.ellipse(
+            (
+                size * 0.22,
+                size * 0.56,
+                size * 0.78,
+                size * 0.56 + ellipse_height,
+            ),
+            fill=color,
+        )
+
+    return icon
+
+
 def _detect_weather_alert(weather: object) -> Tuple[Optional[str], Optional[Tuple[float, float, float]]]:
     alerts = _normalise_alerts(weather)
     severity: Optional[str] = None
@@ -290,7 +345,9 @@ def draw_weather_screen_1(display, weather, transition=False):
     stack_gap = 2
     if precip_percent:
         emoji_color = (173, 216, 230) if precip_emoji == "❄" else (135, 206, 250)
-        emoji_w, emoji_h = draw.textsize(precip_emoji, font=FONT_EMOJI)
+        icon_size = FONT_EMOJI.size if hasattr(FONT_EMOJI, "size") else 26
+        precip_icon = _render_precip_icon(is_snow, icon_size, emoji_color)
+        emoji_w, emoji_h = precip_icon.size
         pct_w, pct_h = draw.textsize(precip_percent, font=side_font)
         block_w = max(emoji_w, pct_w)
         block_h = emoji_h + stack_gap + pct_h
@@ -300,7 +357,7 @@ def draw_weather_screen_1(display, weather, transition=False):
         block_y = icon_center_y - block_h // 2
         emoji_x = precip_x + (block_w - emoji_w) // 2
         pct_x = precip_x + (block_w - pct_w) // 2
-        draw.text((emoji_x, block_y), precip_emoji, font=FONT_EMOJI, fill=emoji_color)
+        img.paste(precip_icon, (emoji_x, block_y), precip_icon)
         draw.text((pct_x, block_y + emoji_h + stack_gap), precip_percent, font=side_font, fill=emoji_color)
 
     if cloud_percent:
