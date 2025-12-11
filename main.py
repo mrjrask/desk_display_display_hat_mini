@@ -73,16 +73,6 @@ from screens.draw_travel_time import (
 from screens.registry import ScreenContext, ScreenDefinition, build_screen_registry
 from schedule import ScreenScheduler, build_scheduler, load_schedule_config
 
-# ─── Logging ─────────────────────────────────────────────────────────────────
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)-8s %(message)s",
-    datefmt="%H:%M:%S",
-    force=True,
-)
-logging.getLogger("requests").setLevel(logging.WARNING)
-logging.info("🖥️  Starting display service…")
-
 # ─── Paths ───────────────────────────────────────────────────────────────────
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(SCRIPT_DIR, "screens_config.json")
@@ -92,11 +82,11 @@ ARCHIVE_THRESHOLD = 500  # archive when we reach this many images
 ARCHIVE_DEFAULT_FOLDER = "Screens"
 ALLOWED_SCREEN_EXTS = (".png", ".jpg", ".jpeg")  # images only
 
-_storage_paths = resolve_storage_paths(logger=logging.getLogger(__name__))
-SCREENSHOT_DIR = str(_storage_paths.screenshot_dir)
-CURRENT_SCREENSHOT_DIR = str(_storage_paths.current_screenshot_dir)
-SCREENSHOT_ARCHIVE_BASE = str(_storage_paths.archive_base)
-SCREENSHOT_ARCHIVE_MIRROR = SCREENSHOT_ARCHIVE_BASE
+_storage_paths = None
+SCREENSHOT_DIR = ""
+CURRENT_SCREENSHOT_DIR = ""
+SCREENSHOT_ARCHIVE_BASE = ""
+SCREENSHOT_ARCHIVE_MIRROR = ""
 
 _screen_config_mtime: Optional[float] = None
 screen_scheduler: Optional[ScreenScheduler] = None
@@ -128,6 +118,8 @@ def _handle_button_down(name: str) -> bool:
     global _skip_request_pending
 
     name = name.upper()
+    if display is None:
+        return False
     if name == "X":
         logging.info("⏭️  X button pressed – skipping to next screen.")
         _skip_request_pending = True
@@ -202,23 +194,19 @@ def refresh_schedule_if_needed(force: bool = False) -> None:
     logging.info("🔁 Loaded schedule configuration with %d node(s).", scheduler.node_count)
 
 
-# ─── Display & Wi-Fi monitor ─────────────────────────────────────────────────
-display = Display()
-try:
-    display.set_button_callback(_button_event_callback)
-except Exception:
-    logging.debug("Button callback registration unavailable.")
-if ENABLE_WIFI_MONITOR:
-    logging.info("🔌 Starting Wi-Fi monitor…")
-    wifi_utils.start_monitor()
-
-refresh_schedule_if_needed(force=True)
+display: Optional[Display] = None
+_background_refresh_thread: Optional[threading.Thread] = None
+_runtime_initialized = False
 
 
 def _clear_display_immediately(reason: Optional[str] = None) -> None:
     """Clear the LCD as soon as a shutdown is requested."""
 
     already_cleared = _display_cleared.is_set()
+
+    if display is None:
+        _display_cleared.set()
+        return
 
     if reason and not already_cleared:
         logging.info("🧹 Clearing display (%s)…", reason)
@@ -269,6 +257,9 @@ def _check_control_buttons() -> bool:
     """
 
     global _skip_request_pending
+
+    if display is None:
+        return False
 
     if _shutdown_event.is_set():
         return False
@@ -418,21 +409,7 @@ def _next_screen_from_registry(
     return entry
 
 # ─── Screenshot / video outputs ──────────────────────────────────────────────
-if ENABLE_SCREENSHOTS:
-    os.makedirs(SCREENSHOT_DIR, exist_ok=True)
-    os.makedirs(CURRENT_SCREENSHOT_DIR, exist_ok=True)
-    os.makedirs(SCREENSHOT_ARCHIVE_BASE, exist_ok=True)
-
 video_out = None
-if ENABLE_VIDEO:
-    import cv2, numpy as np
-    FOURCC     = cv2.VideoWriter_fourcc(*"mp4v")
-    video_path = os.path.join(SCREENSHOT_DIR, "display_output.mp4")
-    logging.info(f"🎥 Starting video capture → {video_path} @ {VIDEO_FPS} FPS using mp4v")
-    video_out = cv2.VideoWriter(video_path, FOURCC, VIDEO_FPS, (WIDTH, HEIGHT))
-    if not video_out.isOpened():
-        logging.error("❌ Cannot open video writer; disabling video output")
-        video_out = None
 
 _archive_lock = threading.Lock()
 _screenshot_count_lock = threading.Lock()
@@ -897,11 +874,71 @@ def _background_refresh() -> None:
             break
 
 
-threading.Thread(
-    target=_background_refresh,
-    daemon=True
-).start()
-refresh_all(force=True)
+def init_runtime() -> None:
+    """Configure logging, storage paths, hardware, and background workers."""
+
+    global SCREENSHOT_DIR, CURRENT_SCREENSHOT_DIR, SCREENSHOT_ARCHIVE_BASE
+    global SCREENSHOT_ARCHIVE_MIRROR, _storage_paths, display, video_out
+    global _background_refresh_thread, _runtime_initialized
+
+    if _runtime_initialized:
+        return
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)-8s %(message)s",
+        datefmt="%H:%M:%S",
+        force=True,
+    )
+    logging.getLogger("requests").setLevel(logging.WARNING)
+    logging.info("🖥️  Starting display service…")
+
+    _storage_paths = resolve_storage_paths(logger=logging.getLogger(__name__))
+    SCREENSHOT_DIR = str(_storage_paths.screenshot_dir)
+    CURRENT_SCREENSHOT_DIR = str(_storage_paths.current_screenshot_dir)
+    SCREENSHOT_ARCHIVE_BASE = str(_storage_paths.archive_base)
+    SCREENSHOT_ARCHIVE_MIRROR = SCREENSHOT_ARCHIVE_BASE
+
+    # Display & Wi-Fi monitor
+    display = Display()
+    try:
+        display.set_button_callback(_button_event_callback)
+    except Exception:
+        logging.debug("Button callback registration unavailable.")
+    if ENABLE_WIFI_MONITOR:
+        logging.info("🔌 Starting Wi-Fi monitor…")
+        wifi_utils.start_monitor()
+
+    refresh_schedule_if_needed(force=True)
+
+    if ENABLE_SCREENSHOTS:
+        os.makedirs(SCREENSHOT_DIR, exist_ok=True)
+        os.makedirs(CURRENT_SCREENSHOT_DIR, exist_ok=True)
+        os.makedirs(SCREENSHOT_ARCHIVE_BASE, exist_ok=True)
+
+    if ENABLE_VIDEO:
+        import cv2, numpy as np
+        FOURCC     = cv2.VideoWriter_fourcc(*"mp4v")
+        video_path = os.path.join(SCREENSHOT_DIR, "display_output.mp4")
+        logging.info(
+            "🎥 Starting video capture → %s @ %s FPS using mp4v",
+            video_path,
+            VIDEO_FPS,
+        )
+        video_out = cv2.VideoWriter(video_path, FOURCC, VIDEO_FPS, (WIDTH, HEIGHT))
+        if not video_out.isOpened():
+            logging.error("❌ Cannot open video writer; disabling video output")
+            video_out = None
+
+    if _background_refresh_thread is None:
+        _background_refresh_thread = threading.Thread(
+            target=_background_refresh,
+            daemon=True,
+        )
+        _background_refresh_thread.start()
+
+    refresh_all(force=True)
+    _runtime_initialized = True
 
 # ─── Main loop ───────────────────────────────────────────────────────────────
 loop_count = 0
@@ -1115,7 +1152,10 @@ def main_loop():
     finally:
         _finalize_shutdown()
 
-if __name__ == '__main__':
+
+def main() -> None:
+    init_runtime()
+
     try:
         main_loop()
     except KeyboardInterrupt:
@@ -1125,3 +1165,7 @@ if __name__ == '__main__':
         _finalize_shutdown()
 
     os._exit(0)
+
+
+if __name__ == "__main__":
+    main()
