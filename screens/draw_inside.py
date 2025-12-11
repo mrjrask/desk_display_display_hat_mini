@@ -444,7 +444,12 @@ def _probe_pimoroni_bme680(_i2c: Any, addresses: Set[int]) -> Optional[SensorPro
         pres_hpa, pres = _normalize_pressure(pres_raw)
         if pres_hpa is not None and not 300 <= pres_hpa <= 1100:
             raise RuntimeError(f"BME680 pressure sanity check failed: {pres_hpa:.1f} hPa")
-        voc = float(gas) if gas not in (None, 0) and heat_stable else None
+        voc_raw = float(gas) if gas is not None else None
+        if voc_raw is not None and voc_raw <= 0:
+            voc_raw = None
+        if voc_raw is not None and not heat_stable:
+            logging.debug("draw_inside: using BME680 gas reading before heater stability")
+        voc = voc_raw
         hum_val = float(hum) if hum is not None else None
 
         if temp_f is None:
