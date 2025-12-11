@@ -75,7 +75,27 @@ def _initialise_env() -> None:
             _load_env_file(str(path))
 
 
-_initialise_env()
+_ENV_INITIALISED = False
+
+
+def initialise_env_if_requested(force: bool = False) -> None:
+    """Conditionally load `.env` files based on CONFIG_LOAD_DOTENV flag."""
+
+    global _ENV_INITIALISED
+
+    if _ENV_INITIALISED and not force:
+        return
+
+    raw_flag = os.environ.get("CONFIG_LOAD_DOTENV", "0").strip().lower()
+    should_load = raw_flag in {"1", "true", "yes", "on"}
+
+    if should_load:
+        _initialise_env()
+
+    _ENV_INITIALISED = True
+
+
+initialise_env_if_requested()
 
 
 def _get_first_env_var(*names: str):
