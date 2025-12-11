@@ -167,20 +167,38 @@ def _render_precip_icon(is_snow: bool, size: int, color: Tuple[int, int, int]) -
                 width=max(1, arm_width - 1),
             )
     else:
-        top = (size * 0.5, size * 0.05)
-        left = (size * 0.24, size * 0.58)
-        right = (size * 0.76, size * 0.58)
-        bottom = (size * 0.5, size * 0.95)
-        icon_draw.polygon([top, left, bottom, right], fill=color)
-        ellipse_height = size * 0.32
+        # Draw a smooth water droplet shape
+        center_x = size / 2
+
+        # Create points for a smooth teardrop using parametric curves
+        points = []
+        num_points = 24
+
+        # Top half - creates the pointed tip and curved sides
+        for i in range(num_points + 1):
+            t = i / num_points
+            # Parametric teardrop curve
+            angle = math.pi * (1 - t) + math.pi
+            r = size * 0.35 * (1 - 0.7 * math.cos(angle / 2))
+            x = center_x + r * math.sin(angle)
+            y = size * (0.15 + 0.75 * t)
+            points.append((x, y))
+
+        # Draw the filled droplet shape
+        if len(points) > 2:
+            icon_draw.polygon(points, fill=color)
+
+        # Add a highlight ellipse for a glossy effect (optional, makes it look nicer)
+        highlight_color = tuple(min(255, int(c * 1.3)) for c in color[:3])
+        highlight_size = size * 0.15
         icon_draw.ellipse(
             (
-                size * 0.22,
-                size * 0.56,
-                size * 0.78,
-                size * 0.56 + ellipse_height,
+                center_x - highlight_size / 2,
+                size * 0.35,
+                center_x + highlight_size / 2,
+                size * 0.35 + highlight_size * 0.8,
             ),
-            fill=color,
+            fill=highlight_color,
         )
 
     return icon
@@ -292,7 +310,6 @@ def draw_weather_screen_1(display, weather, transition=False):
     elif daily.get("snow") or current.get("snow"):
         is_snow = True
 
-    precip_emoji = "❄" if is_snow else "💧"
     precip_percent = None
     if pop_pct is not None:
         precip_percent = f"{max(0, min(pop_pct, 100))}%"
@@ -344,9 +361,9 @@ def draw_weather_screen_1(display, weather, transition=False):
     side_font = FONT_WEATHER_DETAILS
     stack_gap = 2
     if precip_percent:
-        emoji_color = (173, 216, 230) if precip_emoji == "❄" else (135, 206, 250)
+        precip_color = (173, 216, 230) if is_snow else (135, 206, 250)
         icon_size = FONT_EMOJI.size if hasattr(FONT_EMOJI, "size") else 26
-        precip_icon = _render_precip_icon(is_snow, icon_size, emoji_color)
+        precip_icon = _render_precip_icon(is_snow, icon_size, precip_color)
         emoji_w, emoji_h = precip_icon.size
         pct_w, pct_h = draw.textsize(precip_percent, font=side_font)
         block_w = max(emoji_w, pct_w)
@@ -358,7 +375,7 @@ def draw_weather_screen_1(display, weather, transition=False):
         emoji_x = precip_x + (block_w - emoji_w) // 2
         pct_x = precip_x + (block_w - pct_w) // 2
         img.paste(precip_icon, (emoji_x, block_y), precip_icon)
-        draw.text((pct_x, block_y + emoji_h + stack_gap), precip_percent, font=side_font, fill=emoji_color)
+        draw.text((pct_x, block_y + emoji_h + stack_gap), precip_percent, font=side_font, fill=precip_color)
 
     if cloud_percent:
         cloud_emoji = "☁"
@@ -450,6 +467,20 @@ def _gather_hourly_forecast(weather: object, hours: int) -> list[dict]:
             uvi_val = int(round(float(hour.get("uvi", 0))))
         except Exception:
             uvi_val = None
+
+        # Detect if precipitation is snow or rain
+        weather_list = hour.get("weather") if isinstance(hour.get("weather"), list) else []
+        hourly_weather = (weather_list or [{}])[0]
+        weather_id = hourly_weather.get("id")
+        weather_main = (hourly_weather.get("main") or "").strip().lower()
+        is_snow = False
+        if weather_main == "snow":
+            is_snow = True
+        elif isinstance(weather_id, int) and 600 <= weather_id < 700:
+            is_snow = True
+        elif hour.get("snow"):
+            is_snow = True
+
         entry = {
             "temp": round(hour.get("temp", 0)),
             "time": _format_hour_label(hour.get("dt"), index=idx + 1),
@@ -459,8 +490,8 @@ def _gather_hourly_forecast(weather: object, hours: int) -> list[dict]:
             "wind_speed": wind_speed,
             "wind_dir": wind_dir,
             "uvi": uvi_val,
+            "is_snow": is_snow,
         }
-        weather_list = hour.get("weather") if isinstance(hour.get("weather"), list) else []
         if weather_list:
             entry["icon"] = weather_list[0].get("icon")
         forecast.append(entry)
@@ -623,8 +654,11 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         pop = hour.get("pop")
         if pop is not None:
             clamped_pop = max(0, min(pop, 100))
-            pop_text = f"💧 {clamped_pop}%"
-            stat_items.append((pop_text, FONT_WEATHER_DETAILS_TINY, (135, 206, 250)))
+            is_snow = hour.get("is_snow", False)
+            precip_label = "Snow" if is_snow else "Rain"
+            precip_color = (173, 216, 230) if is_snow else (135, 206, 250)
+            pop_text = f"{precip_label} {clamped_pop}%"
+            stat_items.append((pop_text, FONT_WEATHER_DETAILS_TINY, precip_color))
 
         uvi_val = hour.get("uvi")
         if uvi_val is not None:
