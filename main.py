@@ -42,6 +42,7 @@ from config import (
     ENABLE_SCREENSHOTS,
     ENABLE_VIDEO,
     VIDEO_FPS,
+    ENABLE_WEATHER,
     ENABLE_WIFI_MONITOR,
     CENTRAL_TIME,
     TRAVEL_ACTIVE_WINDOW,
@@ -199,6 +200,7 @@ def refresh_schedule_if_needed(force: bool = False) -> None:
     _skip_request_pending = False
     logging.info("🔁 Loaded schedule configuration with %d node(s).", scheduler.node_count)
 
+
 # ─── Display & Wi-Fi monitor ─────────────────────────────────────────────────
 display = Display()
 try:
@@ -208,6 +210,8 @@ except Exception:
 if ENABLE_WIFI_MONITOR:
     logging.info("🔌 Starting Wi-Fi monitor…")
     wifi_utils.start_monitor()
+
+refresh_schedule_if_needed(force=True)
 
 
 def _clear_display_immediately(reason: Optional[str] = None) -> None:
@@ -671,12 +675,67 @@ cache = {
     "sox":     {"stand":None, "last":None, "live":None, "next":None, "next_home":None},
 }
 
-def refresh_all():
-    logging.info("🔄 Refreshing all data…")
+_FEED_DEPENDENCIES: Dict[str, Set[str]] = {
+    "weather": {"weather1", "weather2", "weather hourly", "weather radar", "weather logo"},
+    "bears": {"bears stand1", "bears stand2"},
+    "hawks": {"hawks stand1", "hawks stand2", "hawks last", "hawks live", "hawks next", "hawks next home", "hawks logo"},
+    "wolves": {"wolves last", "wolves live", "wolves next", "wolves next home", "wolves logo"},
+    "bulls": {"bulls stand1", "bulls stand2", "bulls last", "bulls live", "bulls next", "bulls next home", "bulls logo"},
+    "cubs": {
+        "cubs stand1",
+        "cubs stand2",
+        "cubs last",
+        "cubs result",
+        "cubs live",
+        "cubs next",
+        "cubs next home",
+        "cubs logo",
+    },
+    "sox": {
+        "sox stand1",
+        "sox stand2",
+        "sox last",
+        "sox live",
+        "sox next",
+        "sox next home",
+        "sox logo",
+    },
+}
+
+_FEED_REFRESH_INTERVALS: Dict[str, int] = {
+    "weather": SCHEDULE_UPDATE_INTERVAL,
+    "hawks": SCHEDULE_UPDATE_INTERVAL,
+    "bulls": SCHEDULE_UPDATE_INTERVAL,
+    "wolves": SCHEDULE_UPDATE_INTERVAL,
+    "bears": 1800,
+    "cubs": 1800,
+    "sox": 1800,
+}
+
+_last_feed_refresh: Dict[str, float] = {}
+
+
+def _requested_data_feeds() -> Set[str]:
+    feeds: Set[str] = set()
+    for feed, screen_ids in _FEED_DEPENDENCIES.items():
+        if feed == "weather" and not ENABLE_WEATHER:
+            continue
+        if _requested_screen_ids & screen_ids:
+            feeds.add(feed)
+    return feeds
+
+
+def _refresh_weather() -> None:
     cache["weather"] = data_fetch.fetch_weather()
+
+
+def _refresh_bears() -> None:
     cache["bears"].update({
         "stand": data_fetch.fetch_bears_standings(),
     })
+
+
+def _refresh_hawks() -> None:
     cache["hawks"].update({
         "stand": data_fetch.fetch_blackhawks_standings(),
         "last": data_fetch.fetch_blackhawks_last_game(),
@@ -684,6 +743,9 @@ def refresh_all():
         "next": data_fetch.fetch_blackhawks_next_game(),
         "next_home": data_fetch.fetch_blackhawks_next_home_game(),
     })
+
+
+def _refresh_wolves() -> None:
     wolves_games = data_fetch.fetch_wolves_games() or {}
     cache["wolves"].update({
         "last": wolves_games.get("last_game"),
@@ -691,6 +753,9 @@ def refresh_all():
         "next": wolves_games.get("next_game"),
         "next_home": wolves_games.get("next_home_game"),
     })
+
+
+def _refresh_bulls() -> None:
     cache["bulls"].update({
         "stand": data_fetch.fetch_bulls_standings(),
         "last": data_fetch.fetch_bulls_last_game(),
@@ -698,6 +763,9 @@ def refresh_all():
         "next": data_fetch.fetch_bulls_next_game(),
         "next_home": data_fetch.fetch_bulls_next_home_game(),
     })
+
+
+def _refresh_cubs() -> None:
     cubg = data_fetch.fetch_cubs_games() or {}
     cache["cubs"].update({
         "stand": data_fetch.fetch_cubs_standings(),
@@ -706,6 +774,9 @@ def refresh_all():
         "next":  cubg.get("next_game"),
         "next_home": cubg.get("next_home_game"),
     })
+
+
+def _refresh_sox() -> None:
     soxg = data_fetch.fetch_sox_games() or {}
     cache["sox"].update({
         "stand": data_fetch.fetch_sox_standings(),
@@ -715,10 +786,60 @@ def refresh_all():
         "next_home": soxg.get("next_home_game"),
     })
 
+
+_FEED_REFRESHERS: Dict[str, Callable[[], None]] = {
+    "weather": _refresh_weather,
+    "bears": _refresh_bears,
+    "hawks": _refresh_hawks,
+    "wolves": _refresh_wolves,
+    "bulls": _refresh_bulls,
+    "cubs": _refresh_cubs,
+    "sox": _refresh_sox,
+}
+
+
+def refresh_all(force: bool = False) -> None:
+    required_feeds = _requested_data_feeds()
+    if not required_feeds:
+        logging.info("⏭️  No scheduled data-dependent screens; skipping refresh.")
+        return
+
+    now = time.monotonic()
+    due_feeds: Set[str] = set()
+    for feed in required_feeds:
+        interval = _FEED_REFRESH_INTERVALS.get(feed, SCHEDULE_UPDATE_INTERVAL)
+        last_run = _last_feed_refresh.get(feed, 0.0)
+        elapsed = now - last_run if last_run else float("inf")
+
+        if force or elapsed >= interval:
+            due_feeds.add(feed)
+        else:
+            remaining = int(interval - elapsed)
+            logging.info("⏭️  Skipping %s refresh; %ds until next update.", feed, remaining)
+
+    if not due_feeds:
+        return
+
+    logging.info("🔄 Refreshing data for feeds: %s", ", ".join(sorted(due_feeds)))
+    for feed in sorted(due_feeds):
+        refresher = _FEED_REFRESHERS.get(feed)
+        if not refresher:
+            continue
+        try:
+            refresher()
+            _last_feed_refresh[feed] = time.monotonic()
+        except Exception as exc:
+            logging.error("Failed to refresh %s feed: %s", feed, exc)
+
 def _background_refresh() -> None:
     time.sleep(30)
     while not _shutdown_event.is_set():
-        refresh_all()
+        feeds = _requested_data_feeds()
+        if not feeds:
+            logging.info("⏸️  Background refresh idle; no data-driven screens active.")
+        else:
+            refresh_all()
+
         if _shutdown_event.wait(SCHEDULE_UPDATE_INTERVAL):
             break
 
@@ -727,7 +848,7 @@ threading.Thread(
     target=_background_refresh,
     daemon=True
 ).start()
-refresh_all()
+refresh_all(force=True)
 
 # ─── Main loop ───────────────────────────────────────────────────────────────
 loop_count = 0
