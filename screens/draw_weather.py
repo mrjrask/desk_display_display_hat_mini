@@ -88,6 +88,25 @@ def _pop_pct_from(entry):
     return int(round(pop_val))
 
 
+def _is_snow_condition(entry: object) -> bool:
+    if not isinstance(entry, dict):
+        return False
+
+    weather_list = entry.get("weather") if isinstance(entry.get("weather"), list) else []
+    weather = (weather_list or [{}])[0]
+    weather_id = weather.get("id")
+    weather_main = (weather.get("main") or "").strip().lower()
+
+    if weather_main == "snow":
+        return True
+    if isinstance(weather_id, int) and 600 <= weather_id < 700:
+        return True
+    if entry.get("snow"):
+        return True
+
+    return False
+
+
 def _normalise_alerts(weather: object) -> list:
     alerts = []
     if isinstance(weather, dict):
@@ -167,40 +186,51 @@ def _render_precip_icon(is_snow: bool, size: int, color: Tuple[int, int, int]) -
                 width=max(1, arm_width - 1),
             )
     else:
-        # Draw a smooth water droplet shape
         center_x = size / 2
+        base_radius = size * 0.34
+        base_center_y = size * 0.64
+        tip_y = size * 0.08
 
-        # Create a teardrop using a circle at the bottom and curved sides to a point at top
-        points = []
-        num_points = 32
+        drop_mask = Image.new("L", (size, size), 0)
+        mask_draw = ImageDraw.Draw(drop_mask)
 
-        # Bottom circular portion (lower 60% is round)
-        bottom_center_y = size * 0.65
-        radius = size * 0.35
+        mask_draw.ellipse(
+            (
+                center_x - base_radius,
+                base_center_y - base_radius,
+                center_x + base_radius,
+                base_center_y + base_radius,
+            ),
+            fill=255,
+        )
 
-        # Create the rounded bottom and sides
-        for i in range(num_points + 1):
-            # Angle from -135 to +135 degrees (270 degrees total, leaving top open)
-            angle = math.radians(-135 + (270 * i / num_points))
-            x = center_x + radius * math.cos(angle)
-            y = bottom_center_y + radius * math.sin(angle)
+        shoulder_offset = base_radius * 0.9
+        shoulder_height = base_radius * 0.75
+        mask_draw.polygon(
+            [
+                (center_x, tip_y),
+                (center_x - shoulder_offset, base_center_y - shoulder_height),
+                (center_x + shoulder_offset, base_center_y - shoulder_height),
+            ],
+            fill=255,
+        )
 
-            # For the upper portion, taper to the point at top
-            if y < bottom_center_y - radius * 0.5:
-                # Smoothly narrow towards the top point
-                taper_factor = (bottom_center_y - radius - y) / (radius * 1.5)
-                taper_factor = max(0, min(1, taper_factor))
-                x = center_x + (x - center_x) * (1 - taper_factor * 0.7)
-                y = max(size * 0.1, y)
+        body = Image.new("RGBA", (size, size), color + (255,))
+        icon.paste(body, mask=drop_mask)
 
-            points.append((x, y))
-
-        # Add the pointed top
-        points.insert(len(points) // 2, (center_x, size * 0.1))
-
-        # Draw the filled droplet
-        if len(points) > 2:
-            icon_draw.polygon(points, fill=color)
+        highlight = Image.new("L", (size, size), 0)
+        highlight_draw = ImageDraw.Draw(highlight)
+        highlight_draw.ellipse(
+            (
+                center_x - base_radius * 0.35,
+                base_center_y - base_radius * 0.9,
+                center_x - base_radius * 0.05,
+                base_center_y - base_radius * 0.25,
+            ),
+            fill=80,
+        )
+        highlight_color = Image.new("RGBA", (size, size), (255, 255, 255, 140))
+        icon.paste(highlight_color, mask=highlight)
 
     return icon
 
@@ -301,15 +331,9 @@ def draw_weather_screen_1(display, weather, transition=False):
 
     daily_weather_list = daily.get("weather") if isinstance(daily.get("weather"), list) else []
     daily_weather = (daily_weather_list or [{}])[0]
-    weather_id = daily_weather.get("id")
-    weather_main = (daily_weather.get("main") or "").strip().lower()
-    is_snow = False
-    if weather_main == "snow":
-        is_snow = True
-    elif isinstance(weather_id, int) and 600 <= weather_id < 700:
-        is_snow = True
-    elif daily.get("snow") or current.get("snow"):
-        is_snow = True
+    is_snow = _is_snow_condition(daily) or _is_snow_condition(current)
+    if not is_snow and next_hour:
+        is_snow = _is_snow_condition(next_hour)
 
     precip_percent = None
     if pop_pct is not None:
@@ -472,15 +496,7 @@ def _gather_hourly_forecast(weather: object, hours: int) -> list[dict]:
         # Detect if precipitation is snow or rain
         weather_list = hour.get("weather") if isinstance(hour.get("weather"), list) else []
         hourly_weather = (weather_list or [{}])[0]
-        weather_id = hourly_weather.get("id")
-        weather_main = (hourly_weather.get("main") or "").strip().lower()
-        is_snow = False
-        if weather_main == "snow":
-            is_snow = True
-        elif isinstance(weather_id, int) and 600 <= weather_id < 700:
-            is_snow = True
-        elif hour.get("snow"):
-            is_snow = True
+        is_snow = _is_snow_condition(hour)
 
         entry = {
             "temp": round(hour.get("temp", 0)),
