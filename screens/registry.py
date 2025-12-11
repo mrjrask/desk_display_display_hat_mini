@@ -111,7 +111,7 @@ class ScreenContext:
 
     display: Any
     cache: Dict[str, Any]
-    logos: Dict[str, Optional[Image.Image]]
+    logos: Any
     image_dir: str
     travel_requested: bool
     travel_active: bool
