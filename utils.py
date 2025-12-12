@@ -1010,18 +1010,124 @@ def get_mlb_abbreviation(team_name: str) -> str:
     return MLB_ABBREVIATIONS.get(team_name, team_name)
 
 # ─── Weather helpers ──────────────────────────────────────────────────────────
+def _draw_cloud(draw: ImageDraw.ImageDraw, center: tuple[float, float], radius: float, color: tuple[int, int, int]):
+    cx, cy = center
+    for dx, dy, scale in [(-radius * 0.8, 0, 1), (0, -radius * 0.5, 1.1), (radius * 0.8, 0, 1)]:
+        r = radius * scale
+        draw.ellipse(
+            (cx + dx - r, cy + dy - r, cx + dx + r, cy + dy + r),
+            fill=color,
+        )
+    draw.rectangle((cx - radius * 1.6, cy, cx + radius * 1.6, cy + radius * 1.1), fill=color)
+
+
+def _render_sun(size: int) -> Image.Image:
+    icon = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(icon)
+    center = size / 2
+    radius = size * 0.24
+    draw.ellipse((center - radius, center - radius, center + radius, center + radius), fill=(255, 204, 0, 255))
+    for i in range(12):
+        angle = math.radians(i * 30)
+        x0 = center + math.cos(angle) * radius * 1.5
+        y0 = center + math.sin(angle) * radius * 1.5
+        x1 = center + math.cos(angle) * radius * 2.1
+        y1 = center + math.sin(angle) * radius * 2.1
+        draw.line((x0, y0, x1, y1), fill=(255, 215, 0, 255), width=max(2, size // 20))
+    return icon
+
+
+def _render_cloudy(size: int, with_sun: bool = False) -> Image.Image:
+    icon = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(icon)
+    center = (size * 0.5, size * 0.55)
+    radius = size * 0.18
+    if with_sun:
+        sun = _render_sun(size)
+        icon.alpha_composite(sun, (int(size * 0.05), int(size * 0.05)))
+    _draw_cloud(draw, center, radius, (220, 220, 220, 255))
+    return icon
+
+
+def _render_precip(size: int, kind: str) -> Image.Image:
+    icon = _render_cloudy(size)
+    draw = ImageDraw.Draw(icon)
+    base_y = int(size * 0.65)
+    spacing = size * 0.12
+    start_x = size * 0.32
+    color = (100, 170, 255, 255)
+    for idx in range(3):
+        x = start_x + idx * spacing
+        if kind == "snow":
+            arm = size * 0.05
+            draw.line((x, base_y, x, base_y + size * 0.18), fill=color, width=max(1, size // 30))
+            draw.line((x - arm, base_y + size * 0.08, x + arm, base_y + size * 0.1), fill=color, width=max(1, size // 30))
+            draw.line((x - arm, base_y + size * 0.12, x + arm, base_y + size * 0.14), fill=color, width=max(1, size // 30))
+        elif kind == "sleet":
+            draw.line((x, base_y, x, base_y + size * 0.18), fill=color, width=max(2, size // 18))
+            draw.text((x - size * 0.04, base_y + size * 0.16), "•", font=ImageFont.load_default(), fill=color)
+        else:
+            draw.line((x, base_y, x, base_y + size * 0.2), fill=color, width=max(2, size // 18))
+    if kind == "storm":
+        bolt = [
+            (size * 0.62, base_y - size * 0.05),
+            (size * 0.55, base_y + size * 0.15),
+            (size * 0.66, base_y + size * 0.12),
+            (size * 0.6, base_y + size * 0.35),
+            (size * 0.74, base_y + size * 0.12),
+            (size * 0.64, base_y + size * 0.12),
+        ]
+        draw.polygon(bolt, fill=(255, 204, 0, 255))
+    return icon
+
+
+def _render_fog(size: int) -> Image.Image:
+    icon = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(icon)
+    y = size * 0.35
+    for _ in range(4):
+        draw.rounded_rectangle((size * 0.18, y, size * 0.82, y + size * 0.08), radius=size * 0.04, fill=(200, 200, 200, 200))
+        y += size * 0.12
+    return icon
+
+
+def _render_wind(size: int) -> Image.Image:
+    icon = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(icon)
+    y = size * 0.35
+    for idx in range(3):
+        draw.arc((size * 0.18, y - size * 0.05, size * 0.9, y + size * 0.25), start=200, end=350, fill=(180, 220, 255, 255), width=max(2, size // 24))
+        y += size * 0.18
+    return icon
+
+
+ICON_RENDERERS = {
+    "sunny": _render_sun,
+    "partly-cloudy": lambda size: _render_cloudy(size, with_sun=True),
+    "cloudy": _render_cloudy,
+    "rain": lambda size: _render_precip(size, "rain"),
+    "snow": lambda size: _render_precip(size, "snow"),
+    "sleet": lambda size: _render_precip(size, "sleet"),
+    "storm": lambda size: _render_precip(size, "storm"),
+    "fog": _render_fog,
+    "wind": _render_wind,
+}
+
+
 @log_call
 def fetch_weather_icon(icon_code: str, size: int) -> Image.Image | None:
     if not icon_code:
         return None
+
+    renderer = ICON_RENDERERS.get(icon_code)
+    if renderer is None:
+        logging.debug("Unknown icon code %s; using cloudy placeholder", icon_code)
+        renderer = ICON_RENDERERS["cloudy"]
+
     try:
-        url = f"https://openweathermap.org/img/wn/{icon_code}@2x.png"
-        response = requests.get(url, timeout=5)
-        response.raise_for_status()
-        icon = Image.open(BytesIO(response.content)).convert("RGBA")
-        return icon.resize((size, size), Image.ANTIALIAS)
-    except Exception as exc:  # pragma: no cover - network failures are non-fatal
-        logging.warning("Weather icon fetch failed: %s", exc)
+        return renderer(size)
+    except Exception as exc:  # pragma: no cover - drawing failures are non-fatal
+        logging.warning("Weather icon render failed: %s", exc)
         return None
 
 

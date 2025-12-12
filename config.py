@@ -178,27 +178,27 @@ CURRENT_SSID = get_current_ssid()
 
 if CURRENT_SSID == "Verano":
     ENABLE_WEATHER = True
-    OWM_API_KEY    = _get_first_env_var("OWM_API_KEY_VERANO", "OWM_API_KEY")
     LATITUDE       = 41.9103
     LONGITUDE      = -87.6340
     TRAVEL_MODE    = "to_home"
 elif CURRENT_SSID == "wiffy":
     ENABLE_WEATHER = True
-    OWM_API_KEY    = _get_first_env_var("OWM_API_KEY_WIFFY", "OWM_API_KEY")
     LATITUDE       = 42.13444
     LONGITUDE      = -87.876389
     TRAVEL_MODE    = "to_work"
 else:
     ENABLE_WEATHER = True
-    OWM_API_KEY    = _get_first_env_var("OWM_API_KEY_DEFAULT", "OWM_API_KEY")
     LATITUDE       = 41.9103
     LONGITUDE      = -87.6340
     TRAVEL_MODE    = "to_home"
 
-if not OWM_API_KEY:
-    logging.warning(
-        "OpenWeatherMap API key not configured; the app will use fallback weather data only."
-    )
+WEATHERKIT_TEAM_ID     = os.environ.get("WEATHERKIT_TEAM_ID")
+WEATHERKIT_KEY_ID      = os.environ.get("WEATHERKIT_KEY_ID")
+WEATHERKIT_SERVICE_ID  = os.environ.get("WEATHERKIT_SERVICE_ID")
+WEATHERKIT_KEY_PATH    = os.environ.get("WEATHERKIT_KEY_PATH")
+WEATHERKIT_PRIVATE_KEY = os.environ.get("WEATHERKIT_PRIVATE_KEY")
+WEATHERKIT_LANGUAGE    = os.environ.get("WEATHERKIT_LANGUAGE", "en")
+WEATHERKIT_TIMEZONE    = os.environ.get("WEATHERKIT_TIMEZONE", "America/Chicago")
 
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY")
 
@@ -217,6 +217,19 @@ except (TypeError, ValueError):
     HOURLY_FORECAST_HOURS = 5
 if HOURLY_FORECAST_HOURS > 12:
     HOURLY_FORECAST_HOURS = 12
+
+try:
+    WEATHER_REFRESH_SECONDS = int(os.environ.get("WEATHER_REFRESH_SECONDS", "1800"))
+    if WEATHER_REFRESH_SECONDS < 600:
+        logging.warning(
+            "WEATHER_REFRESH_SECONDS too low; clamping to 600 seconds to limit API usage."
+        )
+        WEATHER_REFRESH_SECONDS = 600
+except (TypeError, ValueError):
+    logging.warning(
+        "Invalid WEATHER_REFRESH_SECONDS value; defaulting to 1800 seconds."
+    )
+    WEATHER_REFRESH_SECONDS = 1800
 try:
     TEAM_STANDINGS_DISPLAY_SECONDS = int(
         os.environ.get("TEAM_STANDINGS_DISPLAY_SECONDS", "5")
@@ -470,18 +483,9 @@ SCOREBOARD_SCROLL_PAUSE_TOP    = 0.75
 SCOREBOARD_SCROLL_PAUSE_BOTTOM = 0.5
 
 # ─── API endpoints ────────────────────────────────────────────────────────────
-ONE_CALL_URL      = "https://api.openweathermap.org/data/3.0/onecall"
-OPEN_METEO_URL    = "https://api.open-meteo.com/v1/forecast"
-OPEN_METEO_PARAMS = {
-    "latitude":        LATITUDE,
-    "longitude":       LONGITUDE,
-    "current_weather": True,
-    "timezone":        "America/Chicago",
-    "temperature_unit":"fahrenheit",
-    "windspeed_unit":  "mph",
-    "daily":           "temperature_2m_max,temperature_2m_min,sunrise,sunset"
-}
-
+WEATHERKIT_URL_TEMPLATE = (
+    "https://weatherkit.apple.com/api/v1/weather/{language}/{lat}/{lon}"
+)
 NHL_API_URL        = "https://api-web.nhle.com/v1/club-schedule-season/CHI/20252026"
 MLB_API_URL        = "https://statsapi.mlb.com/api/v1/schedule"
 MLB_CUBS_TEAM_ID   = "112"

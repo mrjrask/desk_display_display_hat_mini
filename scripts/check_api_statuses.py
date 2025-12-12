@@ -41,7 +41,6 @@ from data_fetch import (
     fetch_sox_games,
     fetch_sox_standings,
     fetch_weather,
-    fetch_weather_fallback,
     fetch_wolves_games,
 )
 from screens.draw_travel_time import get_travel_times
@@ -109,12 +108,7 @@ def _run_check(check: ApiCheck) -> dict:
 
 
 CHECKS: Iterable[ApiCheck] = [
-    ApiCheck("weather_primary", fetch_weather, description="OpenWeatherMap OneCall"),
-    ApiCheck(
-        "weather_fallback",
-        fetch_weather_fallback,
-        description="Open-Meteo fallback",
-    ),
+    ApiCheck("weather", fetch_weather, description="Apple WeatherKit"),
     ApiCheck("nhl_next_game", fetch_blackhawks_next_game, expect_data=False),
     ApiCheck("nhl_next_home_game", fetch_blackhawks_next_home_game, expect_data=False),
     ApiCheck("nhl_last_game", fetch_blackhawks_last_game, expect_data=False),

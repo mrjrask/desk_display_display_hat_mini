@@ -2,7 +2,6 @@ import datetime as dt
 import importlib
 import os
 
-os.environ.setdefault("OWM_API_KEY", "test")
 os.environ.setdefault("GOOGLE_MAPS_API_KEY", "test")
 
 travel = importlib.import_module("screens.draw_travel_time")

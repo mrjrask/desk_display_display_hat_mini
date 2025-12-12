@@ -19,13 +19,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pytz
 import requests
+import jwt
 
 from services.http_client import NHL_HEADERS, get_session
 from screens.nba_scoreboard import _fetch_games_for_date as _nba_fetch_games_for_date
 
 from config import (
-    OWM_API_KEY,
-    ONE_CALL_URL,
     LATITUDE,
     LONGITUDE,
     NHL_API_URL,
@@ -34,8 +33,6 @@ from config import (
     MLB_CUBS_TEAM_ID,
     MLB_SOX_TEAM_ID,
     CENTRAL_TIME,
-    OPEN_METEO_URL,
-    OPEN_METEO_PARAMS,
     NBA_TEAM_ID,
     NBA_TEAM_TRICODE,
     AHL_API_BASE_URL,
@@ -48,115 +45,292 @@ from config import (
     AHL_TEAM_ID,
     AHL_TEAM_NAME,
     AHL_TEAM_TRICODE,
+    WEATHERKIT_TEAM_ID,
+    WEATHERKIT_KEY_ID,
+    WEATHERKIT_SERVICE_ID,
+    WEATHERKIT_KEY_PATH,
+    WEATHERKIT_PRIVATE_KEY,
+    WEATHERKIT_LANGUAGE,
+    WEATHERKIT_TIMEZONE,
+    WEATHERKIT_URL_TEMPLATE,
+    WEATHER_REFRESH_SECONDS,
 )
 
 # ─── Shared HTTP session ─────────────────────────────────────────────────────
 _session = get_session()
 
-# Track last time we received a 429 from OWM
-_last_owm_429 = None
+# Weather caching to limit API usage across devices
+_weather_cache: Optional[dict[str, Any]] = None
+_weather_cache_fetched_at: Optional[datetime.datetime] = None
+_weatherkit_token: Optional[str] = None
+_weatherkit_token_exp: Optional[datetime.datetime] = None
+_weatherkit_key_cache: Optional[str] = None
 # Cache statsapi DNS availability to avoid repeated slow lookups
 _statsapi_dns_available: Optional[bool] = None
 _statsapi_dns_checked_at: Optional[float] = None
 _STATSAPI_DNS_RECHECK_SECONDS = 600
 
 # -----------------------------------------------------------------------------
-# WEATHER
+# WEATHER — Apple WeatherKit only
 # -----------------------------------------------------------------------------
-def fetch_weather():
-    """
-    Fetch weather from OpenWeatherMap OneCall, falling back to Open-Meteo on errors
-    or if recently rate-limited.
-    """
-    global _last_owm_429
-    now = datetime.datetime.now()
-    if not OWM_API_KEY:
-        logging.warning("OpenWeatherMap API key missing; using fallback provider")
-        return fetch_weather_fallback()
-    # If we got a 429 within the last 2 hours, skip OWM and fallback
-    if _last_owm_429 and (now - _last_owm_429) < datetime.timedelta(hours=2):
-        logging.warning("Skipping OpenWeatherMap due to recent 429; using fallback")
-        return fetch_weather_fallback()
+def _load_weatherkit_private_key() -> Optional[str]:
+    global _weatherkit_key_cache
+    if _weatherkit_key_cache:
+        return _weatherkit_key_cache
 
-    try:
-        params = {
-            "lat": LATITUDE,
-            "lon": LONGITUDE,
-            "appid": OWM_API_KEY,
-            "units": "imperial",
-        }
-        r = _session.get(ONE_CALL_URL, params=params, timeout=10)
-        r.raise_for_status()
-        return r.json()
+    if WEATHERKIT_PRIVATE_KEY:
+        key = WEATHERKIT_PRIVATE_KEY.strip()
+        if key:
+            _weatherkit_key_cache = key
+            return _weatherkit_key_cache
 
-    except requests.exceptions.HTTPError as http_err:
-        if r.status_code == 429:
-            logging.warning("HTTP 429 from OWM; falling back and pausing OWM for 2h")
-            _last_owm_429 = datetime.datetime.now()
-            return fetch_weather_fallback()
-        logging.error("HTTP error fetching weather: %s", http_err)
+    if WEATHERKIT_KEY_PATH:
+        try:
+            with open(WEATHERKIT_KEY_PATH, "r", encoding="utf-8") as fh:
+                _weatherkit_key_cache = fh.read().strip()
+                if _weatherkit_key_cache:
+                    return _weatherkit_key_cache
+        except Exception as exc:
+            logging.error("Unable to read WEATHERKIT_KEY_PATH %s: %s", WEATHERKIT_KEY_PATH, exc)
+
+    logging.error("WeatherKit private key not configured. Set WEATHERKIT_PRIVATE_KEY or WEATHERKIT_KEY_PATH.")
+    return None
+
+
+def _build_weatherkit_token(now: datetime.datetime) -> Optional[str]:
+    global _weatherkit_token, _weatherkit_token_exp
+
+    missing = [
+        name
+        for name, value in (
+            ("WEATHERKIT_TEAM_ID", WEATHERKIT_TEAM_ID),
+            ("WEATHERKIT_KEY_ID", WEATHERKIT_KEY_ID),
+            ("WEATHERKIT_SERVICE_ID", WEATHERKIT_SERVICE_ID),
+        )
+        if not value
+    ]
+    if missing:
+        logging.error("Missing WeatherKit configuration: %s", ", ".join(missing))
         return None
 
-    except Exception as e:
-        logging.error("Error fetching weather: %s", e)
+    if _weatherkit_token and _weatherkit_token_exp:
+        if (_weatherkit_token_exp - now).total_seconds() > 300:
+            return _weatherkit_token
+
+    key = _load_weatherkit_private_key()
+    if not key:
         return None
 
-
-def fetch_weather_fallback():
-    """
-    Fallback using Open-Meteo API for weather data.
-    """
+    iat = int(now.timestamp())
+    exp = int((now + datetime.timedelta(minutes=30)).timestamp())
     try:
-        r = _session.get(OPEN_METEO_URL, params=OPEN_METEO_PARAMS, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        logging.debug("Weather data (Open-Meteo): %s", data)
-
-        current = data.get("current_weather", {})
-        daily   = data.get("daily", {})
-
-        mapped = {
-            "current": {
-                "temp":        current.get("temperature"),
-                "feels_like":  current.get("temperature"),
-                "weather": [{
-                    "description": weather_code_to_description(
-                        current.get("weathercode", -1)
-                    )
-                }],
-                "wind_speed":  current.get("windspeed"),
-                "wind_deg":    current.get("winddirection"),
-                "humidity":    (daily.get("relativehumidity_2m") or [0])[0],
-                "pressure":    (daily.get("surface_pressure")   or [0])[0],
-                "uvi":         0,
-                "sunrise":     (daily.get("sunrise")  or [None])[0],
-                "sunset":      (daily.get("sunset")   or [None])[0],
+        _weatherkit_token = jwt.encode(
+            {
+                "iss": WEATHERKIT_TEAM_ID,
+                "iat": iat,
+                "exp": exp,
+                "sub": WEATHERKIT_SERVICE_ID,
             },
-            "daily": [{
-                "temp": {
-                    "max": (daily.get("temperature_2m_max") or [None])[0],
-                    "min": (daily.get("temperature_2m_min") or [None])[0],
-                },
-                "sunrise": (daily.get("sunrise") or [None])[0],
-                "sunset":  (daily.get("sunset")  or [None])[0],
-            }],
-        }
-        return mapped
-
-    except Exception as e:
-        logging.error("Error fetching fallback weather: %s", e)
+            key,
+            algorithm="ES256",
+            headers={"kid": WEATHERKIT_KEY_ID},
+        )
+        _weatherkit_token_exp = datetime.datetime.fromtimestamp(exp, datetime.timezone.utc)
+        return _weatherkit_token
+    except Exception as exc:
+        logging.error("Unable to sign WeatherKit token: %s", exc)
         return None
 
 
-def weather_code_to_description(code):
+def _camel_to_words(text: str) -> str:
+    if not text:
+        return ""
+    words = re.sub(r"(?<!^)(?=[A-Z])", " ", text)
+    return words.strip().title()
+
+
+def _condition_mapping(condition_code: str) -> tuple[str, str]:
     mapping = {
-        0:  "Clear sky",     1: "Mainly clear",  2: "Partly cloudy", 3: "Overcast",
-        45: "Fog",           48: "Rime fog",     51: "Light drizzle", 53: "Mod. drizzle",
-        55: "Dense drizzle", 61: "Slight rain",  63: "Mod. rain",     65: "Heavy rain",
-        80: "Rain showers",  81: "Mod. showers", 82: "Violent showers",
-        95: "Thunderstorm",  96: "Thunder w/ hail", 99: "Thunder w/ hail"
+        "Blizzard": ("Blizzard", "snow"),
+        "BlowingSnow": ("Blowing Snow", "snow"),
+        "Breezy": ("Breezy", "wind"),
+        "Clear": ("Clear", "sunny"),
+        "Cloudy": ("Cloudy", "cloudy"),
+        "Drizzle": ("Drizzle", "rain"),
+        "Flurries": ("Flurries", "snow"),
+        "Fog": ("Fog", "fog"),
+        "FreezingDrizzle": ("Freezing Drizzle", "sleet"),
+        "FreezingRain": ("Freezing Rain", "sleet"),
+        "Frigid": ("Frigid", "wind"),
+        "Haze": ("Haze", "fog"),
+        "Hazy": ("Hazy", "fog"),
+        "HeavyRain": ("Heavy Rain", "rain"),
+        "HeavySnow": ("Heavy Snow", "snow"),
+        "Hot": ("Hot", "sunny"),
+        "Hurricane": ("Hurricane", "storm"),
+        "IsolatedThunderstorms": ("Isolated Thunderstorms", "storm"),
+        "MostlyClear": ("Mostly Clear", "sunny"),
+        "MostlyCloudy": ("Mostly Cloudy", "cloudy"),
+        "MostlySunny": ("Mostly Sunny", "sunny"),
+        "PartlyCloudy": ("Partly Cloudy", "partly-cloudy"),
+        "Rain": ("Rain", "rain"),
+        "ScatteredThunderstorms": ("Scattered Thunderstorms", "storm"),
+        "Sleet": ("Sleet", "sleet"),
+        "Smoky": ("Smoky", "fog"),
+        "Snow": ("Snow", "snow"),
+        "StrongStorms": ("Strong Storms", "storm"),
+        "SunShowers": ("Sun Showers", "rain"),
+        "Tornado": ("Tornado", "storm"),
+        "TropicalStorm": ("Tropical Storm", "storm"),
+        "Windy": ("Windy", "wind"),
     }
-    return mapping.get(code, f"Code {code}")
+    default_desc = _camel_to_words(condition_code or "") or "Unknown"
+    desc, icon = mapping.get(condition_code, (default_desc, "cloudy"))
+    return desc, icon
+
+
+def _parse_iso_timestamp(value: Any) -> Optional[int]:
+    if not isinstance(value, str):
+        return None
+    try:
+        cleaned = value.replace("Z", "+00:00")
+        dt_value = datetime.datetime.fromisoformat(cleaned)
+        if dt_value.tzinfo is None:
+            dt_value = dt_value.replace(tzinfo=datetime.timezone.utc)
+        return int(dt_value.timestamp())
+    except Exception:
+        return None
+
+
+def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, Any]]:
+    if not isinstance(data, dict):
+        return None
+
+    current_raw = data.get("currentWeather") or {}
+    daily_raw = (data.get("forecastDaily") or {}).get("days") or []
+    hourly_raw = (data.get("forecastHourly") or {}).get("hours") or []
+    alerts_raw = (data.get("weatherAlerts") or {}).get("alerts") or []
+
+    first_day = daily_raw[0] if daily_raw else {}
+    sunrise = _parse_iso_timestamp(first_day.get("sunrise"))
+    sunset = _parse_iso_timestamp(first_day.get("sunset"))
+
+    desc, icon = _condition_mapping(current_raw.get("conditionCode", ""))
+    humidity_raw = current_raw.get("humidity")
+    try:
+        humidity_pct = int(round(float(humidity_raw) * 100)) if humidity_raw is not None else None
+    except Exception:
+        humidity_pct = None
+
+    current: dict[str, Any] = {
+        "temp": current_raw.get("temperature"),
+        "feels_like": current_raw.get("temperatureApparent") or current_raw.get("temperature"),
+        "weather": [
+            {
+                "description": desc,
+                "icon": icon,
+            }
+        ],
+        "wind_speed": current_raw.get("windSpeed"),
+        "wind_deg": current_raw.get("windDirection"),
+        "humidity": humidity_pct,
+        "pressure": current_raw.get("pressure"),
+        "uvi": current_raw.get("uvIndex"),
+        "sunrise": sunrise,
+        "sunset": sunset,
+        "dt": _parse_iso_timestamp(current_raw.get("asOf")),
+        "clouds": int(round(float(current_raw.get("cloudCover")) * 100)) if current_raw.get("cloudCover") is not None else None,
+    }
+
+    daily: list[dict[str, Any]] = []
+    for day in daily_raw:
+        day_desc, day_icon = _condition_mapping(day.get("conditionCode", ""))
+        daily.append(
+            {
+                "temp": {"max": day.get("temperatureMax"), "min": day.get("temperatureMin")},
+                "sunrise": _parse_iso_timestamp(day.get("sunrise")),
+                "sunset": _parse_iso_timestamp(day.get("sunset")),
+                "pop": day.get("precipitationChance"),
+                "weather": [
+                    {
+                        "description": day_desc,
+                        "icon": day_icon,
+                    }
+                ],
+            }
+        )
+
+    hourly: list[dict[str, Any]] = []
+    for hour in hourly_raw:
+        hour_desc, hour_icon = _condition_mapping(hour.get("conditionCode", ""))
+        hourly.append(
+            {
+                "dt": _parse_iso_timestamp(hour.get("forecastStart")),
+                "temp": hour.get("temperature"),
+                "feels_like": hour.get("temperatureApparent") or hour.get("temperature"),
+                "pop": hour.get("precipitationChance"),
+                "weather": [
+                    {
+                        "description": hour_desc,
+                        "icon": hour_icon,
+                    }
+                ],
+            }
+        )
+
+    mapped = {
+        "current": current,
+        "daily": daily,
+        "hourly": hourly,
+        "alerts": alerts_raw,
+    }
+    return mapped
+
+
+def fetch_weather():
+    """Fetch weather exclusively from Apple WeatherKit with caching."""
+
+    global _weather_cache, _weather_cache_fetched_at
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    if _weather_cache and _weather_cache_fetched_at:
+        delta = (now - _weather_cache_fetched_at).total_seconds()
+        if delta < WEATHER_REFRESH_SECONDS:
+            logging.debug(
+                "Returning cached WeatherKit data (age: %.0fs, TTL: %ds)", delta, WEATHER_REFRESH_SECONDS
+            )
+            return _weather_cache
+
+    token = _build_weatherkit_token(now)
+    if not token:
+        return _weather_cache
+
+    url = WEATHERKIT_URL_TEMPLATE.format(
+        language=WEATHERKIT_LANGUAGE,
+        lat=LATITUDE,
+        lon=LONGITUDE,
+    )
+
+    params = {
+        "dataSets": "currentWeather,forecastDaily,forecastHourly,weatherAlerts",
+        "timezone": WEATHERKIT_TIMEZONE,
+    }
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+    }
+
+    try:
+        r = _session.get(url, params=params, headers=headers, timeout=10)
+        r.raise_for_status()
+        normalized = _normalise_weatherkit_response(r.json())
+        if normalized is not None:
+            _weather_cache = normalized
+            _weather_cache_fetched_at = now
+        return normalized or _weather_cache
+    except Exception as exc:
+        logging.error("Error fetching WeatherKit data: %s", exc)
+        return _weather_cache
 
 
 # -----------------------------------------------------------------------------
