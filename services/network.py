@@ -36,7 +36,7 @@ class ConnectivityMonitor:
     def _check_internet(self):
         try:
             # quick TCP connect to one of our domains
-            sock = socket.create_connection(("api.openweathermap.org", 443), timeout=3)
+            sock = socket.create_connection(("weatherkit.apple.com", 443), timeout=3)
             sock.close()
             return True
         except:

@@ -306,8 +306,16 @@ Each step above maps directly to the JSON structure under `playlists.default.ste
 API keys are no longer stored directly in `config.py`. Set them as environment variables before running any of the
 scripts:
 
-- `OWM_API_KEY_VERANO`, `OWM_API_KEY_WIFFY`, or `OWM_API_KEY_DEFAULT` (fallback); the code also accepts a generic
-  `OWM_API_KEY` value if you only have a single OpenWeatherMap key.
+- **Apple WeatherKit (required for weather):**
+  - `WEATHERKIT_TEAM_ID` — your 10-character Apple Developer Team ID.
+  - `WEATHERKIT_KEY_ID` — the WeatherKit key identifier from the Keys tab in Certificates, IDs & Profiles.
+  - `WEATHERKIT_SERVICE_ID` — the Service ID (or bundle ID) you enabled for WeatherKit.
+  - Provide the private key via **one** of:
+    - `WEATHERKIT_KEY_PATH` pointing to the `.p8` private key you downloaded from Apple, or
+    - `WEATHERKIT_PRIVATE_KEY` containing the full PEM contents.
+  - Optional: `WEATHERKIT_LANGUAGE` (default `en`) and `WEATHERKIT_TIMEZONE` (default `America/Chicago`).
+  - Optional: `WEATHER_REFRESH_SECONDS` controls how long WeatherKit responses are cached before another API call is made. The
+    default is **1800 seconds (30 minutes)** to stay well below the 500k calls/month allowance, even across multiple devices.
 - `GOOGLE_MAPS_API_KEY` for travel-time requests (leave unset to disable that screen).
 - `TRAVEL_TO_HOME_ORIGIN`, `TRAVEL_TO_HOME_DESTINATION`, `TRAVEL_TO_WORK_ORIGIN`,
   and `TRAVEL_TO_WORK_DESTINATION` to override the default travel addresses.
@@ -322,7 +330,10 @@ scripts:
 You can export the variables in your shell session:
 
 ```bash
-export OWM_API_KEY="your-open-weather-map-key"
+export WEATHERKIT_TEAM_ID="ABCDE12345"
+export WEATHERKIT_KEY_ID="1A2BC3D4E5"
+export WEATHERKIT_SERVICE_ID="com.example.weather"
+export WEATHERKIT_KEY_PATH="/home/pi/desk_display/AuthKey_1A2BC3D4E5.p8"
 export GOOGLE_MAPS_API_KEY="your-google-maps-key"
 ```
 
@@ -346,7 +357,7 @@ Or copy `.env.example` to `.env` and load it with your preferred process manager
 ## Screens
 
 - **Date/Time:** legible, high‑contrast text with the GitHub update dot when upstream commits are available.
-- **Weather (1/2):** Open‑Meteo + OWM snapshots and extended forecasts.
+- **Weather (1/2):** Apple WeatherKit current conditions + daily/hourly forecasts with built-in caching to minimize API calls.
 - **Inside:** BME688/BME280/LTR559/SHT41 summaries when sensors are wired.
 - **VRNO:** stock mini‑panel.
 - **Travel:** Maps ETA using your configured mode.
@@ -456,7 +467,7 @@ The checker now logs **which files have diverged** when updates exist, for easie
 - **Too‑dark colors on date/time:** this project forces high‑brightness random RGB values to ensure legibility on the LCD.
 - **Missing logos:** you’ll see a warning like `Logo file missing: CUBS.png`. Add the correct file into `images/mlb/`.
 - **No WebP animation:** ensure your Pillow build supports WebP (`pip3 show pillow`). PNG fallback will still work.
-- **Network/API errors:** MLB/OWM requests are time‑bounded; transient timeouts are logged and screens are skipped gracefully.
+- **Network/API errors:** WeatherKit/MLB requests are time‑bounded; transient timeouts are logged and screens are skipped gracefully.
 - **NHL statsapi diagnostics:** run `python3 nhl_scoreboard.py --diagnose-dns` to print resolver details, `/etc/resolv.conf`, and
   quick HTTP checks for both the statsapi and api-web fallbacks. DNS hiccups are now logged at `DEBUG`, so look for the INFO log
   that announces the api-web fallback instead of a warning storm.

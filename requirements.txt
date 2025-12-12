@@ -1,7 +1,8 @@
 Flask 
-requests 
-pytz 
+requests
+pytz
 Pillow
+PyJWT
 waitress
 yfinance
 numpy
