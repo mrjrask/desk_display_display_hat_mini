@@ -64,7 +64,28 @@ from utils import (
     temporary_display_led,
 )
 import data_fetch
-from services import wifi_utils
+try:
+    from services import wifi_utils as _wifi_utils
+    wifi_utils = _wifi_utils
+except Exception as exc:
+    logging.getLogger(__name__).warning(
+        "Wi-Fi utilities unavailable; Wi-Fi monitoring disabled: %s", exc
+    )
+
+    class _WifiUtilsFallback:
+        @staticmethod
+        def start_monitor():
+            return None
+
+        @staticmethod
+        def stop_monitor():
+            return None
+
+        @staticmethod
+        def get_wifi_state():
+            return "ok", None
+
+    wifi_utils = _WifiUtilsFallback()
 from paths import resolve_storage_paths
 
 from screens.draw_date_time import draw_date, draw_time
@@ -440,8 +461,11 @@ def _finalize_shutdown() -> None:
         logging.info("🎬 Finalizing video…")
     _release_video_writer()
 
-    if ENABLE_WIFI_MONITOR:
-        wifi_utils.stop_monitor()
+    if ENABLE_WIFI_MONITOR and hasattr(wifi_utils, "stop_monitor"):
+        try:
+            wifi_utils.stop_monitor()
+        except Exception as exc:
+            logging.debug("Wi-Fi monitor shutdown skipped: %s", exc)
 
     global _button_monitor_thread
     if _button_monitor_thread and _button_monitor_thread.is_alive():
@@ -907,9 +931,12 @@ def init_runtime() -> None:
         display.set_button_callback(_button_event_callback)
     except Exception:
         logging.debug("Button callback registration unavailable.")
-    if ENABLE_WIFI_MONITOR:
+    if ENABLE_WIFI_MONITOR and hasattr(wifi_utils, "start_monitor"):
         logging.info("🔌 Starting Wi-Fi monitor…")
-        wifi_utils.start_monitor()
+        try:
+            wifi_utils.start_monitor()
+        except Exception as exc:
+            logging.warning("Wi-Fi monitor unavailable: %s", exc)
 
     refresh_schedule_if_needed(force=True)
 
@@ -990,8 +1017,12 @@ def main_loop():
                 resume_display_updates()
 
             # Wi-Fi outage handling
-            if ENABLE_WIFI_MONITOR:
-                wifi_state, wifi_ssid = wifi_utils.get_wifi_state()
+            if ENABLE_WIFI_MONITOR and hasattr(wifi_utils, "get_wifi_state"):
+                try:
+                    wifi_state, wifi_ssid = wifi_utils.get_wifi_state()
+                except Exception as exc:
+                    logging.debug("Wi-Fi state unavailable: %s", exc)
+                    wifi_state, wifi_ssid = ("ok", None)
             else:
                 wifi_state, wifi_ssid = ("ok", None)
 
