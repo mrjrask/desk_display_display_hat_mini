@@ -2,7 +2,7 @@ Flask
 requests
 pytz
 Pillow
-PyJWT
+PyJWT[crypto]>=2.8.0
 waitress
 yfinance
 numpy
