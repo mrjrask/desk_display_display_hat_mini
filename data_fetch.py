@@ -54,6 +54,10 @@ from config import (
     WEATHERKIT_TIMEZONE,
     WEATHERKIT_URL_TEMPLATE,
     WEATHER_REFRESH_SECONDS,
+    OWM_API_KEY,
+    OWM_API_URL,
+    OWM_LANGUAGE,
+    OWM_UNITS,
 )
 
 # ─── Shared HTTP session ─────────────────────────────────────────────────────
@@ -71,7 +75,7 @@ _statsapi_dns_checked_at: Optional[float] = None
 _STATSAPI_DNS_RECHECK_SECONDS = 600
 
 # -----------------------------------------------------------------------------
-# WEATHER — Apple WeatherKit only
+# WEATHER — Apple WeatherKit primary, OpenWeatherMap secondary
 # -----------------------------------------------------------------------------
 def _load_weatherkit_private_key() -> Optional[str]:
     global _weatherkit_key_cache
@@ -287,23 +291,138 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
     return mapped
 
 
-def fetch_weather():
-    """Fetch weather exclusively from Apple WeatherKit with caching."""
 
-    global _weather_cache, _weather_cache_fetched_at
-    now = datetime.datetime.now(datetime.timezone.utc)
+def _owm_condition_mapping(weather: dict[str, Any]) -> tuple[str, str]:
+    weather_id = weather.get("id") if isinstance(weather, dict) else None
+    main = (weather.get("main") or "").lower() if isinstance(weather, dict) else ""
+    description = (weather.get("description") or "").title() if isinstance(weather, dict) else ""
 
-    if _weather_cache and _weather_cache_fetched_at:
-        delta = (now - _weather_cache_fetched_at).total_seconds()
-        if delta < WEATHER_REFRESH_SECONDS:
-            logging.debug(
-                "Returning cached WeatherKit data (age: %.0fs, TTL: %ds)", delta, WEATHER_REFRESH_SECONDS
-            )
-            return _weather_cache
+    icon = "cloudy"
+    if isinstance(weather_id, int):
+        if 200 <= weather_id < 300:
+            icon = "storm"
+        elif 300 <= weather_id < 400:
+            icon = "rain"
+        elif weather_id == 511:
+            icon = "sleet"
+        elif 500 <= weather_id < 600:
+            icon = "rain"
+        elif 600 <= weather_id < 700:
+            icon = "snow"
+        elif weather_id in {701, 711, 721, 731, 741, 751, 761}:
+            icon = "fog"
+        elif 762 <= weather_id <= 781:
+            icon = "storm"
+        elif weather_id == 800:
+            icon = "sunny"
+        elif weather_id in {801, 802}:
+            icon = "partly-cloudy"
+        elif weather_id in {803, 804}:
+            icon = "cloudy"
 
+    if icon == "cloudy" and main:
+        if "thunder" in main:
+            icon = "storm"
+        elif "drizzle" in main or "rain" in main:
+            icon = "rain"
+        elif "snow" in main or "sleet" in main:
+            icon = "snow"
+        elif main in {"mist", "fog", "haze"}:
+            icon = "fog"
+        elif "clear" in main:
+            icon = "sunny"
+        elif "cloud" in main:
+            icon = "cloudy"
+
+    return description or "Unknown", icon
+
+
+def _normalise_openweathermap_response(data: dict[str, Any]) -> Optional[dict[str, Any]]:
+    if not isinstance(data, dict):
+        return None
+
+    current_raw = data.get("current") or {}
+    daily_raw = data.get("daily") or []
+    hourly_raw = data.get("hourly") or []
+    alerts_raw = data.get("alerts") or []
+
+    current_weather_list = current_raw.get("weather") if isinstance(current_raw.get("weather"), list) else []
+    current_weather = (current_weather_list or [{}])[0]
+    current_desc, current_icon = _owm_condition_mapping(current_weather)
+
+    current: dict[str, Any] = {
+        "temp": current_raw.get("temp"),
+        "feels_like": current_raw.get("feels_like") or current_raw.get("temp"),
+        "weather": [
+            {
+                "description": current_desc,
+                "icon": current_icon,
+            }
+        ],
+        "wind_speed": current_raw.get("wind_speed"),
+        "wind_deg": current_raw.get("wind_deg"),
+        "humidity": current_raw.get("humidity"),
+        "pressure": current_raw.get("pressure"),
+        "uvi": current_raw.get("uvi"),
+        "sunrise": current_raw.get("sunrise"),
+        "sunset": current_raw.get("sunset"),
+        "dt": current_raw.get("dt"),
+        "clouds": current_raw.get("clouds"),
+    }
+
+    daily: list[dict[str, Any]] = []
+    for day in daily_raw:
+        weather_list = day.get("weather") if isinstance(day.get("weather"), list) else []
+        weather_entry = (weather_list or [{}])[0]
+        desc, icon = _owm_condition_mapping(weather_entry)
+        daily.append(
+            {
+                "temp": {"max": (day.get("temp") or {}).get("max"), "min": (day.get("temp") or {}).get("min")},
+                "sunrise": day.get("sunrise"),
+                "sunset": day.get("sunset"),
+                "pop": day.get("pop"),
+                "weather": [
+                    {
+                        "description": desc,
+                        "icon": icon,
+                    }
+                ],
+            }
+        )
+
+    hourly: list[dict[str, Any]] = []
+    for hour in hourly_raw:
+        weather_list = hour.get("weather") if isinstance(hour.get("weather"), list) else []
+        weather_entry = (weather_list or [{}])[0]
+        desc, icon = _owm_condition_mapping(weather_entry)
+        hourly.append(
+            {
+                "dt": hour.get("dt"),
+                "temp": hour.get("temp"),
+                "feels_like": hour.get("feels_like") or hour.get("temp"),
+                "pop": hour.get("pop"),
+                "weather": [
+                    {
+                        "description": desc,
+                        "icon": icon,
+                    }
+                ],
+            }
+        )
+
+    mapped = {
+        "current": current,
+        "daily": daily,
+        "hourly": hourly,
+        "alerts": alerts_raw,
+    }
+    return mapped
+
+
+def _fetch_weatherkit(now: datetime.datetime) -> Optional[dict[str, Any]]:
     token = _build_weatherkit_token(now)
     if not token:
-        return _weather_cache
+        return None
 
     url = WEATHERKIT_URL_TEMPLATE.format(
         language=WEATHERKIT_LANGUAGE,
@@ -324,13 +443,59 @@ def fetch_weather():
         r = _session.get(url, params=params, headers=headers, timeout=10)
         r.raise_for_status()
         normalized = _normalise_weatherkit_response(r.json())
-        if normalized is not None:
-            _weather_cache = normalized
-            _weather_cache_fetched_at = now
-        return normalized or _weather_cache
+        return normalized
     except Exception as exc:
         logging.error("Error fetching WeatherKit data: %s", exc)
-        return _weather_cache
+        return None
+
+
+def _fetch_openweathermap(now: datetime.datetime) -> Optional[dict[str, Any]]:
+    if not OWM_API_KEY:
+        logging.debug("OpenWeatherMap API key not configured; skipping secondary source")
+        return None
+
+    params = {
+        "lat": LATITUDE,
+        "lon": LONGITUDE,
+        "appid": OWM_API_KEY,
+        "units": OWM_UNITS,
+        "lang": OWM_LANGUAGE,
+        "exclude": "minutely",
+    }
+
+    try:
+        r = _session.get(OWM_API_URL, params=params, timeout=10)
+        r.raise_for_status()
+        normalized = _normalise_openweathermap_response(r.json())
+        return normalized
+    except Exception as exc:
+        logging.error("Error fetching OpenWeatherMap data: %s", exc)
+        return None
+
+
+def fetch_weather():
+    """Fetch weather from WeatherKit with OpenWeatherMap as a fallback."""
+
+    global _weather_cache, _weather_cache_fetched_at
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    if _weather_cache and _weather_cache_fetched_at:
+        delta = (now - _weather_cache_fetched_at).total_seconds()
+        if delta < WEATHER_REFRESH_SECONDS:
+            logging.debug(
+                "Returning cached weather data (age: %.0fs, TTL: %ds)", delta, WEATHER_REFRESH_SECONDS
+            )
+            return _weather_cache
+
+    normalized = _fetch_weatherkit(now)
+    if normalized is None:
+        normalized = _fetch_openweathermap(now)
+
+    if normalized is not None:
+        _weather_cache = normalized
+        _weather_cache_fetched_at = now
+
+    return normalized or _weather_cache
 
 
 # -----------------------------------------------------------------------------
