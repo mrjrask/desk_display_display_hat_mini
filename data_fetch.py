@@ -69,6 +69,7 @@ _weather_cache_fetched_at: Optional[datetime.datetime] = None
 _weatherkit_token: Optional[str] = None
 _weatherkit_token_exp: Optional[datetime.datetime] = None
 _weatherkit_key_cache: Optional[str] = None
+_owm_backoff_until: Optional[datetime.datetime] = None
 # Cache statsapi DNS availability to avoid repeated slow lookups
 _statsapi_dns_available: Optional[bool] = None
 _statsapi_dns_checked_at: Optional[float] = None
@@ -84,10 +85,28 @@ def _load_weatherkit_private_key() -> Optional[str]:
 
     if WEATHERKIT_PRIVATE_KEY:
         raw_key = WEATHERKIT_PRIVATE_KEY.strip()
+        # Remove accidental surrounding quotes that can be introduced by shell
+        # quoting or dotenv files.
+        if (raw_key.startswith("'") and raw_key.endswith("'")) or (
+            raw_key.startswith('"') and raw_key.endswith('"')
+        ):
+            raw_key = raw_key[1:-1].strip()
+
         if raw_key:
             # Handle keys provided as literal "\n" sequences (common in env vars)
             # and normalize CRLF line endings.
             normalized_key = raw_key.replace("\\n", "\n").replace("\r\n", "\n")
+
+            # If the key looks like bare base64 (missing PEM framing), wrap it so
+            # cryptography can parse it correctly.
+            if "-----BEGIN" not in normalized_key and re.fullmatch(
+                r"[A-Za-z0-9+/=\s]+", normalized_key
+            ):
+                normalized_key = (
+                    "-----BEGIN PRIVATE KEY-----\n"
+                    + "\n".join(line.strip() for line in normalized_key.splitlines() if line.strip())
+                    + "\n-----END PRIVATE KEY-----"
+                )
 
             # If the env var accidentally contains a file path instead of the
             # actual key, attempt to read the file.
@@ -472,8 +491,18 @@ def _fetch_weatherkit(now: datetime.datetime) -> Optional[dict[str, Any]]:
 
 
 def _fetch_openweathermap(now: datetime.datetime) -> Optional[dict[str, Any]]:
+    global _owm_backoff_until
+
     if not OWM_API_KEY:
         logging.debug("OpenWeatherMap API key not configured; skipping secondary source")
+        return None
+
+    if _owm_backoff_until and now < _owm_backoff_until:
+        remaining = int((_owm_backoff_until - now).total_seconds())
+        logging.info(
+            "Skipping OpenWeatherMap fetch; still backing off for %ds after rate limit",
+            remaining,
+        )
         return None
 
     params = {
@@ -490,6 +519,17 @@ def _fetch_openweathermap(now: datetime.datetime) -> Optional[dict[str, Any]]:
         r.raise_for_status()
         normalized = _normalise_openweathermap_response(r.json())
         return normalized
+    except requests.HTTPError as exc:
+        status = exc.response.status_code if exc.response is not None else None
+        if status == 429:
+            _owm_backoff_until = now + datetime.timedelta(minutes=15)
+            logging.warning(
+                "OpenWeatherMap rate limited (429); backing off until %s",
+                _owm_backoff_until.isoformat(),
+            )
+        else:
+            logging.error("Error fetching OpenWeatherMap data: %s", exc)
+        return None
     except Exception as exc:
         logging.error("Error fetching OpenWeatherMap data: %s", exc)
         return None
@@ -516,8 +556,18 @@ def fetch_weather():
     if normalized is not None:
         _weather_cache = normalized
         _weather_cache_fetched_at = now
+        return _weather_cache
 
-    return normalized or _weather_cache
+    # If both sources fail, fall back to stale cached data instead of returning
+    # nothing (and hammering the APIs on the next attempt).
+    if _weather_cache and _weather_cache_fetched_at:
+        delta = (now - _weather_cache_fetched_at).total_seconds()
+        logging.info(
+            "Returning stale weather cache after fetch errors (age: %.0fs)", delta
+        )
+        return _weather_cache
+
+    return None
 
 
 # -----------------------------------------------------------------------------
