@@ -83,15 +83,37 @@ def _load_weatherkit_private_key() -> Optional[str]:
         return _weatherkit_key_cache
 
     if WEATHERKIT_PRIVATE_KEY:
-        key = WEATHERKIT_PRIVATE_KEY.strip()
-        if key:
-            _weatherkit_key_cache = key
+        raw_key = WEATHERKIT_PRIVATE_KEY.strip()
+        if raw_key:
+            # Handle keys provided as literal "\n" sequences (common in env vars)
+            # and normalize CRLF line endings.
+            normalized_key = raw_key.replace("\\n", "\n").replace("\r\n", "\n")
+
+            # If the env var accidentally contains a file path instead of the
+            # actual key, attempt to read the file.
+            if (
+                "-----BEGIN" not in normalized_key
+                and os.path.exists(normalized_key)
+                and os.path.isfile(normalized_key)
+            ):
+                try:
+                    with open(normalized_key, "r", encoding="utf-8") as fh:
+                        normalized_key = fh.read().replace("\r\n", "\n").strip()
+                except Exception as exc:
+                    logging.error(
+                        "Unable to read WEATHERKIT_PRIVATE_KEY path %s: %s",
+                        normalized_key,
+                        exc,
+                    )
+                    return None
+
+            _weatherkit_key_cache = normalized_key
             return _weatherkit_key_cache
 
     if WEATHERKIT_KEY_PATH:
         try:
             with open(WEATHERKIT_KEY_PATH, "r", encoding="utf-8") as fh:
-                _weatherkit_key_cache = fh.read().strip()
+                _weatherkit_key_cache = fh.read().replace("\r\n", "\n").strip()
                 if _weatherkit_key_cache:
                     return _weatherkit_key_cache
         except Exception as exc:

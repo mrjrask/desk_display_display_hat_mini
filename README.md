@@ -313,6 +313,8 @@ scripts:
   - Provide the private key via **one** of:
     - `WEATHERKIT_KEY_PATH` pointing to the `.p8` private key you downloaded from Apple, or
     - `WEATHERKIT_PRIVATE_KEY` containing the full PEM contents.
+    - If you use environment variables, ensure the PEM retains its real newlines. Literal `\n` sequences, pasted file paths,
+      or Windows-style line endings can all prevent the token from being signed.
   - Optional: `WEATHERKIT_LANGUAGE` (default `en`) and `WEATHERKIT_TIMEZONE` (default `America/Chicago`).
   - Optional: `WEATHER_REFRESH_SECONDS` controls how long WeatherKit responses are cached before another API call is made. The
     default is **1800 seconds (30 minutes)** to stay well below the 500k calls/month allowance, even across multiple devices.
