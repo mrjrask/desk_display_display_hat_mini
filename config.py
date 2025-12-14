@@ -200,6 +200,13 @@ WEATHERKIT_PRIVATE_KEY = os.environ.get("WEATHERKIT_PRIVATE_KEY")
 WEATHERKIT_LANGUAGE    = os.environ.get("WEATHERKIT_LANGUAGE", "en")
 WEATHERKIT_TIMEZONE    = os.environ.get("WEATHERKIT_TIMEZONE", "America/Chicago")
 
+OWM_API_KEY = _get_first_env_var(
+    "OWM_API_KEY", "OWM_API_KEY_VERANO", "OWM_API_KEY_WIFFY", "OWM_API_KEY_DEFAULT"
+)
+OWM_API_URL   = "https://api.openweathermap.org/data/3.0/onecall"
+OWM_UNITS     = os.environ.get("OWM_UNITS", "imperial")
+OWM_LANGUAGE  = os.environ.get("OWM_LANGUAGE", "en")
+
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY")
 
 # ─── Display configuration ─────────────────────────────────────────────────────
