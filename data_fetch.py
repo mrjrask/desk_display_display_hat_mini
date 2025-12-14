@@ -20,6 +20,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import pytz
 import requests
 import jwt
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 
 from services.http_client import NHL_HEADERS, get_session
 from screens.nba_scoreboard import _fetch_games_for_date as _nba_fetch_games_for_date
@@ -68,7 +70,7 @@ _weather_cache: Optional[dict[str, Any]] = None
 _weather_cache_fetched_at: Optional[datetime.datetime] = None
 _weatherkit_token: Optional[str] = None
 _weatherkit_token_exp: Optional[datetime.datetime] = None
-_weatherkit_key_cache: Optional[str] = None
+_weatherkit_key_cache: Optional[Any] = None
 _owm_backoff_until: Optional[datetime.datetime] = None
 # Cache statsapi DNS availability to avoid repeated slow lookups
 _statsapi_dns_available: Optional[bool] = None
@@ -78,7 +80,21 @@ _STATSAPI_DNS_RECHECK_SECONDS = 600
 # -----------------------------------------------------------------------------
 # WEATHER — Apple WeatherKit primary, OpenWeatherMap secondary
 # -----------------------------------------------------------------------------
-def _load_weatherkit_private_key() -> Optional[str]:
+def load_weatherkit_private_key(key_path: str):
+    with open(key_path, "rb") as f:
+        pem_bytes = f.read()
+
+    # normalize line endings; ensure trailing newline
+    pem_bytes = pem_bytes.replace(b"\r\n", b"\n").strip() + b"\n"
+
+    return serialization.load_pem_private_key(
+        pem_bytes,
+        password=None,
+        backend=default_backend(),
+    )
+
+
+def _load_weatherkit_private_key() -> Optional[Any]:
     global _weatherkit_key_cache
     if _weatherkit_key_cache:
         return _weatherkit_key_cache
@@ -116,8 +132,8 @@ def _load_weatherkit_private_key() -> Optional[str]:
                 and os.path.isfile(normalized_key)
             ):
                 try:
-                    with open(normalized_key, "r", encoding="utf-8") as fh:
-                        normalized_key = fh.read().replace("\r\n", "\n").strip()
+                    _weatherkit_key_cache = load_weatherkit_private_key(normalized_key)
+                    return _weatherkit_key_cache
                 except Exception as exc:
                     logging.error(
                         "Unable to read WEATHERKIT_PRIVATE_KEY path %s: %s",
@@ -126,15 +142,27 @@ def _load_weatherkit_private_key() -> Optional[str]:
                     )
                     return None
 
-            _weatherkit_key_cache = normalized_key
+            try:
+                pem_bytes = normalized_key.replace("\r\n", "\n").strip().encode("utf-8")
+                if not pem_bytes.endswith(b"\n"):
+                    pem_bytes += b"\n"
+
+                _weatherkit_key_cache = serialization.load_pem_private_key(
+                    pem_bytes,
+                    password=None,
+                    backend=default_backend(),
+                )
+            except Exception as exc:
+                logging.error("Unable to parse WEATHERKIT_PRIVATE_KEY: %s", exc)
+                return None
+
             return _weatherkit_key_cache
 
     if WEATHERKIT_KEY_PATH:
         try:
-            with open(WEATHERKIT_KEY_PATH, "r", encoding="utf-8") as fh:
-                _weatherkit_key_cache = fh.read().replace("\r\n", "\n").strip()
-                if _weatherkit_key_cache:
-                    return _weatherkit_key_cache
+            _weatherkit_key_cache = load_weatherkit_private_key(WEATHERKIT_KEY_PATH)
+            if _weatherkit_key_cache:
+                return _weatherkit_key_cache
         except Exception as exc:
             logging.error("Unable to read WEATHERKIT_KEY_PATH %s: %s", WEATHERKIT_KEY_PATH, exc)
 
