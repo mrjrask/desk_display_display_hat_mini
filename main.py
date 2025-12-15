@@ -132,8 +132,6 @@ _button_monitor_thread: Optional[threading.Thread] = None
 
 _dark_hours_active = False
 
-BRIGHTNESS_STEP = 0.1
-
 
 def _handle_button_down(name: str) -> bool:
     """React to a newly pressed control button."""
@@ -151,14 +149,6 @@ def _handle_button_down(name: str) -> bool:
     if name == "Y":
         logging.info("🔁 Y button pressed – restarting desk_display service…")
         _restart_desk_display_service()
-        return False
-    if name == "A":
-        new_level = display.adjust_backlight(-BRIGHTNESS_STEP)
-        logging.info("🅰️  A button pressed – dimming to %.0f%%.", new_level * 100)
-        return False
-    if name == "B":
-        new_level = display.adjust_backlight(BRIGHTNESS_STEP)
-        logging.info("🅱️  B button pressed – brightening to %.0f%%.", new_level * 100)
         return False
     return False
 

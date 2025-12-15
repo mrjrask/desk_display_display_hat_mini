@@ -149,7 +149,6 @@ class Display:
         else:
             try:  # pragma: no cover - hardware import
                 self._display = DisplayHATMini(self._buffer)
-                self.set_backlight(1.0)
                 for name in self._BUTTON_NAMES:
                     pin_name = f"BUTTON_{name}"
                     self._button_pins[name] = getattr(self._display, pin_name, None)
