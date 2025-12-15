@@ -80,7 +80,13 @@ _STATSAPI_DNS_RECHECK_SECONDS = 600
 # -----------------------------------------------------------------------------
 # WEATHER — Apple WeatherKit primary, OpenWeatherMap secondary
 # -----------------------------------------------------------------------------
+def _expand_path(path: str) -> str:
+    return os.path.expanduser(os.path.expandvars(path))
+
+
 def load_weatherkit_private_key(key_path: str):
+    key_path = _expand_path(key_path)
+
     with open(key_path, "rb") as f:
         pem_bytes = f.read()
 
@@ -126,18 +132,19 @@ def _load_weatherkit_private_key() -> Optional[Any]:
 
             # If the env var accidentally contains a file path instead of the
             # actual key, attempt to read the file.
+            normalized_path = _expand_path(normalized_key)
             if (
                 "-----BEGIN" not in normalized_key
-                and os.path.exists(normalized_key)
-                and os.path.isfile(normalized_key)
+                and os.path.exists(normalized_path)
+                and os.path.isfile(normalized_path)
             ):
                 try:
-                    _weatherkit_key_cache = load_weatherkit_private_key(normalized_key)
+                    _weatherkit_key_cache = load_weatherkit_private_key(normalized_path)
                     return _weatherkit_key_cache
                 except Exception as exc:
                     logging.error(
                         "Unable to read WEATHERKIT_PRIVATE_KEY path %s: %s",
-                        normalized_key,
+                        normalized_path,
                         exc,
                     )
                     return None
