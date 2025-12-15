@@ -570,6 +570,8 @@ def _save_screenshot(sid: str, img: Image.Image) -> Optional[Tuple[str, bool]]:
 def maybe_archive_screenshots(latest_folder: str) -> None:
     """Archive the newest screen's folder once the rolling counter hits the threshold."""
 
+    global _archive_pending
+
     if not ENABLE_SCREENSHOTS:
         return
     if not latest_folder:
