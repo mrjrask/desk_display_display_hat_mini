@@ -988,7 +988,7 @@ BEARS_SCHEDULE = [
     {"week":"Week 13", "date":"Fri, Nov 28","opponent":"Philadelphia Eagles",   "home_away":"Away","time":"2PM"},
     {"week":"Week 14", "date":"Sun, Dec 7", "opponent":"Green Bay Packers",     "home_away":"Away","time":"3:25PM"},
     {"week":"Week 15", "date":"Sun, Dec 14","opponent":"Cleveland Browns",      "home_away":"Home","time":"Noon"},
-    {"week":"Week 16", "date":"Sat, Dec 20","opponent":"Green Bay Packers",     "home_away":"Home","time":"TBD"},
+    {"week":"Week 16", "date":"Sat, Dec 20","opponent":"Green Bay Packers",     "home_away":"Home","time":"7:20PM"},
     {"week":"Week 17", "date":"Sun, Dec 28","opponent":"San Francisco 49ers",   "home_away":"Away","time":"7:20PM"},
     {"week":"Week 18", "date":"TBD",        "opponent":"Detroit Lions",         "home_away":"Home","time":"TBD"},
 ]
