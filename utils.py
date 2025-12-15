@@ -648,23 +648,57 @@ def get_mlb_abbreviation(team_name: str) -> str:
     return MLB_ABBREVIATIONS.get(team_name, team_name)
 
 
-def next_game_from_schedule(schedule: List[Dict[str, Any]], today: Optional[datetime.date] = None) -> Optional[Dict[str, Any]]:
+def _week_sort_value(week_label: str) -> float:
+    """Return a numeric sort key for week labels.
+
+    Supports values like ``"Week 16"`` or preseason fractions such as ``"0.2"``.
+    Unknown or missing labels sort to the end of the schedule.
+    """
+
+    label = (week_label or "").strip().lower()
+    if label.startswith("week"):
+        try:
+            return float(label.split()[1])
+        except Exception:
+            return float("inf")
+    try:
+        return float(label)
+    except Exception:
+        return float("inf")
+
+
+def next_game_from_schedule(
+    schedule: List[Dict[str, Any]], today: Optional[datetime.date] = None
+) -> Optional[Dict[str, Any]]:
     today = today or datetime.date.today()
     year = today.year
-    upcoming: List[tuple[datetime.date, Dict[str, Any]]] = []
-    for entry in schedule:
+
+    candidates: List[tuple[Optional[datetime.date], float, int, Dict[str, Any]]] = []
+    for idx, entry in enumerate(schedule):
         if entry.get("opponent") == "—" or str(entry.get("time", "")).upper() == "TBD":
             continue
+
+        parsed_date: Optional[datetime.date] = None
         try:
             parsed = datetime.datetime.strptime(entry.get("date", ""), "%a, %b %d")
-            game_date = datetime.date(year, parsed.month, parsed.day)
+            parsed_date = datetime.date(year, parsed.month, parsed.day)
         except Exception:
-            continue
-        if game_date >= today:
-            upcoming.append((game_date, entry))
-    if not upcoming:
+            parsed_date = None
+
+        week_value = _week_sort_value(str(entry.get("week", "")))
+        candidates.append((parsed_date, week_value, idx, entry))
+
+    if not candidates:
         return None
-    return sorted(upcoming, key=lambda item: item[0])[0][1]
+
+    for parsed_date, week_value, idx, entry in sorted(
+        candidates, key=lambda item: (item[1], item[0] or datetime.date.max, item[2])
+    ):
+        if parsed_date is not None and parsed_date < today:
+            continue
+        return entry
+
+    return None
 
 
 _LOGO_BRIGHTNESS_OVERRIDES: dict[tuple[str, str], float] = {
