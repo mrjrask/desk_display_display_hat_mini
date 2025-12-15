@@ -302,9 +302,19 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
     except Exception:
         humidity_pct = None
 
+    def _to_fahrenheit(value: Optional[float]) -> Optional[float]:
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return None
+        return numeric * 9 / 5 + 32
+
+    current_temp_c = current_raw.get("temperature")
+    current_feels_c = current_raw.get("temperatureApparent") or current_temp_c
+
     current: dict[str, Any] = {
-        "temp": current_raw.get("temperature"),
-        "feels_like": current_raw.get("temperatureApparent") or current_raw.get("temperature"),
+        "temp": _to_fahrenheit(current_temp_c),
+        "feels_like": _to_fahrenheit(current_feels_c),
         "weather": [
             {
                 "description": desc,
@@ -327,7 +337,10 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
         day_desc, day_icon = _condition_mapping(day.get("conditionCode", ""))
         daily.append(
             {
-                "temp": {"max": day.get("temperatureMax"), "min": day.get("temperatureMin")},
+                "temp": {
+                    "max": _to_fahrenheit(day.get("temperatureMax")),
+                    "min": _to_fahrenheit(day.get("temperatureMin")),
+                },
                 "sunrise": _parse_iso_timestamp(day.get("sunrise")),
                 "sunset": _parse_iso_timestamp(day.get("sunset")),
                 "pop": day.get("precipitationChance"),
@@ -346,8 +359,8 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
         hourly.append(
             {
                 "dt": _parse_iso_timestamp(hour.get("forecastStart")),
-                "temp": hour.get("temperature"),
-                "feels_like": hour.get("temperatureApparent") or hour.get("temperature"),
+                "temp": _to_fahrenheit(hour.get("temperature")),
+                "feels_like": _to_fahrenheit(hour.get("temperatureApparent") or hour.get("temperature")),
                 "pop": hour.get("precipitationChance"),
                 "weather": [
                     {
