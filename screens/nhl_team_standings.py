@@ -84,6 +84,12 @@ def draw_nhl_standings_screen1(display, rec, logo_path, division_name, *, transi
 
     rec_clean = _strip_pct_leading_zero(rec)
 
+    division_rank = None
+    conference_rank = None
+    if isinstance(rec_clean, dict):
+        division_rank = rec_clean.get("divisionRank")
+        conference_rank = rec_clean.get("conferenceRank")
+
     division_display = _format_division_name(rec_clean, division_name)
     conference_display = _format_conference_name(rec_clean)
     rec_for_display = (
@@ -91,6 +97,8 @@ def draw_nhl_standings_screen1(display, rec, logo_path, division_name, *, transi
             **rec_clean,
             "divisionName": division_display,
             "conferenceName": conference_display,
+            "divisionRank": division_rank if division_rank not in (None, "") else "-",
+            "conferenceRank": conference_rank if conference_rank not in (None, "") else "-",
         }
         if rec_clean
         else rec_clean

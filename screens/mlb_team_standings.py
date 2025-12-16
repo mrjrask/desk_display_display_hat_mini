@@ -192,7 +192,8 @@ def draw_standings_screen1(
         points_txt = f"{pts_val} {points_label}"
 
     # Division rank
-    dr = rec.get('divisionRank','-')
+    dr_raw = rec.get('divisionRank')
+    dr = dr_raw if dr_raw not in (None, "") else "-"
     try:
         dr_lbl = "Last" if int(dr)==5 else _ord(dr)
     except:
@@ -234,7 +235,8 @@ def draw_standings_screen1(
         lines.append((gb_txt, FONT_STAND1_GB_VALUE))
     lines.append((rank_txt, FONT_STAND1_RANK))
     if conference_label and show_conference_rank:
-        conf_rank = rec.get("conferenceRank", "-")
+        conf_raw = rec.get("conferenceRank")
+        conf_rank = conf_raw if conf_raw not in (None, "") else "-"
         try:
             conf_lbl = "Last" if int(conf_rank) == 16 else _ord(conf_rank)
         except Exception:
