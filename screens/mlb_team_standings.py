@@ -138,6 +138,8 @@ def draw_standings_screen1(
     show_pct=False,
     pct_precision=None,
     record_details_fn=None,
+    record_font=None,
+    points_font=None,
     transition=False,
 ):
     """
@@ -167,6 +169,9 @@ def draw_standings_screen1(
 
     # W/L
     record_line = _format_record_values(rec.get("leagueRecord", {}), ot_label=ot_label)
+
+    record_font = FONT_STAND1_WL if record_font is None else record_font
+    points_font = FONT_STAND1_GB_VALUE if points_font is None else points_font
 
     if record_details_fn:
         wl_txt = record_details_fn(rec, record_line)
@@ -221,10 +226,10 @@ def draw_standings_screen1(
 
     # Lines to draw
     lines = [
-        (wl_txt, FONT_STAND1_WL),
+        (wl_txt, record_font),
     ]
     if points_txt:
-        lines.append((points_txt, FONT_STAND1_GB_VALUE))
+        lines.append((points_txt, points_font))
     if gb_txt and place_gb_before_rank:
         lines.append((gb_txt, FONT_STAND1_GB_VALUE))
     lines.append((rank_txt, FONT_STAND1_RANK))

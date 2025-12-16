@@ -3,6 +3,7 @@ from screens.mlb_team_standings import (
     draw_standings_screen1 as _base_screen1,
     draw_standings_screen2 as _base_screen2,
 )
+from config import FONT_STAND1_WL_LARGE
 from utils import log_call
 
 
@@ -29,6 +30,22 @@ def _strip_pct_leading_zero(rec, *, precision=3):
     return {**rec, "leagueRecord": updated_record}
 
 
+def _format_nfl_record(rec, _record_line):
+    record = rec.get("leagueRecord", {}) if isinstance(rec, dict) else {}
+    wins = record.get("wins", "-")
+    losses = record.get("losses", "-")
+
+    ties = record.get("ties")
+    if ties in (None, "", "-", 0, "0"):
+        ties = record.get("ot")
+
+    base_record = f"{wins}-{losses}"
+    if ties not in (None, "", "-", 0, "0"):
+        base_record = f"{base_record}-{ties}"
+
+    return base_record
+
+
 @log_call
 def draw_nfl_standings_screen1(display, rec, logo_path, division_name, *, transition=False):
     """Wrap the generic standings screen for NFL teams (no GB/WC columns)."""
@@ -37,6 +54,8 @@ def draw_nfl_standings_screen1(display, rec, logo_path, division_name, *, transi
         _strip_pct_leading_zero(rec),
         logo_path,
         division_name,
+        record_details_fn=_format_nfl_record,
+        record_font=FONT_STAND1_WL_LARGE,
         show_games_back=False,
         show_wild_card=False,
         transition=transition,

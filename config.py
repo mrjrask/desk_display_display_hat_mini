@@ -656,6 +656,7 @@ FONT_STOCK_TEXT         = _load_font("DejaVuSans.ttf",      17)
 
 # Standings fonts...
 FONT_STAND1_WL          = _load_font("DejaVuSans-Bold.ttf", 26)
+FONT_STAND1_WL_LARGE    = _load_font("DejaVuSans-Bold.ttf", 65)
 FONT_STAND1_RANK        = _load_font("DejaVuSans.ttf",      22)
 FONT_STAND1_GB_LABEL    = _load_font("DejaVuSans.ttf",      17)
 FONT_STAND1_WCGB_LABEL  = _load_font("DejaVuSans.ttf",      17)
