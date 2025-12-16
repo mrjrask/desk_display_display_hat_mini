@@ -1073,6 +1073,8 @@ def _fetch_nhl_team_standings(team_abbr: str):
                 "conferenceRank": conf_rank,
                 "conferenceName": entry.get("conferenceName")
                 or entry.get("conferenceAbbrev"),
+                "divisionName": entry.get("divisionName")
+                or entry.get("divisionAbbrev"),
             }
         logging.warning("Team %s not found in NHL standings; trying fallback", team_abbr)
     except Exception as exc:
@@ -1145,6 +1147,18 @@ def _fetch_nhl_team_standings_espn(team_abbr: str):
             if conference_rank in (None, ""):
                 conference_rank = _stat(stats, "playoffSeed")
 
+            division_name = (
+                _stat(stats, "divisionAbbreviation")
+                or _stat(stats, "divisionName")
+                or _stat(stats, "divisionDisplayName")
+            )
+
+            conference_name = (
+                _stat(stats, "conferenceAbbreviation")
+                or _stat(stats, "conferenceName")
+                or _stat(stats, "conferenceDisplayName")
+            )
+
             return {
                 "leagueRecord": {
                     "wins": _safe_int(_stat(stats, "wins")),
@@ -1159,6 +1173,8 @@ def _fetch_nhl_team_standings_espn(team_abbr: str):
                 "records": {"splitRecords": []},
                 "points": _stat(stats, "points"),
                 "conferenceRank": conference_rank,
+                "conferenceName": conference_name,
+                "divisionName": division_name,
             }
     except Exception as exc:
         logging.error("Error fetching NHL standings (ESPN fallback) for %s: %s", team_abbr, exc)
@@ -1194,22 +1210,26 @@ def _fetch_nhl_team_standings_statsapi(team_abbr: str):
                         {"type": split.get("type"), "wins": wins, "losses": losses}
                     )
 
-                logging.info("Using statsapi NHL standings fallback for %s", team_abbr)
-                return {
-                    "leagueRecord": {
-                        "wins": _safe_int(league_record.get("wins")),
-                        "losses": _safe_int(league_record.get("losses")),
-                        "ot": _safe_int(league_record.get("ot")),
-                        "pct": league_record.get("pct") or league_record.get("pointsPercentage"),
-                    },
-                    "divisionRank": team.get("divisionRank"),
-                    "divisionGamesBack": team.get("divisionGamesBack"),
-                    "wildCardGamesBack": team.get("wildCardRank"),
-                    "streak": {"streakCode": streak_code or "-"},
-                    "records": {"splitRecords": split_records},
-                    "points": team.get("points"),
-                    "conferenceRank": team.get("conferenceRank"),
-                }
+            logging.info("Using statsapi NHL standings fallback for %s", team_abbr)
+            return {
+                "leagueRecord": {
+                    "wins": _safe_int(league_record.get("wins")),
+                    "losses": _safe_int(league_record.get("losses")),
+                    "ot": _safe_int(league_record.get("ot")),
+                    "pct": league_record.get("pct") or league_record.get("pointsPercentage"),
+                },
+                "divisionRank": team.get("divisionRank"),
+                "divisionGamesBack": team.get("divisionGamesBack"),
+                "wildCardGamesBack": team.get("wildCardRank"),
+                "streak": {"streakCode": streak_code or "-"},
+                "records": {"splitRecords": split_records},
+                "points": team.get("points"),
+                "conferenceRank": team.get("conferenceRank"),
+                "conferenceName": (team.get("conference") or {}).get("name")
+                or (team.get("conference") or {}).get("abbreviation"),
+                "divisionName": (team.get("division") or {}).get("name")
+                or (team.get("division") or {}).get("abbreviation"),
+            }
         logging.error("Team %s not found in NHL standings (statsapi fallback)", team_abbr)
     except Exception as exc:
         logging.error("Error fetching NHL standings (statsapi) for %s: %s", team_abbr, exc)

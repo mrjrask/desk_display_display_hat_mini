@@ -34,21 +34,34 @@ def _strip_pct_leading_zero(rec, *, precision=3):
 def _format_division_name(rec, default_name):
     name = None
     if isinstance(rec, dict):
-        name = rec.get("divisionName") or rec.get("divisionAbbrev")
+        division_info = rec.get("division")
+        if isinstance(division_info, dict):
+            division_info = division_info.get("name") or division_info.get("abbreviation")
+
+        name = (
+            rec.get("divisionName")
+            or rec.get("divisionAbbrev")
+            or (division_info if isinstance(division_info, str) else None)
+        )
 
     name = name or default_name
     if not name:
-        return name
+        return "division"
 
-    if "division" not in str(name).lower():
-        return f"{name} Division"
-    return name
+    cleaned = str(name).replace("Division", "").strip()
+    return cleaned or str(name)
 
 
 def _format_conference_name(rec):
     name = None
     if isinstance(rec, dict):
-        name = rec.get("conferenceName") or rec.get("conferenceAbbrev")
+        conference_info = rec.get("conference")
+        if isinstance(conference_info, dict):
+            conference_info = conference_info.get("name") or conference_info.get(
+                "abbreviation"
+            )
+
+        name = rec.get("conferenceName") or rec.get("conferenceAbbrev") or conference_info
 
     if not name:
         return "conference"
@@ -74,7 +87,13 @@ def draw_nhl_standings_screen1(display, rec, logo_path, division_name, *, transi
     division_display = _format_division_name(rec_clean, division_name)
     conference_display = _format_conference_name(rec_clean)
     rec_for_display = (
-        {**rec_clean, "conferenceName": conference_display} if rec_clean else rec_clean
+        {
+            **rec_clean,
+            "divisionName": division_display,
+            "conferenceName": conference_display,
+        }
+        if rec_clean
+        else rec_clean
     )
 
     return _base_screen1(
