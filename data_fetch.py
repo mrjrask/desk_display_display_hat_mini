@@ -231,38 +231,38 @@ def _camel_to_words(text: str) -> str:
 
 def _condition_mapping(condition_code: str) -> tuple[str, str]:
     mapping = {
-        "Blizzard": ("Blizzard", "snow"),
-        "BlowingSnow": ("Blowing Snow", "snow"),
-        "Breezy": ("Breezy", "wind"),
-        "Clear": ("Clear", "sunny"),
-        "Cloudy": ("Cloudy", "cloudy"),
-        "Drizzle": ("Drizzle", "rain"),
-        "Flurries": ("Flurries", "snow"),
-        "Fog": ("Fog", "fog"),
-        "FreezingDrizzle": ("Freezing Drizzle", "sleet"),
-        "FreezingRain": ("Freezing Rain", "sleet"),
-        "Frigid": ("Frigid", "wind"),
-        "Haze": ("Haze", "fog"),
-        "Hazy": ("Hazy", "fog"),
-        "HeavyRain": ("Heavy Rain", "rain"),
-        "HeavySnow": ("Heavy Snow", "snow"),
-        "Hot": ("Hot", "sunny"),
-        "Hurricane": ("Hurricane", "storm"),
-        "IsolatedThunderstorms": ("Isolated Thunderstorms", "storm"),
-        "MostlyClear": ("Mostly Clear", "sunny"),
-        "MostlyCloudy": ("Mostly Cloudy", "cloudy"),
-        "MostlySunny": ("Mostly Sunny", "sunny"),
-        "PartlyCloudy": ("Partly Cloudy", "partly-cloudy"),
-        "Rain": ("Rain", "rain"),
-        "ScatteredThunderstorms": ("Scattered Thunderstorms", "storm"),
-        "Sleet": ("Sleet", "sleet"),
-        "Smoky": ("Smoky", "fog"),
-        "Snow": ("Snow", "snow"),
-        "StrongStorms": ("Strong Storms", "storm"),
-        "SunShowers": ("Sun Showers", "rain"),
-        "Tornado": ("Tornado", "storm"),
-        "TropicalStorm": ("Tropical Storm", "storm"),
-        "Windy": ("Windy", "wind"),
+        "Blizzard": ("Blizzard", "Blizzard"),
+        "BlowingSnow": ("Blowing Snow", "HeavySnow"),
+        "Breezy": ("Breezy", "Windy"),
+        "Clear": ("Clear", "Clear"),
+        "Cloudy": ("Cloudy", "Cloudy"),
+        "Drizzle": ("Drizzle", "Rain"),
+        "Flurries": ("Flurries", "Snow"),
+        "Fog": ("Fog", "Fog"),
+        "FreezingDrizzle": ("Freezing Drizzle", "Sleet"),
+        "FreezingRain": ("Freezing Rain", "Sleet"),
+        "Frigid": ("Frigid", "Haze"),
+        "Haze": ("Haze", "Haze"),
+        "Hazy": ("Hazy", "Haze"),
+        "HeavyRain": ("Heavy Rain", "HeavyRain"),
+        "HeavySnow": ("Heavy Snow", "HeavySnow"),
+        "Hot": ("Hot", "Clear"),
+        "Hurricane": ("Hurricane", "Thunderstorms"),
+        "IsolatedThunderstorms": ("Isolated Thunderstorms", "Thunderstorms"),
+        "MostlyClear": ("Mostly Clear", "MostlyClear"),
+        "MostlyCloudy": ("Mostly Cloudy", "Cloudy"),
+        "MostlySunny": ("Mostly Sunny", "MostlyClear"),
+        "PartlyCloudy": ("Partly Cloudy", "PartlyCloudy"),
+        "Rain": ("Rain", "Rain"),
+        "ScatteredThunderstorms": ("Scattered Thunderstorms", "Thunderstorms"),
+        "Sleet": ("Sleet", "Sleet"),
+        "Smoky": ("Smoky", "Haze"),
+        "Snow": ("Snow", "Snow"),
+        "StrongStorms": ("Strong Storms", "Thunderstorms"),
+        "SunShowers": ("Sun Showers", "Rain"),
+        "Tornado": ("Tornado", "Thunderstorms"),
+        "TropicalStorm": ("Tropical Storm", "Thunderstorms"),
+        "Windy": ("Windy", "Windy"),
     }
     default_desc = _camel_to_words(condition_code or "") or "Unknown"
     desc, icon = mapping.get(condition_code, (default_desc, "cloudy"))
@@ -386,42 +386,42 @@ def _owm_condition_mapping(weather: dict[str, Any]) -> tuple[str, str]:
     main = (weather.get("main") or "").lower() if isinstance(weather, dict) else ""
     description = (weather.get("description") or "").title() if isinstance(weather, dict) else ""
 
-    icon = "cloudy"
+    icon = "Cloudy"
     if isinstance(weather_id, int):
         if 200 <= weather_id < 300:
-            icon = "storm"
+            icon = "Thunderstorms"
         elif 300 <= weather_id < 400:
-            icon = "rain"
+            icon = "Rain"
         elif weather_id == 511:
-            icon = "sleet"
+            icon = "Sleet"
         elif 500 <= weather_id < 600:
-            icon = "rain"
+            icon = "Rain"
         elif 600 <= weather_id < 700:
-            icon = "snow"
+            icon = "Snow"
         elif weather_id in {701, 711, 721, 731, 741, 751, 761}:
-            icon = "fog"
+            icon = "Fog"
         elif 762 <= weather_id <= 781:
-            icon = "storm"
+            icon = "Thunderstorms"
         elif weather_id == 800:
-            icon = "sunny"
+            icon = "Clear"
         elif weather_id in {801, 802}:
-            icon = "partly-cloudy"
+            icon = "PartlyCloudy"
         elif weather_id in {803, 804}:
-            icon = "cloudy"
+            icon = "Cloudy"
 
-    if icon == "cloudy" and main:
+    if icon == "Cloudy" and main:
         if "thunder" in main:
-            icon = "storm"
+            icon = "Thunderstorms"
         elif "drizzle" in main or "rain" in main:
-            icon = "rain"
+            icon = "Rain"
         elif "snow" in main or "sleet" in main:
-            icon = "snow"
+            icon = "Snow"
         elif main in {"mist", "fog", "haze"}:
-            icon = "fog"
+            icon = "Fog"
         elif "clear" in main:
-            icon = "sunny"
+            icon = "Clear"
         elif "cloud" in main:
-            icon = "cloudy"
+            icon = "Cloudy"
 
     return description or "Unknown", icon
 
