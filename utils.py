@@ -19,6 +19,7 @@ import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import functools
@@ -1152,16 +1153,40 @@ def fetch_weather_icon(icon_code: str, size: int) -> Image.Image | None:
     if not icon_code:
         return None
 
-    renderer = ICON_RENDERERS.get(icon_code)
-    if renderer is None:
-        logging.debug("Unknown icon code %s; using cloudy placeholder", icon_code)
-        renderer = ICON_RENDERERS["cloudy"]
-
-    try:
-        return renderer(size)
-    except Exception as exc:  # pragma: no cover - drawing failures are non-fatal
-        logging.warning("Weather icon render failed: %s", exc)
+    icon_lookup = str(icon_code).strip()
+    if not icon_lookup:
         return None
+
+    alias_map = {
+        "sunny": "Clear",
+        "partly-cloudy": "PartlyCloudy",
+        "cloudy": "Cloudy",
+        "rain": "Rain",
+        "snow": "Snow",
+        "sleet": "Sleet",
+        "storm": "Thunderstorms",
+        "fog": "Fog",
+        "wind": "Windy",
+    }
+    icon_name = alias_map.get(icon_lookup.lower(), icon_lookup)
+
+    icon_dir = Path(__file__).resolve().parent / "images" / "WeatherKit"
+    candidates = [icon_dir / f"{icon_name}.png"]
+    if icon_name != "Cloudy":
+        candidates.append(icon_dir / "Cloudy.png")
+
+    for candidate in candidates:
+        try:
+            if candidate.is_file():
+                icon = Image.open(candidate).convert("RGBA")
+                if icon.size != (size, size):
+                    icon = icon.resize((size, size), Image.ANTIALIAS)
+                return icon
+        except Exception as exc:  # pragma: no cover - drawing failures are non-fatal
+            logging.warning("Weather icon load failed for %s: %s", candidate, exc)
+
+    logging.warning("Weather icon %s not found; returning None", icon_name)
+    return None
 
 
 def uv_index_color(uvi: int) -> tuple[int, int, int]:
