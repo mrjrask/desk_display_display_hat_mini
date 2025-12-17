@@ -476,12 +476,28 @@ def _wind_arrow(degrees: Optional[float]) -> str:
     return arrows[idx]
 
 
-def _gather_hourly_forecast(weather: object, hours: int) -> list[dict]:
+def _gather_hourly_forecast(
+    weather: object, hours: int, *, now: Optional[datetime.datetime] = None
+) -> list[dict]:
     if not isinstance(weather, dict):
         return []
     hourly = weather.get("hourly") if isinstance(weather.get("hourly"), list) else []
+    reference_time = (now or datetime.datetime.now(CENTRAL_TIME)) - datetime.timedelta(minutes=5)
+
+    future_hours = []
+    for hour in hourly:
+        ts = hour.get("dt") if isinstance(hour, dict) else None
+        dt_val = timestamp_to_datetime(ts, CENTRAL_TIME)
+        if dt_val and dt_val < reference_time:
+            continue
+        future_hours.append(hour)
+
+    future_hours.sort(
+        key=lambda h: h.get("dt") if isinstance(h, dict) and h.get("dt") is not None else float("inf")
+    )
+
     forecast = []
-    for idx, hour in enumerate(hourly[:hours]):
+    for idx, hour in enumerate(future_hours[:hours]):
         if not isinstance(hour, dict):
             continue
         wind_speed = None
