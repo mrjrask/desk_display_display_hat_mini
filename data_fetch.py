@@ -1012,6 +1012,20 @@ def _safe_int(value):
         return value
 
 
+def _extract_rank_value(entry: dict, *keys) -> Optional[int]:
+    """Return the first positive integer value found for any key in entry."""
+
+    for key in keys:
+        if not isinstance(entry, dict) or key not in entry:
+            continue
+
+        value = _safe_int(entry.get(key))
+        if isinstance(value, (int, float)) and value > 0:
+            return int(value)
+
+    return None
+
+
 def _format_streak_code(prefix, count):
     try:
         c = int(count)
@@ -1168,12 +1182,24 @@ def _fetch_nhl_team_standings(team_abbr: str):
             streak_code = entry.get("streakCode") or _format_streak_code(entry.get("streakType"), entry.get("streakNumber"))
 
             # Properly handle division and conference rankings
-            # Use Seq (sequence) if available and valid (> 0), otherwise fall back
-            div_seq = entry.get("divisionSeq")
-            div_rank = div_seq if (div_seq is not None and div_seq > 0) else entry.get("divisionRank")
+            # Include newer sequence fields in addition to the older Rank values.
+            div_rank = _extract_rank_value(
+                entry,
+                "divisionSeq",
+                "divisionSequence",
+                "divisionSequenceNumber",
+                "divisionRank",
+                "divRank",
+            )
 
-            conf_seq = entry.get("conferenceSeq")
-            conf_rank = conf_seq if (conf_seq is not None and conf_seq > 0) else entry.get("conferenceRank")
+            conf_rank = _extract_rank_value(
+                entry,
+                "conferenceSeq",
+                "conferenceSequence",
+                "conferenceSequenceNumber",
+                "conferenceRank",
+                "confRank",
+            )
 
             return {
                 "leagueRecord": record,
