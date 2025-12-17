@@ -6,7 +6,7 @@
     "weather1": 1,
     "weather2": 1,
     "weather hourly": 1,
-    "weather radar": 0,
+    "weather radar": 1,
     "inside": 1,
     "sensors": 0,
     "verano logo": 0,
@@ -72,7 +72,7 @@
     "NHL Scoreboard": 1,
     "NHL Scoreboard v2": 0,
     "NHL Standings Overview": {
-      "frequency": 1,
+      "frequency": 2,
       "alt": {
         "screen": [
           "NHL Standings West",
