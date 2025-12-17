@@ -774,7 +774,7 @@ def _requested_data_feeds() -> Set[str]:
 
 
 def _refresh_weather() -> None:
-    cache["weather"] = data_fetch.fetch_weather()
+    cache["weather"] = data_fetch.fetch_weather(force_refresh=True)
 
 
 def _refresh_bears() -> None:
