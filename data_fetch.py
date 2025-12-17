@@ -229,6 +229,105 @@ def _camel_to_words(text: str) -> str:
     return words.strip().title()
 
 
+def _night_icon_name(icon: str) -> str:
+    mapping = {
+        "Clear": "Clear_night",
+        "MostlyClear": "MostlyClear_night",
+        "PartlyCloudy": "PartlyCloudy_night",
+    }
+    return mapping.get(icon, icon)
+
+
+def _is_night_time(ts: Any, sunrise: Any, sunset: Any) -> bool:
+    try:
+        ts_val = int(ts)
+        sunrise_val = int(sunrise)
+        sunset_val = int(sunset)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return ts_val >= sunset_val or ts_val < sunrise_val
+
+
+def _sun_windows(daily: list[dict[str, Any]]) -> list[tuple[int, int, int]]:
+    windows: list[tuple[int, int, int]] = []
+    for day in daily:
+        sunrise = day.get("sunrise")
+        sunset = day.get("sunset")
+        anchor = day.get("dt") or sunrise or sunset
+        try:
+            anchor_val = int(anchor)
+            sunrise_val = int(sunrise)
+            sunset_val = int(sunset)
+        except (TypeError, ValueError, OverflowError):
+            continue
+        windows.append((anchor_val, sunrise_val, sunset_val))
+    return sorted(windows, key=lambda w: w[0])
+
+
+def _sun_times_for(ts: Any, windows: list[tuple[int, int, int]]) -> tuple[Optional[int], Optional[int]]:
+    try:
+        ts_val = int(ts)
+    except (TypeError, ValueError, OverflowError):
+        return None, None
+
+    if not windows:
+        return None, None
+
+    best: tuple[int, int, int] | None = None
+    best_diff: int | None = None
+    for anchor, sunrise, sunset in windows:
+        diff = abs(ts_val - anchor)
+        if best is None or best_diff is None or diff < best_diff:
+            best = (anchor, sunrise, sunset)
+            best_diff = diff
+    if best is None:
+        return None, None
+    return best[1], best[2]
+
+
+def _apply_nighttime_icons(weather: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(weather, dict):
+        return weather
+
+    def _apply(entry: dict[str, Any], sunrise_val: Any, sunset_val: Any) -> None:
+        if not isinstance(entry, dict):
+            return
+        weather_list = entry.get("weather") if isinstance(entry.get("weather"), list) else []
+        if not weather_list:
+            return
+        icon = weather_list[0].get("icon")
+        if not icon:
+            return
+        if _is_night_time(entry.get("dt"), sunrise_val, sunset_val):
+            night_icon = _night_icon_name(icon)
+            if night_icon != icon:
+                weather_list[0]["icon"] = night_icon
+                entry["weather"] = weather_list
+
+    daily_entries = weather.get("daily") if isinstance(weather.get("daily"), list) else []
+    sun_windows = _sun_windows(daily_entries)
+
+    current = weather.get("current")
+    if isinstance(current, dict):
+        sunrise = current.get("sunrise")
+        sunset = current.get("sunset")
+        if sunrise is None or sunset is None:
+            sunrise, sunset = _sun_times_for(current.get("dt"), sun_windows)
+        if sunrise is not None and sunset is not None:
+            _apply(current, sunrise, sunset)
+
+    hourly_entries = weather.get("hourly") if isinstance(weather.get("hourly"), list) else []
+    for hour in hourly_entries:
+        sunrise = hour.get("sunrise")
+        sunset = hour.get("sunset")
+        if sunrise is None or sunset is None:
+            sunrise, sunset = _sun_times_for(hour.get("dt"), sun_windows)
+        if sunrise is not None and sunset is not None:
+            _apply(hour, sunrise, sunset)
+
+    return weather
+
+
 def _condition_mapping(condition_code: str) -> tuple[str, str]:
     mapping = {
         "Blizzard": ("Blizzard", "Blizzard"),
@@ -335,8 +434,10 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
     daily: list[dict[str, Any]] = []
     for day in daily_raw:
         day_desc, day_icon = _condition_mapping(day.get("conditionCode", ""))
+        day_dt = _parse_iso_timestamp(day.get("forecastStart"))
         daily.append(
             {
+                "dt": day_dt,
                 "temp": {
                     "max": _to_fahrenheit(day.get("temperatureMax")),
                     "min": _to_fahrenheit(day.get("temperatureMin")),
@@ -377,7 +478,7 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
         "hourly": hourly,
         "alerts": alerts_raw,
     }
-    return mapped
+    return _apply_nighttime_icons(mapped)
 
 
 
@@ -466,6 +567,7 @@ def _normalise_openweathermap_response(data: dict[str, Any]) -> Optional[dict[st
         desc, icon = _owm_condition_mapping(weather_entry)
         daily.append(
             {
+                "dt": day.get("dt"),
                 "temp": {"max": (day.get("temp") or {}).get("max"), "min": (day.get("temp") or {}).get("min")},
                 "sunrise": day.get("sunrise"),
                 "sunset": day.get("sunset"),
@@ -505,7 +607,7 @@ def _normalise_openweathermap_response(data: dict[str, Any]) -> Optional[dict[st
         "hourly": hourly,
         "alerts": alerts_raw,
     }
-    return mapped
+    return _apply_nighttime_icons(mapped)
 
 
 def _fetch_weatherkit(now: datetime.datetime) -> Optional[dict[str, Any]]:
@@ -583,17 +685,22 @@ def _fetch_openweathermap(now: datetime.datetime) -> Optional[dict[str, Any]]:
         return None
 
 
-def fetch_weather():
-    """Fetch weather from WeatherKit with OpenWeatherMap as a fallback."""
+def fetch_weather(force_refresh: bool = False):
+    """Fetch weather from WeatherKit with OpenWeatherMap as a fallback.
+
+    Args:
+        force_refresh: If True, bypass the local cache TTL and fetch new data.
+    """
 
     global _weather_cache, _weather_cache_fetched_at
     now = datetime.datetime.now(datetime.timezone.utc)
 
+    cache_age = None
     if _weather_cache and _weather_cache_fetched_at:
-        delta = (now - _weather_cache_fetched_at).total_seconds()
-        if delta < WEATHER_REFRESH_SECONDS:
+        cache_age = (now - _weather_cache_fetched_at).total_seconds()
+        if not force_refresh and cache_age < WEATHER_REFRESH_SECONDS:
             logging.debug(
-                "Returning cached weather data (age: %.0fs, TTL: %ds)", delta, WEATHER_REFRESH_SECONDS
+                "Returning cached weather data (age: %.0fs, TTL: %ds)", cache_age, WEATHER_REFRESH_SECONDS
             )
             return _weather_cache
 
@@ -609,9 +716,9 @@ def fetch_weather():
     # If both sources fail, fall back to stale cached data instead of returning
     # nothing (and hammering the APIs on the next attempt).
     if _weather_cache and _weather_cache_fetched_at:
-        delta = (now - _weather_cache_fetched_at).total_seconds()
+        cache_age = cache_age if cache_age is not None else (now - _weather_cache_fetched_at).total_seconds()
         logging.info(
-            "Returning stale weather cache after fetch errors (age: %.0fs)", delta
+            "Returning stale weather cache after fetch errors (age: %.0fs)", cache_age
         )
         return _weather_cache
 
