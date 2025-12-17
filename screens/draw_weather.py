@@ -867,7 +867,7 @@ def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[Image.I
         draw = ImageDraw.Draw(frame_img)
         draw.ellipse((marker_x - 3, marker_y - 3, marker_x + 3, marker_y + 3), fill=(255, 0, 0, 255))
 
-        final_frame = frame_img.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGB")
+        final_frame = frame_img.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
         images.append(final_frame)
 
     return images
@@ -919,23 +919,22 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
     clear_display(display)
     loops = 2
     delay = 0.5
-    radar_height = int(HEIGHT * 0.65)
-    separator_y = radar_height
     map_section = None
     if base_map:
-        map_section = base_map.resize((WIDTH, HEIGHT - radar_height), Image.LANCZOS)
+        map_section = base_map.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
 
     def _compose_frame(frame: Image.Image) -> Image.Image:
+        radar_resized = frame.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
+        radar_opacity = 0.6
+        if radar_opacity < 1.0:
+            alpha = radar_resized.getchannel("A")
+            alpha = alpha.point(lambda p: int(p * radar_opacity))
+            radar_resized.putalpha(alpha)
         if map_section is None:
-            return frame
-        combined = Image.new("RGB", (WIDTH, HEIGHT), "black")
-        radar_resized = frame.resize((WIDTH, radar_height), Image.LANCZOS)
-        combined.paste(radar_resized, (0, 0))
-        combined.paste(map_section, (0, radar_height))
-        draw = ImageDraw.Draw(combined)
-        draw.line((0, separator_y, WIDTH, separator_y), fill=(60, 60, 60))
-        draw.text((4, radar_height + 4), "Map overview", font=FONT_WEATHER_DETAILS_BOLD, fill=(220, 220, 220))
-        return combined
+            return radar_resized.convert("RGB")
+        combined = map_section.copy()
+        combined.alpha_composite(radar_resized)
+        return combined.convert("RGB")
 
     composed_frames = [_compose_frame(frame) for frame in frames]
 
