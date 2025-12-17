@@ -297,9 +297,6 @@ def draw_weather_screen_1(display, weather, transition=False):
         fill=(255,255,255)
     )
 
-    icon_code = current.get("weather", [{}])[0].get("icon")
-    icon_img = fetch_weather_icon(icon_code, WEATHER_ICON_SIZE)
-
     cloud_cover = current.get("clouds")
     try:
         cloud_cover = int(round(float(cloud_cover)))
@@ -375,8 +372,17 @@ def draw_weather_screen_1(display, weather, transition=False):
 
     # paste icon between desc and labels
     top_of_icons = h_temp + h_desc + WEATHER_DESC_GAP * 2
-    y_icon = top_of_icons + ((y_lbl - top_of_icons - WEATHER_ICON_SIZE)//2)
-    icon_x = (WIDTH - WEATHER_ICON_SIZE) // 2
+    icon_code = current.get("weather", [{}])[0].get("icon")
+    # Fit the weather icon into the available gap between the description and
+    # the Feels/Hi/Lo labels so it doesn't overlap other content.
+    available_icon_height = y_lbl - top_of_icons
+    if available_icon_height > 0:
+        icon_size = max(1, min(WEATHER_ICON_SIZE, available_icon_height))
+    else:
+        icon_size = min(WEATHER_ICON_SIZE, HEIGHT // 2)
+    icon_img = fetch_weather_icon(icon_code, icon_size)
+    y_icon = top_of_icons + ((y_lbl - top_of_icons - icon_size)//2)
+    icon_x = (WIDTH - icon_size) // 2
     icon_center_y = top_of_icons + max(0, (y_lbl - top_of_icons) // 2)
 
     if icon_img:
@@ -407,7 +413,7 @@ def draw_weather_screen_1(display, weather, transition=False):
         pct_w, pct_h = draw.textsize(cloud_percent, font=side_font)
         block_w = max(emoji_w, pct_w)
         block_h = emoji_h + stack_gap + pct_h
-        cloud_x = icon_x + WEATHER_ICON_SIZE + 6
+        cloud_x = icon_x + icon_size + 6
         if cloud_x + block_w > WIDTH:
             cloud_x = WIDTH - block_w
         block_y = icon_center_y - block_h // 2
