@@ -463,6 +463,9 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
                 "temp": _to_fahrenheit(hour.get("temperature")),
                 "feels_like": _to_fahrenheit(hour.get("temperatureApparent") or hour.get("temperature")),
                 "pop": hour.get("precipitationChance"),
+                "wind_speed": hour.get("windSpeed"),
+                "wind_deg": hour.get("windDirection"),
+                "uvi": hour.get("uvIndex"),
                 "weather": [
                     {
                         "description": hour_desc,
@@ -592,6 +595,9 @@ def _normalise_openweathermap_response(data: dict[str, Any]) -> Optional[dict[st
                 "temp": hour.get("temp"),
                 "feels_like": hour.get("feels_like") or hour.get("temp"),
                 "pop": hour.get("pop"),
+                "wind_speed": hour.get("wind_speed"),
+                "wind_deg": hour.get("wind_deg"),
+                "uvi": hour.get("uvi"),
                 "weather": [
                     {
                         "description": desc,
