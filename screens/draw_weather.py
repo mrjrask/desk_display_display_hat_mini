@@ -377,12 +377,12 @@ def draw_weather_screen_1(display, weather, transition=False):
     # the Feels/Hi/Lo labels so it doesn't overlap other content.
     available_icon_height = y_lbl - top_of_icons
     if available_icon_height > 0:
-        icon_size = max(1, min(WEATHER_ICON_SIZE, available_icon_height))
+        weather_icon_size = max(1, min(WEATHER_ICON_SIZE, available_icon_height))
     else:
-        icon_size = min(WEATHER_ICON_SIZE, HEIGHT // 2)
-    icon_img = fetch_weather_icon(icon_code, icon_size)
-    y_icon = top_of_icons + ((y_lbl - top_of_icons - icon_size)//2)
-    icon_x = (WIDTH - icon_size) // 2
+        weather_icon_size = min(WEATHER_ICON_SIZE, HEIGHT // 2)
+    icon_img = fetch_weather_icon(icon_code, weather_icon_size)
+    y_icon = top_of_icons + ((y_lbl - top_of_icons - weather_icon_size)//2)
+    icon_x = (WIDTH - weather_icon_size) // 2
     icon_center_y = top_of_icons + max(0, (y_lbl - top_of_icons) // 2)
 
     if icon_img:
@@ -392,8 +392,8 @@ def draw_weather_screen_1(display, weather, transition=False):
     stack_gap = 2
     if precip_percent:
         precip_color = (173, 216, 230) if is_snow else (135, 206, 250)
-        icon_size = FONT_EMOJI.size if hasattr(FONT_EMOJI, "size") else 26
-        precip_icon = _render_precip_icon(is_snow, icon_size, precip_color)
+        precip_icon_size = FONT_EMOJI.size if hasattr(FONT_EMOJI, "size") else 26
+        precip_icon = _render_precip_icon(is_snow, precip_icon_size, precip_color)
         emoji_w, emoji_h = precip_icon.size
         pct_w, pct_h = draw.textsize(precip_percent, font=side_font)
         block_w = max(emoji_w, pct_w)
@@ -413,7 +413,7 @@ def draw_weather_screen_1(display, weather, transition=False):
         pct_w, pct_h = draw.textsize(cloud_percent, font=side_font)
         block_w = max(emoji_w, pct_w)
         block_h = emoji_h + stack_gap + pct_h
-        cloud_x = icon_x + icon_size + 6
+        cloud_x = icon_x + weather_icon_size + 6
         if cloud_x + block_w > WIDTH:
             cloud_x = WIDTH - block_w
         block_y = icon_center_y - block_h // 2
