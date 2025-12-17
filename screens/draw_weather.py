@@ -925,6 +925,11 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
 
     def _compose_frame(frame: Image.Image) -> Image.Image:
         radar_resized = frame.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
+        radar_opacity = 0.6
+        if radar_opacity < 1.0:
+            alpha = radar_resized.getchannel("A")
+            alpha = alpha.point(lambda p: int(p * radar_opacity))
+            radar_resized.putalpha(alpha)
         if map_section is None:
             return radar_resized.convert("RGB")
         combined = map_section.copy()
