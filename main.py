@@ -129,6 +129,10 @@ _BUTTON_NAMES = ("A", "B", "X", "Y")
 _BUTTON_STATE = {name: False for name in _BUTTON_NAMES}
 _manual_skip_event = threading.Event()
 _button_monitor_thread: Optional[threading.Thread] = None
+_pending_previous_screen_id: Optional[str] = None
+_SCREEN_HISTORY_LIMIT = 50
+_screen_history = []
+_screen_history_lock = threading.Lock()
 
 _dark_hours_active = False
 
@@ -136,11 +140,29 @@ _dark_hours_active = False
 def _handle_button_down(name: str) -> bool:
     """React to a newly pressed control button."""
 
-    global _skip_request_pending
+    global _skip_request_pending, _pending_previous_screen_id
 
     name = name.upper()
     if display is None:
         return False
+    if name == "A":
+        logging.info("⏭️  A button pressed – skipping to next screen.")
+        _skip_request_pending = True
+        _manual_skip_event.set()
+        return True
+    if name == "B":
+        with _screen_history_lock:
+            previous_id = _screen_history[-2] if len(_screen_history) >= 2 else None
+        if not previous_id:
+            logging.info("⏮️  B button pressed, but no previous screen is available.")
+            return False
+        logging.info(
+            "⏮️  B button pressed – returning to previous screen '%s'.", previous_id
+        )
+        _pending_previous_screen_id = previous_id
+        _skip_request_pending = False
+        _manual_skip_event.set()
+        return True
     if name == "X":
         logging.info("⏭️  X button pressed – skipping to next screen.")
         _skip_request_pending = True
@@ -185,7 +207,7 @@ def _load_scheduler_from_config() -> Optional[ScreenScheduler]:
 
 def refresh_schedule_if_needed(force: bool = False) -> None:
     global _screen_config_mtime, screen_scheduler, _requested_screen_ids
-    global _last_screen_id, _skip_request_pending
+    global _last_screen_id, _skip_request_pending, _pending_previous_screen_id
 
     try:
         mtime = os.path.getmtime(CONFIG_PATH)
@@ -204,6 +226,9 @@ def refresh_schedule_if_needed(force: bool = False) -> None:
     _screen_config_mtime = mtime
     _last_screen_id = None
     _skip_request_pending = False
+    _pending_previous_screen_id = None
+    with _screen_history_lock:
+        _screen_history.clear()
     logging.info("🔁 Loaded schedule configuration with %d node(s).", scheduler.node_count)
 
 
@@ -382,7 +407,20 @@ def _next_screen_from_registry(
 ) -> Optional[ScreenDefinition]:
     """Return the next screen, honoring any pending skip requests."""
 
-    global _skip_request_pending
+    global _skip_request_pending, _pending_previous_screen_id
+
+    if _pending_previous_screen_id:
+        previous_id = _pending_previous_screen_id
+        _pending_previous_screen_id = None
+        previous_entry = registry.get(previous_id)
+        if previous_entry and previous_entry.available:
+            logging.info("⏮️  Returning to previous screen '%s'.", previous_id)
+            _skip_request_pending = False
+            return previous_entry
+        logging.info(
+            "⏮️  Previous screen '%s' unavailable; resuming scheduled rotation.",
+            previous_id,
+        )
 
     scheduler = screen_scheduler
     if scheduler is None:
@@ -1161,11 +1199,15 @@ def main_loop():
                 else:
                     logging.info("Screen '%s' produced no drawable image.", sid)
 
-                if _shutdown_event.is_set():
-                    break
+            if _shutdown_event.is_set():
+                break
 
-                _last_screen_id = sid
-                skip_delay = _wait_with_button_checks(SCREEN_DELAY)
+            _last_screen_id = sid
+            with _screen_history_lock:
+                _screen_history.append(sid)
+                if len(_screen_history) > _SCREEN_HISTORY_LIMIT:
+                    _screen_history = _screen_history[-_SCREEN_HISTORY_LIMIT:]
+            skip_delay = _wait_with_button_checks(SCREEN_DELAY)
 
             if _shutdown_event.is_set():
                 break
