@@ -1086,13 +1086,13 @@ def check_github_updates() -> bool:
     return updated
 
 
-_APT_CACHE_TTL_SECONDS = 60 * 60
+_APT_CACHE_TTL_SECONDS = 4 * 60 * 60
 _APT_CACHE_RESULT: Optional[bool] = None
 _APT_CACHE_AT: float = 0.0
 
 
 def check_apt_updates() -> bool:
-    """Return True if `apt` has upgradeable packages (cached for an hour)."""
+    """Return True if `apt` has upgradeable packages (cached for four hours)."""
 
     global _APT_CACHE_RESULT, _APT_CACHE_AT
 
