@@ -60,8 +60,16 @@ _FORCE_HEADLESS = os.environ.get("DESK_DISPLAY_FORCE_HEADLESS", "").strip().lowe
 }
 
 _ACTIVE_DISPLAY: Optional["Display"] = None
-_GITHUB_LED_ANIMATOR: Optional["_GithubLedAnimator"] = None
-_GITHUB_LED_STATE: bool = False
+_LED_INDICATOR_ANIMATOR: Optional["_LedAnimator"] = None
+
+
+@dataclass
+class _UpdateStatus:
+    github: bool = False
+    apt: bool = False
+
+
+_UPDATE_STATUS = _UpdateStatus()
 
 _DISPLAY_UPDATE_GATE = threading.Event()
 _DISPLAY_UPDATE_GATE.set()
@@ -790,20 +798,37 @@ def load_svg(key, url) -> Image.Image | None:
     except Exception:
         return None
 
-# ─── GitHub Update Checker ─────────────────────────────────────────────────
-class _GithubLedAnimator:
-    """Hold the onboard LED at a barely visible blue glow."""
+# ─── Update Indicator LED ───────────────────────────────────────────────────
+class _LedAnimator:
+    """Animate the onboard LED using a cycle of colors."""
 
-    def __init__(self, display: "Display") -> None:
+    def __init__(
+        self,
+        display: "Display",
+        pattern: Tuple[Tuple[float, float, float], ...],
+        interval: float = 0.6,
+    ) -> None:
         self._display = display
+        self._pattern = pattern
+        self._interval = interval
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
 
     def start(self) -> None:
         self._thread.start()
 
-    def is_running_for(self, display: "Display") -> bool:
-        return self._display is display and self._thread.is_alive()
+    def is_running_for(
+        self,
+        display: "Display",
+        pattern: Tuple[Tuple[float, float, float], ...],
+        interval: float,
+    ) -> bool:
+        return (
+            self._display is display
+            and self._thread.is_alive()
+            and self._pattern == pattern
+            and abs(self._interval - interval) < 1e-6
+        )
 
     def stop(self) -> None:
         self._stop.set()
@@ -811,99 +836,128 @@ class _GithubLedAnimator:
         self._display.set_led(r=0.0, g=0.0, b=0.0)
 
     def _run(self) -> None:
-        self._display.set_led(r=0.0, g=0.0, b=LED_INDICATOR_LEVEL)
-        # Keep the LED steady until we're asked to stop.
-        while not self._stop.wait(0.2):
-            continue
+        idx = 0
+        while not self._stop.is_set():
+            r, g, b = self._pattern[idx]
+            self._display.set_led(r=r, g=g, b=b)
+            idx = (idx + 1) % len(self._pattern)
+            if self._stop.wait(self._interval):
+                break
         self._display.set_led(r=0.0, g=0.0, b=0.0)
 
 
-def _start_github_led_animator(display: "Display") -> None:
-    """Start the GitHub LED animator for the provided display."""
+def _led_pattern(status: _UpdateStatus) -> Tuple[Tuple[Tuple[float, float, float], ...], float] | tuple[None, None]:
+    blue = (0.0, 0.0, LED_INDICATOR_LEVEL)
+    yellow = (LED_INDICATOR_LEVEL, LED_INDICATOR_LEVEL, 0.0)
 
-    global _GITHUB_LED_ANIMATOR
+    if status.apt:
+        # Alternate blue/yellow when apt updates are pending.
+        return ((blue, yellow), 0.6)
+    if status.github:
+        return ((blue,), 0.8)
+    return (None, None)
 
-    animator = _GithubLedAnimator(display)
-    _GITHUB_LED_ANIMATOR = animator
+
+def _refresh_led_indicator(display: Optional["Display"] = None) -> None:
+    """Reflect update status on the Display HAT Mini LED."""
+
+    global _LED_INDICATOR_ANIMATOR
+
+    display = display or get_active_display()
+    status = _UPDATE_STATUS
+
+    if display is None:
+        if _LED_INDICATOR_ANIMATOR is not None and not (status.github or status.apt):
+            try:  # pragma: no cover - hardware import
+                _LED_INDICATOR_ANIMATOR.stop()
+            except Exception as exc:
+                logging.debug("Failed to stop LED animator without display: %s", exc)
+            finally:
+                _LED_INDICATOR_ANIMATOR = None
+        return
+
+    pattern, interval = _led_pattern(status)
+
+    if pattern is None:
+        if _LED_INDICATOR_ANIMATOR is not None:
+            try:  # pragma: no cover - hardware import
+                _LED_INDICATOR_ANIMATOR.stop()
+            except Exception as exc:
+                logging.debug("Failed to stop LED animator: %s", exc)
+            finally:
+                _LED_INDICATOR_ANIMATOR = None
+        else:
+            try:
+                display.set_led(r=0.0, g=0.0, b=0.0)
+            except Exception as exc:  # pragma: no cover - hardware import
+                logging.debug("Failed to clear LED: %s", exc)
+        return
+
+    if _LED_INDICATOR_ANIMATOR is not None:
+        if _LED_INDICATOR_ANIMATOR.is_running_for(display, pattern, interval):
+            return
+        try:  # pragma: no cover - hardware import
+            _LED_INDICATOR_ANIMATOR.stop()
+        except Exception as exc:
+            logging.debug("Failed to stop existing LED animator: %s", exc)
+    animator = _LedAnimator(display, pattern, interval)
+    _LED_INDICATOR_ANIMATOR = animator
     try:  # pragma: no cover - hardware import
         animator.start()
     except Exception as exc:
-        logging.debug("Failed to start GitHub LED animator: %s", exc)
-        _GITHUB_LED_ANIMATOR = None
+        logging.debug("Failed to start LED animator: %s", exc)
+        _LED_INDICATOR_ANIMATOR = None
 
 
-def _update_github_led(state: bool) -> None:
-    """Reflect GitHub update status on the Display HAT Mini LED."""
+def _set_update_status(github: Optional[bool] = None, apt: Optional[bool] = None) -> None:
+    global _UPDATE_STATUS
 
-    global _GITHUB_LED_ANIMATOR, _GITHUB_LED_STATE
-
-    _GITHUB_LED_STATE = state
-
-    display = get_active_display()
-    if display is None:
-        if not state and _GITHUB_LED_ANIMATOR is not None:
-            try:  # pragma: no cover - hardware import
-                _GITHUB_LED_ANIMATOR.stop()
-            except Exception as exc:
-                logging.debug("Failed to stop GitHub LED animator without display: %s", exc)
-            finally:
-                _GITHUB_LED_ANIMATOR = None
+    if github is None and apt is None:
         return
 
-    if state:
-        if _GITHUB_LED_ANIMATOR is not None:
-            # Animator already running; nothing to change.
-            if _GITHUB_LED_ANIMATOR.is_running_for(display):
-                return
-            # Display changed or thread stopped; ensure previous animator is stopped.
-            try:
-                _GITHUB_LED_ANIMATOR.stop()
-            except Exception as exc:  # pragma: no cover - hardware import
-                logging.debug("Failed to stop previous GitHub LED animator: %s", exc)
-        _start_github_led_animator(display)
-    else:
-        if _GITHUB_LED_ANIMATOR is not None:
-            try:
-                _GITHUB_LED_ANIMATOR.stop()
-            except Exception as exc:  # pragma: no cover - hardware import
-                logging.debug("Failed to stop GitHub LED animator: %s", exc)
-            finally:
-                _GITHUB_LED_ANIMATOR = None
+    status = _UPDATE_STATUS
+    _UPDATE_STATUS = _UpdateStatus(
+        github=status.github if github is None else github,
+        apt=status.apt if apt is None else apt,
+    )
+    _refresh_led_indicator()
 
 
 @contextmanager
 def temporary_display_led(r: float, g: float, b: float):
-    """Temporarily override the display LED, restoring GitHub status after."""
+    """Temporarily override the display LED, restoring update status after."""
 
-    global _GITHUB_LED_ANIMATOR
+    global _LED_INDICATOR_ANIMATOR
 
     display = get_active_display()
     if display is None:
         yield
         return
 
-    animator = _GITHUB_LED_ANIMATOR
-    if animator is not None and not animator.is_running_for(display):
+    pattern, interval = _led_pattern(_UPDATE_STATUS)
+
+    animator = _LED_INDICATOR_ANIMATOR
+    if animator is not None and (pattern is None or interval is None or not animator.is_running_for(display, pattern, interval)):
         animator = None
 
-    github_led_active = bool(_GITHUB_LED_STATE)
+    update_led_active = bool(_UPDATE_STATUS.github or _UPDATE_STATUS.apt)
     if animator is not None:
-        github_led_active = True
+        update_led_active = True
 
     if animator is not None:
         try:  # pragma: no cover - hardware import
             animator.stop()
         except Exception as exc:
-            logging.debug("Failed to stop GitHub LED animator before override: %s", exc)
+            logging.debug("Failed to stop LED animator before override: %s", exc)
         finally:
-            _GITHUB_LED_ANIMATOR = None
+            _LED_INDICATOR_ANIMATOR = None
 
     try:
         display.set_led(r=r, g=g, b=b)
         yield
     finally:
-        if github_led_active or _GITHUB_LED_STATE:
-            _start_github_led_animator(display)
+        if update_led_active or _UPDATE_STATUS.github or _UPDATE_STATUS.apt:
+            _refresh_led_indicator(display)
         else:
             try:
                 display.set_led(r=0.0, g=0.0, b=0.0)
@@ -1003,7 +1057,7 @@ def check_github_updates() -> bool:
 
     updated = (local_sha != remote_sha)
     logging.info(f"check_github_updates: updates available = {updated}")
-    _update_github_led(updated)
+    _set_update_status(github=updated)
 
     # If updated, log which files changed
     if updated:
@@ -1030,6 +1084,52 @@ def check_github_updates() -> bool:
             logging.exception("check_github_updates: failed to list changed files")
 
     return updated
+
+
+_APT_CACHE_TTL_SECONDS = 60 * 60
+_APT_CACHE_RESULT: Optional[bool] = None
+_APT_CACHE_AT: float = 0.0
+
+
+def check_apt_updates() -> bool:
+    """Return True if `apt` has upgradeable packages (cached for an hour)."""
+
+    global _APT_CACHE_RESULT, _APT_CACHE_AT
+
+    now = time.time()
+    if _APT_CACHE_RESULT is not None and (now - _APT_CACHE_AT) < _APT_CACHE_TTL_SECONDS:
+        logging.info(
+            "check_apt_updates: using cached result (%s)",
+            "updates" if _APT_CACHE_RESULT else "no updates",
+        )
+        _set_update_status(apt=_APT_CACHE_RESULT)
+        return _APT_CACHE_RESULT
+
+    try:
+        proc = subprocess.run(
+            ["apt-get", "-s", "-o", "Debug::NoLocking=1", "upgrade"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        logging.exception("check_apt_updates: failed to run apt-get simulation")
+        _set_update_status(apt=False)
+        return False
+
+    if proc.returncode != 0:
+        logging.warning("check_apt_updates: apt-get exited with %s", proc.returncode)
+        _set_update_status(apt=False)
+        return False
+
+    updates_available = any(line.startswith("Inst ") for line in proc.stdout.splitlines())
+    logging.info("check_apt_updates: updates available = %s", updates_available)
+
+    _APT_CACHE_RESULT = updates_available
+    _APT_CACHE_AT = now
+
+    _set_update_status(apt=updates_available)
+    return updates_available
 
 MLB_ABBREVIATIONS = {
     "Chicago Cubs": "CUBS", "Atlanta Braves": "ATL",  "Miami Marlins": "MIA",
