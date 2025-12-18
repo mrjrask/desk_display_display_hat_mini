@@ -1206,7 +1206,7 @@ def main_loop():
             with _screen_history_lock:
                 _screen_history.append(sid)
                 if len(_screen_history) > _SCREEN_HISTORY_LIMIT:
-                    _screen_history = _screen_history[-_SCREEN_HISTORY_LIMIT:]
+                    _screen_history[:] = _screen_history[-_SCREEN_HISTORY_LIMIT:]
             skip_delay = _wait_with_button_checks(SCREEN_DELAY)
 
             if _shutdown_event.is_set():
