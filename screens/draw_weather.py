@@ -747,8 +747,10 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
             stat_items.append((uv_text, FONT_WEATHER_DETAILS_TINY_LARGE, uv_color))
 
         if stat_items:
-            slots = len(stat_items) + 1
-            for idx, item in enumerate(stat_items, start=1):
+            num_items = len(stat_items)
+            segment_height = stat_area_height / num_items if num_items else stat_area_height
+
+            for idx, item in enumerate(stat_items):
                 # Support both (text, font, color), (text, font, color, icon), and pre-rendered image items
                 icon = None
                 text_image = None
@@ -766,7 +768,9 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
                     text_w, text_h = text_image.size
                 else:
                     text_w, text_h = draw.textsize(text, font=font)
-                text_y = int(stat_area_top + (stat_area_height * idx / slots) - text_h / 2)
+
+                center_y = stat_area_top + segment_height * (idx + 0.5)
+                text_y = int(center_y - text_h / 2)
                 text_y = max(stat_area_top, min(text_y, stat_area_bottom - text_h))
 
                 if icon:
