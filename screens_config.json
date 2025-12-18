@@ -10,7 +10,7 @@
     "inside": 1,
     "sensors": 0,
     "verano logo": 0,
-    "vrnof": 4,
+    "vrnof": 3,
     "travel": 2,
     "cubs logo": 0,
     "cubs stand1": 0,
@@ -53,17 +53,17 @@
     "NFL Scoreboard": 1,
     "NFL Scoreboard v2": 0,
     "NFL Overview NFC": {
-      "frequency": 2,
+      "frequency": 3,
       "alt": {
         "screen": "NFL Standings NFC",
-        "frequency": 1
+        "frequency": 3
       }
     },
     "NFL Overview AFC": {
-      "frequency": 2,
+      "frequency": 3,
       "alt": {
         "screen": "NFL Standings AFC",
-        "frequency": 1
+        "frequency": 3
       }
     },
     "NFL Standings NFC": 0,
@@ -78,7 +78,7 @@
           "NHL Standings West",
           "NHL Standings East"
         ],
-        "frequency": 1
+        "frequency": 2
       }
     },
     "NHL Standings West": 0,
