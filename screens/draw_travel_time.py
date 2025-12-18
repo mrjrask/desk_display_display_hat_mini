@@ -50,13 +50,20 @@ def _api_key() -> str:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _fetch_routes(avoid_highways: bool = False) -> List[Dict[str, Any]]:
-    return fetch_directions_routes(
+    routes = fetch_directions_routes(
         TRAVEL_ORIGIN,
         TRAVEL_DESTINATION,
         _api_key(),
         avoid_highways=avoid_highways,
         url=TRAVEL_DIRECTIONS_URL,
     )
+
+    for route in routes:
+        leg = (route.get("legs") or [{}])[0]
+        duration = leg.get("duration") or {}
+        route["_duration_base_sec"] = duration.get("value") or None
+
+    return routes
 
 
 def _pop_route(pool: List[dict], tokens: Sequence[str]) -> Optional[dict]:
@@ -179,65 +186,74 @@ def get_travel_active_window() -> Optional[Tuple[dt.time, dt.time]]:
     return start, end
 
 
-def get_travel_times() -> Dict[str, TravelTimeResult]:
-    """Return formatted travel times keyed by route identifier."""
+def _select_travel_routes(routes: List[dict]) -> Dict[str, Optional[dict]]:
+    remaining = list(routes)
+
+    lake_shore_tokens = [
+        "lake shore",
+        "lake shore dr",
+        "lake shore drive",
+        "us-41",
+        "us 41",
+        "lsd",
+        "sheridan",
+        "sheridan rd",
+        "sheridan road",
+        "dundee",
+        "dundee rd",
+        "dundee road",
+    ]
+    kennedy_edens_tokens = [
+        "edens",
+        "edens expressway",
+        "i-94",
+        "i 94",
+        "i94",
+        "90/94",
+        "kennedy",
+        "dan ryan",
+    ]
+    kennedy_294_tokens = [
+        "i-294",
+        "i 294",
+        "i294",
+        "294",
+        "294 tollway",
+        "tri-state",
+        "willow",
+        "willow rd",
+        "willow road",
+    ]
+
+    return {
+        "lake_shore": _pop_route(remaining, lake_shore_tokens),
+        "kennedy_edens": _pop_route(remaining, kennedy_edens_tokens),
+        "kennedy_294": _pop_route(remaining, kennedy_294_tokens),
+    }
+
+
+def get_travel_routes() -> Dict[str, Optional[dict]]:
+    """Return the raw route objects keyed by route identifier."""
 
     try:
         routes_all = list(_fetch_routes(avoid_highways=False))
-        remaining = list(routes_all)
-
-        lake_shore_tokens = [
-            "lake shore",
-            "lake shore dr",
-            "lake shore drive",
-            "us-41",
-            "us 41",
-            "lsd",
-            "sheridan",
-            "sheridan rd",
-            "sheridan road",
-            "dundee",
-            "dundee rd",
-            "dundee road",
-        ]
-        kennedy_edens_tokens = [
-            "edens",
-            "edens expressway",
-            "i-94",
-            "i 94",
-            "i94",
-            "90/94",
-            "kennedy",
-            "dan ryan",
-        ]
-        kennedy_294_tokens = [
-            "i-294",
-            "i 294",
-            "i294",
-            "294",
-            "294 tollway",
-            "tri-state",
-            "willow",
-            "willow rd",
-            "willow road",
-        ]
-
-        lake_shore = _pop_route(remaining, lake_shore_tokens)
-        kennedy_edens = _pop_route(remaining, kennedy_edens_tokens)
-        kennedy_294 = _pop_route(remaining, kennedy_294_tokens)
-
-        return {
-            "lake_shore": TravelTimeResult.from_route(lake_shore),
-            "kennedy_edens": TravelTimeResult.from_route(kennedy_edens),
-            "kennedy_294": TravelTimeResult.from_route(kennedy_294),
-        }
+        return _select_travel_routes(routes_all)
     except Exception as exc:  # pragma: no cover - defensive guard for runtime issues
-        logging.warning("Travel time parse failed: %s", exc)
+        logging.warning("Travel route fetch failed: %s", exc)
         return {
-            "lake_shore": TravelTimeResult("N/A"),
-            "kennedy_edens": TravelTimeResult("N/A"),
-            "kennedy_294": TravelTimeResult("N/A"),
+            "lake_shore": None,
+            "kennedy_edens": None,
+            "kennedy_294": None,
         }
+
+
+def get_travel_times() -> Dict[str, TravelTimeResult]:
+    """Return formatted travel times keyed by route identifier."""
+
+    routes = get_travel_routes()
+    return {
+        key: TravelTimeResult.from_route(route) for key, route in routes.items()
+    }
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Drawing helpers for travel route icons
@@ -530,6 +546,7 @@ def draw_travel_time_screen(
 __all__ = [
     "draw_travel_time_screen",
     "get_travel_times",
+    "get_travel_routes",
     "is_travel_screen_active",
     "get_travel_active_window",
 ]
