@@ -131,6 +131,7 @@ desk_display/
 │  ├─ draw_date_time.py
 │  ├─ draw_hawks_schedule.py
 │  ├─ draw_inside.py
+│  ├─ draw_travel_map.py
 │  ├─ draw_travel_time.py
 │  ├─ draw_vrnof.py
 │  ├─ draw_weather.py
@@ -284,18 +285,19 @@ The repository ships with a ready-to-run `screens_config.json` that exposes the 
 3. Every third pass, show `weather2`.
 4. Every third pass, show `inside` (indoor sensors).
 5. `travel`
-6. Every fourth pass, show `vrnof` (Verano VRNO stock panel).
-7. Every other pass, cycle through the Blackhawks cards: `hawks logo`, `hawks last`, `hawks live`, `hawks next`, `hawks next home`.
-8. Every fifth pass, show `NHL Scoreboard`.
-9. Every sixth pass, cycle through `NHL Standings Overview`, `NHL Standings Overview`, `NHL Standings West`.
-10. Every eighteenth pass (starting at phase 12), show `NHL Standings East`.
-11. Every fourth pass, show `bears logo`.
-12. Every fourth pass, show `bears next`.
-13. Every fifth pass, show `NFL Scoreboard`.
-14. Every sixth pass, cycle through `NFL Overview NFC`, `NFL Overview NFC`, `NFL Standings NFC`.
-15. Every sixth pass, cycle through `NFL Overview AFC`, `NFL Overview AFC`, `NFL Standings AFC`.
-16. Every seventh pass, show `NBA Scoreboard`.
-17. Every third pass, show `MLB Scoreboard`.
+6. `travel map`
+7. Every fourth pass, show `vrnof` (Verano VRNO stock panel).
+8. Every other pass, cycle through the Blackhawks cards: `hawks logo`, `hawks last`, `hawks live`, `hawks next`, `hawks next home`.
+9. Every fifth pass, show `NHL Scoreboard`.
+10. Every sixth pass, cycle through `NHL Standings Overview`, `NHL Standings Overview`, `NHL Standings West`.
+11. Every eighteenth pass (starting at phase 12), show `NHL Standings East`.
+12. Every fourth pass, show `bears logo`.
+13. Every fourth pass, show `bears next`.
+14. Every fifth pass, show `NFL Scoreboard`.
+15. Every sixth pass, cycle through `NFL Overview NFC`, `NFL Overview NFC`, `NFL Standings NFC`.
+16. Every sixth pass, cycle through `NFL Overview AFC`, `NFL Overview AFC`, `NFL Standings AFC`.
+17. Every seventh pass, show `NBA Scoreboard`.
+18. Every third pass, show `MLB Scoreboard`.
 
 Each step above maps directly to the JSON structure under `playlists.default.steps`, so any edits made through the admin UI will keep the document and the on-device rotation in sync.
 
