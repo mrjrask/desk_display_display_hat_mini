@@ -36,6 +36,7 @@ from config import (
     FONT_WEATHER_DETAILS_SMALL,
     FONT_WEATHER_DETAILS_TINY,
     FONT_WEATHER_DETAILS_TINY_LARGE,
+    FONT_WEATHER_DETAILS_TINY_MICRO,
     FONT_WEATHER_DETAILS_SMALL_BOLD,
     FONT_EMOJI,
     FONT_EMOJI_SMALL,
@@ -79,19 +80,26 @@ def _render_stat_text(parts):
 
     widths = []
     heights = []
+    offsets = []
+    extents = []
     for text, font, _ in parts:
-        w, h = scratch_draw.textsize(text, font=font)
+        bbox = scratch_draw.textbbox((0, 0), text, font=font)
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
         widths.append(w)
         heights.append(h)
+        offset_y = -bbox[1]
+        offsets.append(offset_y)
+        extents.append(offset_y + h)
 
     total_w = sum(widths)
-    total_h = max(heights) if heights else 0
+    total_h = max(extents) if extents else 0
     result = Image.new("RGBA", (total_w, total_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(result)
 
     x = 0
-    for (text, font, color), w, h in zip(parts, widths, heights):
-        y = (total_h - h) // 2
+    for (text, font, color), w, h, offset_y, extent in zip(parts, widths, heights, offsets, extents):
+        y = offset_y + (total_h - extent) // 2
         draw.text((x, y), text, font=font, fill=color)
         x += w
 
@@ -714,7 +722,7 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         if wind_speed is not None:
             wind_parts = [
                 (f"{wind_speed}", FONT_WEATHER_DETAILS_TINY_LARGE, (180, 225, 255)),
-                (" mph", FONT_WEATHER_DETAILS_TINY, (180, 225, 255)),
+                (" mph", FONT_WEATHER_DETAILS_TINY_MICRO, (180, 225, 255)),
             ]
             if wind_dir:
                 wind_parts.append((f" {wind_dir}", FONT_WEATHER_DETAILS_TINY_LARGE, (180, 225, 255)))
