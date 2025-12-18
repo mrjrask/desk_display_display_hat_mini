@@ -92,16 +92,19 @@ def _render_stat_text(parts):
         offsets.append(offset_y)
         extents.append(offset_y + h)
 
-    # Add a small horizontal cushion to avoid clipping wide glyphs (e.g., arrows)
-    padding = 1
-    total_w = sum(widths) + padding * 2
-    total_h = max(extents) if extents else 0
+    # Add a small cushion to avoid clipping wide glyphs (e.g., arrows) and give
+    # slightly more vertical room for taller fonts such as the wind speed value.
+    padding_x = 1
+    padding_y = 2
+    content_h = max(extents) if extents else 0
+    total_w = sum(widths) + padding_x * 2
+    total_h = content_h + padding_y * 2
     result = Image.new("RGBA", (total_w, total_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(result)
 
-    x = padding
+    x = padding_x
     for (text, font, color), w, h, offset_y, extent in zip(parts, widths, heights, offsets, extents):
-        y = offset_y + (total_h - extent) // 2
+        y = padding_y + offset_y + (content_h - extent) // 2
         draw.text((x, y), text, font=font, fill=color)
         x += w
 
