@@ -35,6 +35,8 @@ from config import (
     FONT_WEATHER_DETAILS_BOLD,
     FONT_WEATHER_DETAILS_SMALL,
     FONT_WEATHER_DETAILS_TINY,
+    FONT_WEATHER_DETAILS_TINY_LARGE,
+    FONT_WEATHER_DETAILS_TINY_MICRO,
     FONT_WEATHER_DETAILS_SMALL_BOLD,
     FONT_EMOJI,
     FONT_EMOJI_SMALL,
@@ -68,6 +70,40 @@ ALERT_ICON_COLORS = {
     "watch": (255, 165, 0),
     "hazard": (255, 215, 0),
 }
+
+
+def _render_stat_text(parts):
+    """Render a left-to-right text image from ``(text, font, color)`` parts."""
+
+    scratch = Image.new("RGB", (1, 1))
+    scratch_draw = ImageDraw.Draw(scratch)
+
+    widths = []
+    heights = []
+    offsets = []
+    extents = []
+    for text, font, _ in parts:
+        bbox = scratch_draw.textbbox((0, 0), text, font=font)
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
+        widths.append(w)
+        heights.append(h)
+        offset_y = -bbox[1]
+        offsets.append(offset_y)
+        extents.append(offset_y + h)
+
+    total_w = sum(widths)
+    total_h = max(extents) if extents else 0
+    result = Image.new("RGBA", (total_w, total_h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(result)
+
+    x = 0
+    for (text, font, color), w, h, offset_y, extent in zip(parts, widths, heights, offsets, extents):
+        y = offset_y + (total_h - extent) // 2
+        draw.text((x, y), text, font=font, fill=color)
+        x += w
+
+    return result
 
 
 def _pop_pct_from(entry):
@@ -684,10 +720,14 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         wind_speed = hour.get("wind_speed")
         wind_dir = hour.get("wind_dir", "") or ""
         if wind_speed is not None:
-            wind_text = f"{wind_speed} mph"
+            wind_parts = [
+                (f"{wind_speed}", FONT_WEATHER_DETAILS_TINY_LARGE, (180, 225, 255)),
+                (" mph", FONT_WEATHER_DETAILS_TINY_MICRO, (180, 225, 255)),
+            ]
             if wind_dir:
-                wind_text = f"{wind_text} {wind_dir}"
-            stat_items.append((wind_text, FONT_WEATHER_DETAILS_TINY, (180, 225, 255)))
+                wind_parts.append((f" {wind_dir}", FONT_WEATHER_DETAILS_TINY_LARGE, (180, 225, 255)))
+            wind_image = _render_stat_text(wind_parts)
+            stat_items.append({"image": wind_image})
 
         pop = hour.get("pop")
         if pop is not None:
@@ -698,25 +738,34 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
             # Render small precipitation icon
             precip_icon_size = 10
             precip_icon = _render_precip_icon(is_snow, precip_icon_size, precip_color)
-            stat_items.append((pop_text, FONT_WEATHER_DETAILS_TINY, precip_color, precip_icon))
+            stat_items.append((pop_text, FONT_WEATHER_DETAILS_TINY_LARGE, precip_color, precip_icon))
 
         uvi_val = hour.get("uvi")
         if uvi_val is not None:
             uv_color = uv_index_color(uvi_val)
             uv_text = f"UV {uvi_val}"
-            stat_items.append((uv_text, FONT_WEATHER_DETAILS_TINY, uv_color))
+            stat_items.append((uv_text, FONT_WEATHER_DETAILS_TINY_LARGE, uv_color))
 
         if stat_items:
             slots = len(stat_items) + 1
             for idx, item in enumerate(stat_items, start=1):
-                # Support both (text, font, color) and (text, font, color, icon)
-                if len(item) == 4:
+                # Support both (text, font, color), (text, font, color, icon), and pre-rendered image items
+                icon = None
+                text_image = None
+                if isinstance(item, dict):
+                    text_image = item.get("image")
+                    text = ""
+                    font = FONT_WEATHER_DETAILS_TINY_LARGE
+                    color = (255, 255, 255)
+                elif len(item) == 4:
                     text, font, color, icon = item
                 else:
                     text, font, color = item
-                    icon = None
 
-                text_w, text_h = draw.textsize(text, font=font)
+                if text_image is not None:
+                    text_w, text_h = text_image.size
+                else:
+                    text_w, text_h = draw.textsize(text, font=font)
                 text_y = int(stat_area_top + (stat_area_height * idx / slots) - text_h / 2)
                 text_y = max(stat_area_top, min(text_y, stat_area_bottom - text_h))
 
@@ -730,6 +779,8 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
                     icon_y = text_y + (text_h - icon_h) // 2
                     img.paste(icon, (icon_x, icon_y), icon)
                     draw.text((text_x, text_y), text, font=font, fill=color)
+                elif text_image is not None:
+                    img.paste(text_image, (cx - text_w // 2, text_y), text_image)
                 else:
                     # Just render text centered
                     draw.text((cx - text_w // 2, text_y), text, font=font, fill=color)
