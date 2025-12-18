@@ -144,7 +144,7 @@ _NBA_SCOREBOARD_BASES: tuple[tuple[str, bool], ...] = (
 )
 _FORBIDDEN_CACHE_TTL = datetime.timedelta(minutes=30)
 _last_forbidden: Optional[datetime.datetime] = None
-_espn_fallback_notice_at: Optional[datetime.datetime] = None
+_nba_cdn_fallback_notice_at: Optional[datetime.datetime] = None
 
 _INTRO_LOGO_CACHE: Optional[Image.Image] = None
 _INTRO_LOGO_LOADED = False
@@ -958,32 +958,32 @@ def _fetch_games_from_espn(day: datetime.date) -> list[dict]:
     return _hydrate_games(mapped_games)
 
 
-def _log_espn_fallback(day: datetime.date) -> None:
+def _log_nba_cdn_fallback(day: datetime.date) -> None:
     """Log a single fallback notice within the forbidden cache window."""
 
-    global _espn_fallback_notice_at
+    global _nba_cdn_fallback_notice_at
 
     now = datetime.datetime.now()
     if (
-        _espn_fallback_notice_at is None
-        or (now - _espn_fallback_notice_at) >= _FORBIDDEN_CACHE_TTL
+        _nba_cdn_fallback_notice_at is None
+        or (now - _nba_cdn_fallback_notice_at) >= _FORBIDDEN_CACHE_TTL
     ):
         logging.info(
-            "Using ESPN NBA scoreboard fallback while NBA data is unavailable (first encountered for %s)",
+            "Using NBA CDN scoreboard fallback while ESPN data is unavailable (first encountered for %s)",
             day,
         )
-        _espn_fallback_notice_at = now
+        _nba_cdn_fallback_notice_at = now
 
 
-def _reset_espn_fallback_notice() -> None:
+def _reset_nba_cdn_fallback_notice() -> None:
     """Reset the fallback notice cache so it can be emitted again later."""
 
-    global _espn_fallback_notice_at
+    global _nba_cdn_fallback_notice_at
 
-    _espn_fallback_notice_at = None
+    _nba_cdn_fallback_notice_at = None
 
 
-def _fetch_games_for_date(day: datetime.date) -> list[dict]:
+def _fetch_games_from_nba_cdn(day: datetime.date) -> list[dict]:
     def _load_json(url: str, *, respect_forbidden_cache: bool = True) -> Optional[Dict[str, Any]]:
         global _last_forbidden
 
@@ -1039,10 +1039,9 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
         )
 
     if not isinstance(data, dict):
-        _log_espn_fallback(day)
-        return _fetch_games_from_espn(day)
+        return []
 
-    _reset_espn_fallback_notice()
+    _reset_nba_cdn_fallback_notice()
     games_raw: Iterable[dict] = []
     if isinstance(data.get("scoreboard"), dict):
         games_raw = data["scoreboard"].get("games") or []
@@ -1054,7 +1053,17 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
     if hydrated:
         return hydrated
 
-    return _fetch_games_from_espn(day)
+    return []
+
+
+def _fetch_games_for_date(day: datetime.date) -> list[dict]:
+    games = _fetch_games_from_espn(day)
+    if games:
+        _reset_nba_cdn_fallback_notice()
+        return games
+
+    _log_nba_cdn_fallback(day)
+    return _fetch_games_from_nba_cdn(day)
 
 
 def _render_scoreboard(
