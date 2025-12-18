@@ -622,15 +622,15 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         time_w, time_h = draw.textsize(time_label, font=FONT_WEATHER_DETAILS_BOLD)
 
         trend_area_top = card_top + 6 + time_h + 6
-        trend_area_bottom = card_top + int(card_height * 0.4)
+        trend_area_bottom = card_top + int(card_height * 0.36)
         if trend_area_bottom - trend_area_top < 16:
             trend_area_bottom = trend_area_top + 16
 
         icon_area_top = trend_area_bottom + 6
         icon_area_bottom = card_top + int(card_height * 0.68)
 
-        stat_area_top = icon_area_bottom + 6
-        stat_area_bottom = card_bottom - 6
+        stat_area_top = icon_area_bottom + 8
+        stat_area_bottom = card_bottom - 8
 
         card_layouts.append(
             {
