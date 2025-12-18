@@ -38,6 +38,7 @@ from config import (
 from utils import (
     ScreenImage,
     bright_color,
+    check_apt_updates,
     check_github_updates,
     clear_display,
     date_strings,
@@ -160,6 +161,7 @@ def draw_date(display, transition: bool=False):
     col_top    = bright_color()
     col_bottom = bright_color()
     gh_on      = check_github_updates()
+    check_apt_updates()
 
     img = _compose_frame("date_time", col_top, col_bottom, gh_on)
 
@@ -187,6 +189,7 @@ def draw_time(display, transition: bool=False):
     col_top    = bright_color()
     col_bottom = bright_color()
     gh_on      = check_github_updates()
+    check_apt_updates()
 
     img = _compose_frame("time_date", col_top, col_bottom, gh_on)
 

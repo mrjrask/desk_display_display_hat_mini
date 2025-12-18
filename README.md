@@ -458,11 +458,13 @@ trigger a fresh boot after cleanup completes.
 
 ---
 
-## GitHub update indicator
+## Update indicators
 
 `utils.check_github_updates()` compares local HEAD with `origin/HEAD`. If they differ, a **red dot** appears at the lower‑left of date/time screens.
 
-The checker now logs **which files have diverged** when updates exist, for easier review (uses `git diff --name-only HEAD..origin/HEAD`).
+`utils.check_apt_updates()` runs a simulated `apt-get upgrade` (cached for four hours) and toggles the LED indicator when packages are upgradeable.
+
+The update checker also logs **which files have diverged** when GitHub updates exist, for easier review (uses `git diff --name-only HEAD..origin/HEAD`).
 
 ---
 
