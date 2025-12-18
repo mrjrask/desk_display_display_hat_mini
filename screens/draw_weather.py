@@ -35,6 +35,7 @@ from config import (
     FONT_WEATHER_DETAILS_BOLD,
     FONT_WEATHER_DETAILS_SMALL,
     FONT_WEATHER_DETAILS_TINY,
+    FONT_WEATHER_DETAILS_TINY_LARGE,
     FONT_WEATHER_DETAILS_SMALL_BOLD,
     FONT_EMOJI,
     FONT_EMOJI_SMALL,
@@ -687,7 +688,7 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
             wind_text = f"{wind_speed} mph"
             if wind_dir:
                 wind_text = f"{wind_text} {wind_dir}"
-            stat_items.append((wind_text, FONT_WEATHER_DETAILS_TINY, (180, 225, 255)))
+            stat_items.append((wind_text, FONT_WEATHER_DETAILS_TINY_LARGE, (180, 225, 255)))
 
         pop = hour.get("pop")
         if pop is not None:
@@ -698,13 +699,13 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
             # Render small precipitation icon
             precip_icon_size = 10
             precip_icon = _render_precip_icon(is_snow, precip_icon_size, precip_color)
-            stat_items.append((pop_text, FONT_WEATHER_DETAILS_TINY, precip_color, precip_icon))
+            stat_items.append((pop_text, FONT_WEATHER_DETAILS_TINY_LARGE, precip_color, precip_icon))
 
         uvi_val = hour.get("uvi")
         if uvi_val is not None:
             uv_color = uv_index_color(uvi_val)
             uv_text = f"UV {uvi_val}"
-            stat_items.append((uv_text, FONT_WEATHER_DETAILS_TINY, uv_color))
+            stat_items.append((uv_text, FONT_WEATHER_DETAILS_TINY_LARGE, uv_color))
 
         if stat_items:
             slots = len(stat_items) + 1
