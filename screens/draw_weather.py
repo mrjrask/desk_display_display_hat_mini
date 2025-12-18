@@ -19,7 +19,7 @@ import logging
 import math
 import time
 from io import BytesIO
-from typing import Optional, Tuple
+from typing import NamedTuple, Optional, Tuple
 
 import requests
 from PIL import Image, ImageDraw
@@ -843,12 +843,35 @@ def _latlon_to_tile(lat: float, lon: float, zoom: int) -> tuple[int, int, float,
     return x_tile, y_tile, x_float - x_tile, y_float - y_tile
 
 
-def _fetch_radar_frames(zoom: int = 7, max_frames: int = 6) -> list[Image.Image]:
+class RadarFrame(NamedTuple):
+    image: Image.Image
+    timestamp: Optional[int]
+
+
+def _normalise_radar_timestamp(value: object) -> Optional[int]:
+    try:
+        ts_int = int(value)  # type: ignore[arg-type]
+    except Exception:
+        return None
+    # RainViewer typically returns seconds, but guard against millisecond inputs.
+    if ts_int > 1_000_000_000_000:
+        ts_int = ts_int // 1000
+    return ts_int
+
+
+def _format_radar_timestamp(timestamp: Optional[int]) -> str:
+    dt = timestamp_to_datetime(timestamp, CENTRAL_TIME)
+    if dt is None:
+        return ""
+    return dt.strftime("%-I:%M %p")
+
+
+def _fetch_radar_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFrame]:
     frames = _fetch_rainviewer_frames(zoom=zoom, max_frames=max_frames)
     return frames
 
 
-def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[Image.Image]:
+def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFrame]:
     try:
         meta_resp = requests.get(
             "https://api.rainviewer.com/public/weather-maps.json", timeout=6
@@ -865,10 +888,11 @@ def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[Image.I
     frames = frames[-max_frames:]
 
     x_tile, y_tile, x_offset, y_offset = _latlon_to_tile(LATITUDE, LONGITUDE, zoom)
-    images: list[Image.Image] = []
+    images: list[RadarFrame] = []
 
     for frame in frames:
         path = frame.get("path") if isinstance(frame, dict) else None
+        timestamp = _normalise_radar_timestamp(frame.get("time") if isinstance(frame, dict) else None)
         if not path:
             continue
         url = (
@@ -890,7 +914,7 @@ def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[Image.I
         draw.ellipse((marker_x - 3, marker_y - 3, marker_x + 3, marker_y + 3), fill=(255, 0, 0, 255))
 
         final_frame = frame_img.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
-        images.append(final_frame)
+        images.append(RadarFrame(final_frame, timestamp))
 
     return images
 
@@ -945,18 +969,37 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
     if base_map:
         map_section = base_map.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
 
-    def _compose_frame(frame: Image.Image) -> Image.Image:
-        radar_resized = frame.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
+    def _compose_frame(frame: RadarFrame) -> Image.Image:
+        radar_resized = frame.image.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
         radar_opacity = 0.6
         if radar_opacity < 1.0:
             alpha = radar_resized.getchannel("A")
             alpha = alpha.point(lambda p: int(p * radar_opacity))
             radar_resized.putalpha(alpha)
         if map_section is None:
-            return radar_resized.convert("RGB")
-        combined = map_section.copy()
-        combined.alpha_composite(radar_resized)
-        return combined.convert("RGB")
+            result = radar_resized.convert("RGB")
+        else:
+            combined = map_section.copy()
+            combined.alpha_composite(radar_resized)
+            result = combined.convert("RGB")
+
+        label = _format_radar_timestamp(frame.timestamp)
+        if label:
+            draw = ImageDraw.Draw(result)
+            bbox = draw.textbbox((0, 0), label, font=FONT_WEATHER_DETAILS_TINY, stroke_width=1)
+            text_w = bbox[2] - bbox[0]
+            x = WIDTH - text_w - 6
+            y = 6
+            draw.text(
+                (x, y),
+                label,
+                font=FONT_WEATHER_DETAILS_TINY,
+                fill=(255, 255, 255),
+                stroke_width=1,
+                stroke_fill=(0, 0, 0),
+            )
+
+        return result
 
     composed_frames = [_compose_frame(frame) for frame in frames]
 
