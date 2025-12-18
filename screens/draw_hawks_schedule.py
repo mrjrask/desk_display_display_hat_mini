@@ -150,12 +150,8 @@ def _push(
         except Exception as e:
             logging.exception("Failed to push image to display: %s", e)
 
-    if led_override is not None:
-        with temporary_display_led(*led_override):
-            _show_image()
-    else:
-        _show_image()
-    return None
+    _show_image()
+    return ScreenImage(img, displayed=True, led_override=led_override)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Net helpers

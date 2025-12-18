@@ -1199,15 +1199,15 @@ def main_loop():
                 else:
                     logging.info("Screen '%s' produced no drawable image.", sid)
 
-            if _shutdown_event.is_set():
-                break
+                if _shutdown_event.is_set():
+                    break
 
-            _last_screen_id = sid
-            with _screen_history_lock:
-                _screen_history.append(sid)
-                if len(_screen_history) > _SCREEN_HISTORY_LIMIT:
-                    _screen_history[:] = _screen_history[-_SCREEN_HISTORY_LIMIT:]
-            skip_delay = _wait_with_button_checks(SCREEN_DELAY)
+                _last_screen_id = sid
+                with _screen_history_lock:
+                    _screen_history.append(sid)
+                    if len(_screen_history) > _SCREEN_HISTORY_LIMIT:
+                        _screen_history[:] = _screen_history[-_SCREEN_HISTORY_LIMIT:]
+                skip_delay = _wait_with_button_checks(SCREEN_DELAY)
 
             if _shutdown_event.is_set():
                 break

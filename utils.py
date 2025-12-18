@@ -886,6 +886,10 @@ def temporary_display_led(r: float, g: float, b: float):
     if animator is not None and not animator.is_running_for(display):
         animator = None
 
+    github_led_active = bool(_GITHUB_LED_STATE)
+    if animator is not None:
+        github_led_active = True
+
     if animator is not None:
         try:  # pragma: no cover - hardware import
             animator.stop()
@@ -898,7 +902,7 @@ def temporary_display_led(r: float, g: float, b: float):
         display.set_led(r=r, g=g, b=b)
         yield
     finally:
-        if _GITHUB_LED_STATE:
+        if github_led_active or _GITHUB_LED_STATE:
             _start_github_led_animator(display)
         else:
             try:

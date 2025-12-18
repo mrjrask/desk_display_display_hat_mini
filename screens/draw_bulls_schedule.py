@@ -723,7 +723,7 @@ def _push(display, img: Optional[Image.Image], *, transition: bool = False, led_
             logging.exception("Failed to push Bulls screen: %s", e)
 
     _show_image()
-    return None
+    return ScreenImage(img, displayed=True, led_override=led_override)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Public entry points (used by screens/registry.py)
@@ -751,9 +751,12 @@ def draw_last_bulls_game(display, game: Optional[Dict], transition: bool = False
             pass
 
     if led_override is not None and LED_INDICATOR_LEVEL and LED_INDICATOR_LEVEL > 0:
-        with temporary_display_led(*led_override):
-            return _push(display, img, transition=transition)
-    return _push(display, img, transition=transition)
+        led_override = (
+            led_override[0] * LED_INDICATOR_LEVEL,
+            led_override[1] * LED_INDICATOR_LEVEL,
+            led_override[2] * LED_INDICATOR_LEVEL,
+        )
+    return _push(display, img, transition=transition, led_override=led_override)
 
 def draw_live_bulls_game(display, game: Optional[Dict], transition: bool = False):
     if not game or _game_state(game) != "live":
