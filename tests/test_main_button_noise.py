@@ -11,7 +11,7 @@ from services import wifi_utils
 
 @pytest.fixture
 def main_for_buttons(monkeypatch):
-    monkeypatch.setattr(wifi_utils, "start_monitor", lambda: None)
+    monkeypatch.setattr(wifi_utils, "start_monitor", lambda *args, **kwargs: None)
     monkeypatch.setattr(wifi_utils, "stop_monitor", lambda: None)
     monkeypatch.setattr(data_fetch, "fetch_weather", lambda: {})
     monkeypatch.setattr(data_fetch, "fetch_blackhawks_last_game", lambda: None)
