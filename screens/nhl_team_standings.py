@@ -116,6 +116,7 @@ def draw_nhl_standings_screen1(display, rec, logo_path, division_name, *, transi
         points_label="points",
         conference_label="conference",
         show_conference_rank=True,
+        record_details_fn=_format_nhl_record,
         transition=transition,
     )
 
@@ -123,6 +124,23 @@ def draw_nhl_standings_screen1(display, rec, logo_path, division_name, *, transi
 def _nhl_record_details(rec, base_rec):
     pts_val = _format_int(rec.get("points"))
     return f"{base_rec} ({pts_val} pts)"
+
+
+def _format_nhl_record(rec, _record_line):
+    record = rec.get("leagueRecord", {}) if isinstance(rec, dict) else {}
+
+    wins = _format_int(record.get("wins"))
+    losses = _format_int(record.get("losses"))
+
+    ties = record.get("ties")
+    otl = record.get("ot")
+    extra = ties if ties not in (None, "", "-", 0, "0") else otl
+
+    parts = [wins, losses]
+    if extra not in (None, "", "-", 0, "0"):
+        parts.append(_format_int(extra))
+
+    return "-".join(parts)
 
 
 @log_call
