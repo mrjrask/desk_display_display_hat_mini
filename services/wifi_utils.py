@@ -33,6 +33,7 @@ _STOP_EVENT = threading.Event()
 _MONITOR_THREAD: Optional[threading.Thread] = None
 _IFACE: Optional[str] = None
 _USER_LOG_PATH: Optional[Path] = None
+_RECOVERY_ENABLED = True
 _SYSTEM_LOG_PATH = Path("/var/log/wifi_auto_recover.log")
 
 _LOGGER = logging.getLogger(__name__)
@@ -372,12 +373,17 @@ def _monitor_loop() -> None:
     global _IFACE
 
     iface = _IFACE
+    recovery_enabled = _RECOVERY_ENABLED
     if not iface:
         _LOGGER.warning("Wi-Fi monitor started without a detected interface; exiting")
         return
 
-    _system_log(f"Startup: begin iface={iface} user_log={_USER_LOG_PATH}")
-    _disable_powersave(iface)
+    _system_log(
+        "Startup: begin iface=%s user_log=%s recovery_enabled=%s"
+        % (iface, _USER_LOG_PATH, "yes" if recovery_enabled else "no")
+    )
+    if recovery_enabled:
+        _disable_powersave(iface)
 
     link_info = _get_link_info(iface)
     _report_status(iface, link_info)
@@ -428,11 +434,19 @@ def _monitor_loop() -> None:
         if fails >= MAX_FAILS:
             if recovery_started is None:
                 recovery_started = time.time()
-                _user_log(f"Lost connection on {iface} — starting recovery attempts.")
-                _system_log(f"Recover: start iface={iface}")
-            _cycle_wifi(iface)
-            if _sleep_with_stop(RETRY_INTERVAL):
-                break
+                if recovery_enabled:
+                    _user_log(f"Lost connection on {iface} — starting recovery attempts.")
+                    _system_log(f"Recover: start iface={iface}")
+                else:
+                    _user_log(f"Lost connection on {iface} — recovery disabled (monitor-only).")
+                    _system_log(f"Recover: disabled iface={iface}")
+            if recovery_enabled:
+                _cycle_wifi(iface)
+                if _sleep_with_stop(RETRY_INTERVAL):
+                    break
+            else:
+                if _sleep_with_stop(RETRY_INTERVAL):
+                    break
         else:
             if _sleep_with_stop(5):
                 break
@@ -440,14 +454,19 @@ def _monitor_loop() -> None:
     _system_log("Wi-Fi monitor thread exiting")
 
 
-def start_monitor() -> None:
-    """Start the background Wi-Fi monitor."""
+def start_monitor(allow_recovery: bool = True) -> None:
+    """Start the background Wi-Fi monitor.
 
-    global _MONITOR_THREAD, _IFACE, _USER_LOG_PATH
+    allow_recovery controls whether the monitor will take interface actions
+    (disable power save, down/up the interface, reconfigure wpa_supplicant).
+    """
+
+    global _MONITOR_THREAD, _IFACE, _USER_LOG_PATH, _RECOVERY_ENABLED
 
     if _MONITOR_THREAD and _MONITOR_THREAD.is_alive():
         return
 
+    _RECOVERY_ENABLED = allow_recovery
     _IFACE = _detect_interface()
     if not _IFACE:
         _LOGGER.warning("No wireless interface detected; Wi-Fi monitor disabled")

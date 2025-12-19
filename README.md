@@ -170,6 +170,8 @@ Most runtime behavior is controlled in `config.py`:
 - **AHL:** `AHL_TEAM_ID`, `AHL_TEAM_TRICODE`, HockeyTech feed overrides (API base/key/site), and `AHL_SCHEDULE_ICS_URL`. Wolves last-game cards keep using HockeyTech scores while the next/next-home cards now read from the published Stanza ICS schedule URL (defaults to the Chicago Wolves feed).
 - **Fonts:** make sure `fonts/` contains the TTFs above
 
+Set `ENABLE_WIFI_RECOVERY=false` when you want the Wi-Fi monitor to run in **monitor-only** mode (no interface resets). This keeps connectivity status flowing to the UI/logs without toggling the interface, which is useful when rpi-connect or other tooling manages the connection lifecycle.
+
 ### Screen sequencing
 
 The scheduler now uses a **playlist-centric schema (v2)** that supports reusable playlists, nested playlists, rule descriptors, and optional conditions. A minimal configuration looks like this:

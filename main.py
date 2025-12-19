@@ -52,6 +52,7 @@ from config import (
     DARK_HOURS_ENABLED,
     is_within_dark_hours,
     AHL_TEAM_TRICODE,
+    ENABLE_WIFI_RECOVERY,
 )
 from utils import (
     Display,
@@ -74,7 +75,7 @@ except Exception as exc:
 
     class _WifiUtilsFallback:
         @staticmethod
-        def start_monitor():
+        def start_monitor(*args, **kwargs):
             return None
 
         @staticmethod
@@ -964,7 +965,7 @@ def init_runtime() -> None:
     if ENABLE_WIFI_MONITOR and hasattr(wifi_utils, "start_monitor"):
         logging.info("🔌 Starting Wi-Fi monitor…")
         try:
-            wifi_utils.start_monitor()
+            wifi_utils.start_monitor(allow_recovery=ENABLE_WIFI_RECOVERY)
         except Exception as exc:
             logging.warning("Wi-Fi monitor unavailable: %s", exc)
 

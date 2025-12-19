@@ -45,7 +45,7 @@ def main_module(monkeypatch):
     monkeypatch.setattr(data_fetch, "fetch_cubs_standings", lambda: None)
     monkeypatch.setattr(data_fetch, "fetch_sox_games", lambda: {})
     monkeypatch.setattr(data_fetch, "fetch_sox_standings", lambda: None)
-    monkeypatch.setattr(wifi_utils, "start_monitor", lambda: None)
+    monkeypatch.setattr(wifi_utils, "start_monitor", lambda *args, **kwargs: None)
 
     sys.modules.pop("main", None)
     main = importlib.import_module("main")
