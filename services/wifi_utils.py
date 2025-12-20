@@ -7,11 +7,13 @@ import logging
 import os
 import pwd
 import shutil
+import socket
 import subprocess
 import threading
 import time
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
+from urllib.parse import urlsplit
 
 
 # ─── Behaviour configuration ───────────────────────────────────────────────────
@@ -198,6 +200,11 @@ def _check_dns_resolution() -> bool:
 
 def _check_internet(iface: str) -> Tuple[bool, List[str]]:
     tried: List[str] = []
+    tcp_targets = _get_tcp_probe_targets()
+
+    if tcp_targets and _check_tcp_targets(tcp_targets, tried):
+        return True, tried
+
     for host in PING_HOSTS:
         tried.append(host)
 
@@ -275,7 +282,78 @@ def _check_internet(iface: str) -> Tuple[bool, List[str]]:
             except Exception as exc:
                 _LOGGER.debug("ping to %s raised: %s", host, exc)
 
+    if tcp_targets and _check_tcp_targets(tcp_targets, tried):
+        return True, tried
+
     return False, tried
+
+
+def _split_env_list(raw: Optional[str]) -> List[str]:
+    if not raw:
+        return []
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _parse_port(raw: Optional[str], default: int = 443) -> int:
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _get_tcp_probe_targets() -> List[Tuple[str, int, str]]:
+    targets: List[Tuple[str, int, str]] = []
+    default_port = _parse_port(os.environ.get("WIFI_TCP_PROBE_PORT"), 443)
+
+    url_candidates = _split_env_list(
+        os.environ.get("WIFI_TCP_PROBE_URLS")
+        or os.environ.get("WIFI_TCP_PROBE_URL")
+        or os.environ.get("WIFI_HTTPS_PROBE_URL")
+    )
+    for raw_url in url_candidates:
+        parsed = urlsplit(raw_url if "://" in raw_url else f"https://{raw_url}")
+        host = parsed.hostname
+        if not host:
+            _LOGGER.debug("Skipping TCP probe URL without host: %s", raw_url)
+            continue
+        port = parsed.port or (443 if parsed.scheme in {"https", "wss", ""} else default_port)
+        label = f"tcp://{host}:{port}"
+        targets.append((host, port, label))
+
+    host_candidates = _split_env_list(
+        os.environ.get("WIFI_TCP_PROBE_HOSTS")
+        or os.environ.get("WIFI_TCP_PROBE_HOST")
+        or os.environ.get("RPI_CONNECT_CONTROL_HOST")
+    )
+    for host in host_candidates:
+        port = default_port
+        label = f"tcp://{host}:{port}"
+        targets.append((host, port, label))
+
+    deduped: List[Tuple[str, int, str]] = []
+    seen = set()
+    for host, port, label in targets:
+        key = (host, port)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append((host, port, label))
+
+    return deduped
+
+
+def _check_tcp_targets(targets: Sequence[Tuple[str, int, str]], tried: List[str]) -> bool:
+    for host, port, label in targets:
+        tried.append(label)
+        try:
+            with socket.create_connection((host, port), timeout=PING_TIMEOUT):
+                return True
+        except Exception as exc:
+            _LOGGER.debug("TCP probe to %s:%s failed: %s", host, port, exc)
+
+    return False
 
 
 def _get_ipv4_address(iface: str) -> Optional[str]:

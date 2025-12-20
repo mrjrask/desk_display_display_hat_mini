@@ -169,6 +169,7 @@ Most runtime behavior is controlled in `config.py`:
 - **MLB:** constants and timezone `CENTRAL_TIME`
 - **AHL:** `AHL_TEAM_ID`, `AHL_TEAM_TRICODE`, HockeyTech feed overrides (API base/key/site), and `AHL_SCHEDULE_ICS_URL`. Wolves last-game cards keep using HockeyTech scores while the next/next-home cards now read from the published Stanza ICS schedule URL (defaults to the Chicago Wolves feed).
 - **Fonts:** make sure `fonts/` contains the TTFs above
+- **Wi-Fi monitor:** ICMP pings stay enabled by default. You can add a TCP/HTTPS reachability probe by setting `WIFI_TCP_PROBE_URLS` (comma-separated URLs/hosts), `WIFI_TCP_PROBE_HOSTS`, or `RPI_CONNECT_CONTROL_HOST`, and optionally override `WIFI_TCP_PROBE_PORT` (defaults to `443`). A successful TCP connection is treated as “internet is OK,” which avoids ICMP-only failures on networks that block ping (e.g., rpi-connect).
 
 Set `ENABLE_WIFI_RECOVERY=false` when you want the Wi-Fi monitor to run in **monitor-only** mode (no interface resets). This keeps connectivity status flowing to the UI/logs without toggling the interface, which is useful when rpi-connect or other tooling manages the connection lifecycle.
 
