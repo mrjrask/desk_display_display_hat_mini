@@ -347,6 +347,19 @@ export GOOGLE_MAPS_API_KEY="your-google-maps-key"
 Or copy `.env.example` to `.env` and load it with your preferred process manager or a tool such as
 [`python-dotenv`](https://github.com/theskumar/python-dotenv).
 
+### Indoor sensor override
+
+The `inside` screen auto-detects supported I²C sensors (Pimoroni BME280/BME680/BME68x/BME688, Adafruit BME280/BME680/SHT41). If your wiring tends to confuse detection—or you want to hide VOC when using a BME280—you can force a specific driver via `.env`:
+
+```bash
+# Choose one of: pimoroni_bme280, adafruit_bme280,
+# pimoroni_bme680, pimoroni_bme68x, adafruit_bme680,
+# adafruit_sht41
+INSIDE_SENSOR=pimoroni_bme280
+```
+
+`INDOOR_SENSOR` is also accepted. Unrecognized values fall back to auto-detect.
+
 ---
 
 ## Images & Fonts

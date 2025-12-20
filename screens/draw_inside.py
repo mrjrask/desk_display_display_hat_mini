@@ -42,6 +42,7 @@ W, H = config.WIDTH, config.HEIGHT
 SensorReadings = Dict[str, Optional[float]]
 SensorProbeResult = Tuple[str, Callable[[], SensorReadings]]
 SensorProbeFn = Callable[[Any, Set[int]], Optional[SensorProbeResult]]
+SensorProbeName = str
 
 
 def _prepend_vendor_sensor_drivers():
@@ -60,6 +61,41 @@ def _prepend_vendor_sensor_drivers():
 
 
 _prepend_vendor_sensor_drivers()
+
+
+def _normalize_sensor_name(raw: str) -> str:
+    normalized = raw.strip().lower().replace("-", " ").replace("_", " ")
+    tokens = [part for part in normalized.split() if part]
+    return "_".join(tokens)
+
+
+def _get_sensor_env_override() -> Tuple[Optional[SensorProbeName], Optional[str]]:
+    """Return the requested sensor driver from the environment, if provided."""
+
+    aliases = {
+        "adafruit_bme680": "adafruit_bme680",
+        "pimoroni_bme680": "pimoroni_bme680",
+        "pimoroni_bme68x": "pimoroni_bme68x",
+        "pimoroni_bme688": "pimoroni_bme68x",
+        "adafruit_sht41": "adafruit_sht41",
+        "adafruit_sht4x": "adafruit_sht41",
+        "pimoroni_bme280": "pimoroni_bme280",
+        "adafruit_bme280": "adafruit_bme280",
+    }
+
+    raw_value = None
+    for env_name in ("INSIDE_SENSOR", "INDOOR_SENSOR"):
+        candidate = os.environ.get(env_name)
+        if candidate:
+            raw_value = candidate
+            break
+
+    if not raw_value:
+        return None, None
+
+    normalized = _normalize_sensor_name(raw_value)
+    resolved = aliases.get(normalized)
+    return resolved, raw_value
 
 
 def _extract_field(data: Any, key: str) -> Optional[float]:
@@ -805,6 +841,25 @@ def _probe_adafruit_sht4x(i2c: Any, addresses: Set[int]) -> Optional[SensorProbe
     return "Adafruit SHT41", read
 
 
+def _get_probe_order(preference: Optional[SensorProbeName]) -> Tuple[Tuple[SensorProbeName, SensorProbeFn], ...]:
+    probers: Tuple[Tuple[SensorProbeName, SensorProbeFn], ...] = (
+        ("pimoroni_bme280", _probe_pimoroni_bme280),
+        ("adafruit_bme280", _probe_adafruit_bme280),
+        ("pimoroni_bme680", _probe_pimoroni_bme680),
+        ("pimoroni_bme68x", _probe_pimoroni_bme68x),
+        ("adafruit_bme680", _probe_adafruit_bme680),
+        ("adafruit_sht41", _probe_adafruit_sht4x),
+    )
+
+    if not preference:
+        return probers
+
+    filtered = tuple((name, fn) for name, fn in probers if name == preference)
+    if filtered:
+        return filtered
+    return probers
+
+
 def _scan_i2c_addresses(i2c: Any) -> Set[int]:
     addresses: Set[int] = set()
 
@@ -859,28 +914,33 @@ def _probe_sensor() -> Tuple[Optional[str], Optional[Callable[[], SensorReadings
     else:
         logging.debug("draw_inside: no I2C addresses detected during scan")
 
+    preference, raw_preference = _get_sensor_env_override()
+    if preference:
+        logging.info("draw_inside: INSIDE_SENSOR set to %s; restricting probe order", preference)
+    elif raw_preference:
+        logging.warning(
+            "draw_inside: INSIDE_SENSOR value %r not recognized; falling back to auto-detect",
+            raw_preference,
+        )
+
     # Prefer BME280 variants before BME680/BME68x. Some BME680 drivers can
     # incorrectly initialise against a BME280 at the same address and return
     # garbage pressure values (~660 hPa instead of ~997 hPa). Trying the
     # BME280-specific probers first keeps the readings aligned with the
-    # standalone BME280 CLI script.
-    probers: Tuple[SensorProbeFn, ...] = (
-        _probe_pimoroni_bme280,
-        _probe_adafruit_bme280,
-        _probe_pimoroni_bme680,
-        _probe_pimoroni_bme68x,
-        _probe_adafruit_bme680,
-        _probe_adafruit_sht4x,
-    )
+    # standalone BME280 CLI script. When INSIDE_SENSOR is set, only the
+    # requested probe will run.
+    probe_plan = _get_probe_order(preference)
 
-    for probe in probers:
+    for probe_name, probe in probe_plan:
         try:
             result = probe(i2c, addresses)
         except ModuleNotFoundError as exc:
-            logging.debug("draw_inside: probe %s skipped (module missing): %s", probe.__name__, exc)
+            logging.debug(
+                "draw_inside: probe %s skipped (module missing): %s", probe_name, exc
+            )
             continue
         except Exception as exc:  # pragma: no cover - relies on hardware
-            logging.debug("draw_inside: probe %s failed: %s", probe.__name__, exc, exc_info=True)
+            logging.debug("draw_inside: probe %s failed: %s", probe_name, exc, exc_info=True)
             continue
         if result:
             provider, reader = result
