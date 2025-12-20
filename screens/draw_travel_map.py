@@ -11,7 +11,16 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import requests
 from PIL import Image, ImageDraw
 
-from config import FONT_TRAVEL_HEADER, FONT_TRAVEL_VALUE, HEIGHT, LATITUDE, LONGITUDE, TRAVEL_TITLE, WIDTH
+from config import (
+    FONT_TRAVEL_HEADER,
+    FONT_TRAVEL_VALUE,
+    GOOGLE_MAPS_API_KEY,
+    HEIGHT,
+    LATITUDE,
+    LONGITUDE,
+    TRAVEL_TITLE,
+    WIDTH,
+)
 from screens.draw_travel_time import (
     TRAVEL_ICON_294,
     TRAVEL_ICON_90,
@@ -189,9 +198,13 @@ def _fetch_base_map(
 ) -> Optional[Image.Image]:
     lat, lng = center
     width, height = size
+    if not GOOGLE_MAPS_API_KEY:
+        logging.warning("Traffic map: GOOGLE_MAPS_API_KEY not set; skipping base map fetch")
+        return None
+
     url = (
-        "https://staticmap.openstreetmap.de/staticmap.php?"
-        f"center={lat},{lng}&zoom={zoom}&size={width}x{height}&maptype=mapnik"
+        "https://maps.googleapis.com/maps/api/staticmap?"
+        f"center={lat},{lng}&zoom={zoom}&size={width}x{height}&maptype=roadmap&key={GOOGLE_MAPS_API_KEY}"
     )
     headers = {"User-Agent": STATIC_MAP_USER_AGENT}
     try:
