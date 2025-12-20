@@ -70,6 +70,7 @@ ALERT_ICON_COLORS = {
     "watch": (255, 165, 0),
     "hazard": (255, 215, 0),
 }
+SUN_EVENT_GRACE = datetime.timedelta(minutes=20)
 
 
 def _render_stat_text(parts):
@@ -814,14 +815,9 @@ def draw_weather_screen_2(display, weather, transition=False):
     daily   = weather.get("daily", [{}])[0]
 
     now = datetime.datetime.now(CENTRAL_TIME)
-    s_r = timestamp_to_datetime(daily.get("sunrise"), CENTRAL_TIME)
-    s_s = timestamp_to_datetime(daily.get("sunset"), CENTRAL_TIME)
-
-    # Sunrise or Sunset first
-    if s_r and now < s_r:
-        items = [("Sunrise:", s_r.strftime("%-I:%M %p"))]
-    elif s_s:
-        items = [("Sunset:",  s_s.strftime("%-I:%M %p"))]
+    next_label, next_time = _next_sun_event(weather.get("daily"), now=now)
+    if next_label and next_time:
+        items = [(f"{next_label}:", next_time.strftime("%-I:%M %p"))]
     else:
         items = []
 
@@ -1059,7 +1055,39 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
                 stroke_fill=(0, 0, 0),
             )
 
-        return result
+    return result
+
+
+def _next_sun_event(daily_entries, now: datetime.datetime | None = None) -> tuple[str | None, datetime.datetime | None]:
+    """Return the next sunrise/sunset event, allowing a post-event grace window."""
+
+    if now is None:
+        now = datetime.datetime.now(CENTRAL_TIME)
+
+    events: list[tuple[str, datetime.datetime]] = []
+    for day in list(daily_entries or [])[:2]:
+        if not isinstance(day, dict):
+            continue
+
+        sunrise = timestamp_to_datetime(day.get("sunrise"), CENTRAL_TIME)
+        if sunrise:
+            events.append(("Sunrise", sunrise))
+
+        sunset = timestamp_to_datetime(day.get("sunset"), CENTRAL_TIME)
+        if sunset:
+            events.append(("Sunset", sunset))
+
+    events.sort(key=lambda entry: entry[1])
+
+    for label, event_time in events:
+        if now <= event_time + SUN_EVENT_GRACE:
+            return label, event_time
+
+    if events:
+        return events[-1]
+
+    return None, None
+
 
     composed_frames = [_compose_frame(frame) for frame in frames]
 
