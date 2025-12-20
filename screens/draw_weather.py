@@ -25,6 +25,7 @@ import requests
 from PIL import Image, ImageDraw
 
 from config import (
+    GOOGLE_MAPS_API_KEY,
     WIDTH,
     HEIGHT,
     CENTRAL_TIME,
@@ -979,33 +980,28 @@ def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFr
 
 
 def _fetch_base_map(zoom: int = 7) -> Optional[Image.Image]:
-    x_tile, y_tile, x_offset, y_offset = _latlon_to_tile(LATITUDE, LONGITUDE, zoom)
-    headers = {
-        "User-Agent": "desk-display/1.0 (+https://github.com/lukemaryon/desk_display)",
-    }
-    tile_urls = [
-        f"https://tile.openstreetmap.org/{zoom}/{x_tile}/{y_tile}.png",
-    ]
-
-    tile: Optional[Image.Image] = None
-    for url in tile_urls:
-        try:
-            resp = requests.get(url, timeout=6, headers=headers)
-            resp.raise_for_status()
-            tile = Image.open(BytesIO(resp.content)).convert("RGBA")
-            break
-        except Exception as exc:  # pragma: no cover - network failures are non-fatal
-            logging.warning("Base map fetch failed from %s: %s", url, exc)
-
-    if tile is None:
+    if not GOOGLE_MAPS_API_KEY:
+        logging.warning("Radar base map: GOOGLE_MAPS_API_KEY not set; skipping base map fetch")
         return None
 
-    marker_x = int((x_offset or 0.5) * tile.width)
-    marker_y = int((y_offset or 0.5) * tile.height)
-    draw = ImageDraw.Draw(tile)
-    draw.ellipse((marker_x - 3, marker_y - 3, marker_x + 3, marker_y + 3), fill=(255, 64, 64, 255), outline=(255, 255, 255, 255))
-    draw.text((marker_x + 6, marker_y - 8), "You", font=FONT_WEATHER_DETAILS, fill=(255, 255, 255, 255))
-    return tile.convert("RGB")
+    lat = LATITUDE
+    lon = LONGITUDE
+    url = (
+        "https://maps.googleapis.com/maps/api/staticmap?"
+        f"center={lat},{lon}&zoom={zoom}&size={WIDTH}x{HEIGHT}&maptype=roadmap&markers=color:red|{lat},{lon}"
+        f"&key={GOOGLE_MAPS_API_KEY}"
+    )
+    headers = {
+        "User-Agent": "desk-display/weather-radar",
+    }
+
+    try:
+        resp = requests.get(url, timeout=6, headers=headers)
+        resp.raise_for_status()
+        return Image.open(BytesIO(resp.content)).convert("RGB")
+    except Exception as exc:  # pragma: no cover - network failures are non-fatal
+        logging.warning("Radar base map fetch failed from %s: %s", url, exc)
+        return None
 
 
 @log_call
