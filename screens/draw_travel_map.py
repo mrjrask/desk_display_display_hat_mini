@@ -4,11 +4,14 @@
 from __future__ import annotations
 
 import logging
+import math
+from io import BytesIO
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
+import requests
 from PIL import Image, ImageDraw
 
-from config import FONT_TRAVEL_HEADER, FONT_TRAVEL_VALUE, HEIGHT, TRAVEL_TITLE, WIDTH
+from config import FONT_TRAVEL_HEADER, FONT_TRAVEL_VALUE, HEIGHT, LATITUDE, LONGITUDE, TRAVEL_TITLE, WIDTH
 from screens.draw_travel_time import (
     TRAVEL_ICON_294,
     TRAVEL_ICON_90,
@@ -26,6 +29,9 @@ MAP_MARGIN = 12
 LEGEND_GAP = 6
 BACKGROUND_COLOR = (18, 18, 18)
 MAP_COLOR = (60, 60, 60)
+STATIC_MAP_TIMEOUT = 6
+STATIC_MAP_USER_AGENT = "desk-display/traffic-map"
+MAP_ZOOM_LEVELS = range(15, 6, -1)
 
 
 def _decode_polyline(polyline: str) -> List[Tuple[float, float]]:
@@ -108,7 +114,7 @@ def _traffic_color(route: Optional[dict]) -> Tuple[int, int, int]:
     return (160, 160, 160)
 
 
-def _draw_routes(draw: ImageDraw.ImageDraw, routes: Dict[str, Optional[dict]], canvas_size: Tuple[int, int]) -> None:
+def _extract_polylines(routes: Dict[str, Optional[dict]]) -> Dict[str, List[Tuple[float, float]]]:
     polylines: Dict[str, List[Tuple[float, float]]] = {}
     for key, route in routes.items():
         encoded = None
@@ -121,20 +127,108 @@ def _draw_routes(draw: ImageDraw.ImageDraw, routes: Dict[str, Optional[dict]], c
             polylines[key] = _decode_polyline(encoded)
         except Exception:
             logging.warning("Travel map: failed to decode polyline for %s", key)
+    return polylines
+
+
+def _latlng_to_world_xy(lat: float, lng: float, zoom: int) -> Tuple[float, float]:
+    siny = math.sin(math.radians(lat))
+    siny = min(max(siny, -0.9999), 0.9999)
+    scale = 256 * (2 ** zoom)
+    x = (lng + 180.0) / 360.0 * scale
+    y = (0.5 - math.log((1 + siny) / (1 - siny)) / (4 * math.pi)) * scale
+    return x, y
+
+
+def _project_to_map(
+    point: Tuple[float, float],
+    center: Tuple[float, float],
+    zoom: int,
+    width: int,
+    height: int,
+) -> Tuple[int, int]:
+    lat, lng = point
+    center_lat, center_lng = center
+    center_x, center_y = _latlng_to_world_xy(center_lat, center_lng, zoom)
+    x, y = _latlng_to_world_xy(lat, lng, zoom)
+    return int((x - center_x) + width / 2), int((y - center_y) + height / 2)
+
+
+def _select_map_view(
+    polylines: Iterable[Sequence[Tuple[float, float]]],
+    canvas_size: Tuple[int, int],
+    fallback_center: Tuple[float, float],
+) -> Tuple[Tuple[float, float], int]:
+    all_points = _flatten(polylines)
+    if not all_points:
+        return fallback_center, 12
+
+    (min_lat, min_lng), (max_lat, max_lng) = _bounds(all_points)
+    center = ((min_lat + max_lat) / 2, (min_lng + max_lng) / 2)
+    available_w = max(1, canvas_size[0] - 2 * MAP_MARGIN)
+    available_h = max(1, canvas_size[1] - 2 * MAP_MARGIN)
+
+    for zoom in MAP_ZOOM_LEVELS:
+        xs: List[float] = []
+        ys: List[float] = []
+        for lat, lng in ((min_lat, min_lng), (min_lat, max_lng), (max_lat, min_lng), (max_lat, max_lng)):
+            x, y = _latlng_to_world_xy(lat, lng, zoom)
+            xs.append(x)
+            ys.append(y)
+        span_x = max(xs) - min(xs)
+        span_y = max(ys) - min(ys)
+        if span_x <= available_w and span_y <= available_h:
+            return center, zoom
+
+    return center, 8
+
+
+def _fetch_base_map(
+    center: Tuple[float, float],
+    zoom: int,
+    size: Tuple[int, int],
+) -> Optional[Image.Image]:
+    lat, lng = center
+    width, height = size
+    url = (
+        "https://staticmap.openstreetmap.de/staticmap.php?"
+        f"center={lat},{lng}&zoom={zoom}&size={width}x{height}&maptype=mapnik"
+    )
+    headers = {"User-Agent": STATIC_MAP_USER_AGENT}
+    try:
+        resp = requests.get(url, timeout=STATIC_MAP_TIMEOUT, headers=headers)
+        resp.raise_for_status()
+        return Image.open(BytesIO(resp.content)).convert("RGB")
+    except Exception as exc:  # pragma: no cover - non-fatal network issues
+        logging.warning("Traffic map: base map fetch failed from %s: %s", url, exc)
+        return None
+
+
+def _draw_routes(
+    draw: ImageDraw.ImageDraw,
+    routes: Dict[str, Optional[dict]],
+    canvas_size: Tuple[int, int],
+    polylines: Optional[Dict[str, List[Tuple[float, float]]]] = None,
+    map_view: Optional[Tuple[Tuple[float, float], int]] = None,
+) -> None:
+    if polylines is None:
+        polylines = _extract_polylines(routes)
 
     if not polylines:
         return
 
-    all_points = _flatten(polylines.values())
-    top_left, bottom_right = _bounds(all_points)
+    if map_view:
+        center, zoom = map_view
+        projector = lambda pt: _project_to_map(pt, center, zoom, *canvas_size)
+    else:
+        all_points = _flatten(polylines.values())
+        top_left, bottom_right = _bounds(all_points)
+        projector = lambda pt: _project(pt, top_left, bottom_right, *canvas_size)
 
     for key, points in polylines.items():
         if len(points) < 2:
             continue
         color = _traffic_color(routes.get(key))
-        projected = [
-            _project(pt, top_left, bottom_right, *canvas_size) for pt in points
-        ]
+        projected = [projector(pt) for pt in points]
         draw.line(projected, fill=color, width=5, joint="curve")
 
 
@@ -172,59 +266,18 @@ def _compose_legend_entry(
 
 
 def _compose_travel_map(routes: Dict[str, Optional[dict]]) -> Image.Image:
-    times = {key: TravelTimeResult.from_route(route) for key, route in routes.items()}
+    map_height = HEIGHT
+    polylines = _extract_polylines(routes)
+    map_view = _select_map_view(polylines.values(), (WIDTH, map_height), (LATITUDE, LONGITUDE))
 
-    canvas = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
+    base_map = _fetch_base_map(map_view[0], map_view[1], (WIDTH, map_height))
+    if base_map is None:
+        canvas = Image.new("RGB", (WIDTH, map_height), MAP_COLOR)
+    else:
+        canvas = base_map
+
     draw = ImageDraw.Draw(canvas)
-
-    map_height = int(HEIGHT * 0.55)
-    draw.rectangle((0, 0, WIDTH, map_height), fill=MAP_COLOR)
-
-    _draw_routes(draw, routes, (WIDTH, map_height))
-
-    legend_entries: List[Tuple[str, Image.Image]] = []
-    legend_entries.append(
-        (
-            "Lake Shore → Sheridan",
-            _compose_legend_entry(
-                "Lake Shore",
-                times.get("lake_shore", TravelTimeResult("N/A")).normalized(),
-                [TRAVEL_ICON_LSD],
-                _traffic_color(routes.get("lake_shore")),
-            ),
-        )
-    )
-    legend_entries.append(
-        (
-            "Kennedy → Edens",
-            _compose_legend_entry(
-                "Kennedy/Edens",
-                times.get("kennedy_edens", TravelTimeResult("N/A")).normalized(),
-                [TRAVEL_ICON_90, TRAVEL_ICON_94],
-                _traffic_color(routes.get("kennedy_edens")),
-            ),
-        )
-    )
-    legend_entries.append(
-        (
-            "Kennedy → 294",
-            _compose_legend_entry(
-                "Kennedy/294",
-                times.get("kennedy_294", TravelTimeResult("N/A")).normalized(),
-                [TRAVEL_ICON_90, TRAVEL_ICON_294],
-                _traffic_color(routes.get("kennedy_294")),
-            ),
-        )
-    )
-
-    y = map_height + LEGEND_GAP
-    padding = 6
-    for _label, entry in legend_entries:
-        canvas.paste(entry, (padding, y))
-        y += entry.height + LEGEND_GAP
-
-    title_w, title_h = draw.textsize(TRAVEL_TITLE, font=FONT_TRAVEL_HEADER)
-    draw.text(((WIDTH - title_w) // 2, max(2, (map_height - title_h) // 2)), TRAVEL_TITLE, font=FONT_TRAVEL_HEADER, fill=(240, 240, 240))
+    _draw_routes(draw, routes, (WIDTH, map_height), polylines=polylines, map_view=map_view)
 
     return canvas
 
