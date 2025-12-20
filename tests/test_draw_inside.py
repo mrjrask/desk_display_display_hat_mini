@@ -3,6 +3,9 @@ import math
 from screens.draw_inside import (
     _build_metric_entries,
     _build_voc_tile,
+    _get_probe_order,
+    _get_sensor_env_override,
+    _normalize_sensor_name,
     _normalize_pressure,
 )
 
@@ -44,3 +47,20 @@ def test_build_voc_tile_uses_bsec_voc_index():
     assert voc_tile, "Expected VOC tile to render from BSEC VOC index"
     assert voc_tile["label"] == "VOC Index"
     assert voc_tile["value"].startswith("125")
+
+
+def test_normalize_sensor_env_value_handles_spacing_and_case():
+    assert _normalize_sensor_name(" Pimoroni-BME680 ") == "pimoroni_bme680"
+
+
+def test_sensor_env_override_supports_aliases(monkeypatch):
+    monkeypatch.setenv("INSIDE_SENSOR", "Adafruit-SHT4X")
+    preference, raw = _get_sensor_env_override()
+    assert raw == "Adafruit-SHT4X"
+    assert preference == "adafruit_sht41"
+
+
+def test_probe_order_restricts_to_preference():
+    plan = _get_probe_order("pimoroni_bme280")
+    assert plan and plan[0][0] == "pimoroni_bme280"
+    assert all(name == "pimoroni_bme280" for name, _ in plan)
