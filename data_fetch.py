@@ -385,6 +385,21 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
     if not isinstance(data, dict):
         return None
 
+    def _measurement_value(value: Any) -> Optional[float]:
+        """Extract a numeric value from WeatherKit measurements.
+
+        Measurements can be plain numbers or objects like {"value": 3.5}.
+        Return None if the value cannot be interpreted as a float.
+        """
+
+        if isinstance(value, dict):
+            value = value.get("value")
+
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
     current_raw = data.get("currentWeather") or {}
     daily_raw = (data.get("forecastDaily") or {}).get("days") or []
     hourly_raw = (data.get("forecastHourly") or {}).get("hours") or []
@@ -420,7 +435,8 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
                 "icon": icon,
             }
         ],
-        "wind_speed": current_raw.get("windSpeed"),
+        "wind_speed": _measurement_value(current_raw.get("windSpeed")),
+        "wind_gust": _measurement_value(current_raw.get("windGust")),
         "wind_deg": current_raw.get("windDirection"),
         "humidity": humidity_pct,
         "pressure": current_raw.get("pressure"),
@@ -463,7 +479,8 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
                 "temp": _to_fahrenheit(hour.get("temperature")),
                 "feels_like": _to_fahrenheit(hour.get("temperatureApparent") or hour.get("temperature")),
                 "pop": hour.get("precipitationChance"),
-                "wind_speed": hour.get("windSpeed"),
+                "wind_speed": _measurement_value(hour.get("windSpeed")),
+                "wind_gust": _measurement_value(hour.get("windGust")),
                 "wind_deg": hour.get("windDirection"),
                 "uvi": hour.get("uvIndex"),
                 "weather": [
@@ -553,6 +570,7 @@ def _normalise_openweathermap_response(data: dict[str, Any]) -> Optional[dict[st
             }
         ],
         "wind_speed": current_raw.get("wind_speed"),
+        "wind_gust": current_raw.get("wind_gust"),
         "wind_deg": current_raw.get("wind_deg"),
         "humidity": current_raw.get("humidity"),
         "pressure": current_raw.get("pressure"),
@@ -596,6 +614,7 @@ def _normalise_openweathermap_response(data: dict[str, Any]) -> Optional[dict[st
                 "feels_like": hour.get("feels_like") or hour.get("temp"),
                 "pop": hour.get("pop"),
                 "wind_speed": hour.get("wind_speed"),
+                "wind_gust": hour.get("wind_gust"),
                 "wind_deg": hour.get("wind_deg"),
                 "uvi": hour.get("uvi"),
                 "weather": [
