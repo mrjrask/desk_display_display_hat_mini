@@ -14,17 +14,23 @@
     body {
       margin: 0;
       padding: 2rem;
-      background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+      background: radial-gradient(circle at 20% 20%, rgba(56, 189, 248, 0.08), transparent 25%), linear-gradient(180deg, #0f172a 0%, #0b1327 100%);
       min-height: 100vh;
     }
     h1 {
-      margin-bottom: 1.5rem;
+      margin-bottom: 0.75rem;
       font-size: clamp(2rem, 5vw, 3rem);
       text-align: center;
       letter-spacing: 0.03em;
     }
+    .subtitle {
+      text-align: center;
+      color: #94a3b8;
+      margin-bottom: 2rem;
+      font-size: 1rem;
+    }
     .error {
-      max-width: 960px;
+      max-width: 1200px;
       margin: 0 auto 2rem auto;
       padding: 1rem 1.5rem;
       border-radius: 12px;
@@ -33,65 +39,18 @@
       color: #fecaca;
       font-weight: 600;
     }
-    .toolbar {
-      max-width: 960px;
-      margin: 0 auto 1.5rem auto;
-      padding: 1rem 1.5rem;
-      border-radius: 16px;
-      background: rgba(15, 23, 42, 0.9);
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
-      align-items: center;
-      justify-content: center;
-    }
-    .toolbar label {
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-      font-size: 0.9rem;
-      color: #cbd5f5;
-      min-width: 220px;
-    }
-    .toolbar input[type="password"],
-    .toolbar input[type="text"] {
-      border-radius: 999px;
-      border: 1px solid rgba(148, 163, 184, 0.4);
-      background: rgba(15, 23, 42, 0.6);
-      color: inherit;
-      padding: 0.4rem 0.9rem;
-      font-size: 1rem;
-    }
-    .toolbar button {
-      border-radius: 999px;
-      padding: 0.45rem 1.2rem;
-      border: none;
-      background: #38bdf8;
-      color: #0f172a;
-      font-weight: 600;
-      cursor: pointer;
-      transition: transform 0.2s ease;
-    }
-    .toolbar button:hover {
-      transform: translateY(-1px);
-    }
-    .toolbar .hint {
-      font-size: 0.8rem;
-      color: #94a3b8;
-    }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
       gap: 1.5rem;
       max-width: 1200px;
       margin: 0 auto;
     }
     .card {
-      background: rgba(15, 23, 42, 0.85);
-      border-radius: 16px;
+      background: rgba(15, 23, 42, 0.9);
+      border-radius: 18px;
       padding: 1.25rem;
-      box-shadow: 0 20px 40px rgba(15, 23, 42, 0.45);
+      box-shadow: 0 20px 40px rgba(15, 23, 42, 0.5);
       border: 1px solid rgba(148, 163, 184, 0.2);
       backdrop-filter: blur(10px);
       display: flex;
@@ -101,151 +60,126 @@
     .card h2 {
       margin: 0;
       font-size: 1.1rem;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
     }
-    .frequency {
+    .meta {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
       font-size: 0.9rem;
-      color: #94a3b8;
-    }
-    .timestamp {
-      font-size: 0.85rem;
       color: #94a3b8;
     }
     .screenshot {
-      width: 100%;
-      aspect-ratio: 1 / 1;
-      object-fit: cover;
-      border-radius: 12px;
-      border: 1px solid rgba(148, 163, 184, 0.2);
+      position: relative;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(148, 163, 184, 0.25);
       background: rgba(30, 41, 59, 0.6);
     }
+    .thumb {
+      width: 100%;
+      display: block;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      transition: transform 0.2s ease;
+      cursor: pointer;
+    }
+    .thumb:hover {
+      transform: scale(1.01);
+    }
+    .fonts {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      padding: 0.85rem;
+    }
+    .fonts h3 {
+      margin: 0 0 0.5rem 0;
+      font-size: 0.95rem;
+      letter-spacing: 0.05em;
+    }
+    .font-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      font-size: 0.95rem;
+    }
+    .font-list li {
+      display: flex;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+      align-items: center;
+      color: #cbd5f5;
+    }
+    .font-slot {
+      font-weight: 700;
+      color: #7dd3fc;
+    }
+    .font-family {
+      color: #e2e8f0;
+    }
+    .font-size {
+      color: #cbd5f5;
+      opacity: 0.85;
+    }
     .empty {
-      font-size: 0.9rem;
+      font-size: 0.95rem;
       color: #94a3b8;
       font-style: italic;
     }
-    .style-panel {
-      margin-top: 0.5rem;
-      padding: 0.75rem;
-      border-radius: 12px;
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      background: rgba(15, 23, 42, 0.65);
-    }
-    .style-panel details {
-      margin-bottom: 0.75rem;
-    }
-    .style-panel summary {
-      cursor: pointer;
-      font-weight: 600;
-      letter-spacing: 0.03em;
-    }
-    .editor-group {
-      margin-top: 0.75rem;
-      border-top: 1px solid rgba(148, 163, 184, 0.2);
-      padding-top: 0.75rem;
-    }
-    .group-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 0.5rem;
-    }
-    .group-header span {
-      text-transform: uppercase;
-      font-size: 0.8rem;
-      color: #cbd5f5;
-      letter-spacing: 0.08em;
-    }
-    .group-header button,
-    .actions button,
-    .refresh-btn {
-      border: none;
-      border-radius: 8px;
-      padding: 0.35rem 0.8rem;
-      font-weight: 600;
-      cursor: pointer;
-      background: rgba(56, 189, 248, 0.15);
-      color: #7dd3fc;
-      transition: background 0.2s ease;
-    }
-    .group-header button:hover,
-    .actions button:hover,
-    .refresh-btn:hover {
-      background: rgba(56, 189, 248, 0.3);
-    }
-    .editor-rows {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-    .editor-row {
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)) 30px;
-      gap: 0.35rem;
-      align-items: center;
+      place-items: center;
+      visibility: hidden;
+      opacity: 0;
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+      padding: 2rem;
+      z-index: 20;
     }
-    .editor-row input[type="text"],
-    .editor-row input[type="number"] {
-      border-radius: 8px;
-      border: 1px solid rgba(148, 163, 184, 0.3);
-      background: rgba(15, 23, 42, 0.7);
-      color: inherit;
-      padding: 0.3rem 0.5rem;
-      font-size: 0.9rem;
+    .overlay.visible {
+      visibility: visible;
+      opacity: 1;
     }
-    .editor-row button {
+    .overlay img {
+      max-width: min(90vw, 900px);
+      max-height: 85vh;
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.35);
+    }
+    .overlay button {
+      position: absolute;
+      top: 1.5rem;
+      right: 1.5rem;
       border: none;
-      background: rgba(248, 113, 113, 0.2);
-      color: #fecaca;
-      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.8);
+      color: #e2e8f0;
+      padding: 0.6rem 0.9rem;
+      border-radius: 999px;
       cursor: pointer;
-      height: 32px;
-      width: 32px;
+      font-weight: 700;
+      border: 1px solid rgba(148, 163, 184, 0.3);
     }
-    .actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      margin-top: 0.5rem;
-    }
-    .actions button:nth-child(2) {
-      background: rgba(251, 191, 36, 0.2);
-      color: #fde68a;
-    }
-    .actions button:nth-child(3) {
-      background: rgba(34, 197, 94, 0.2);
-      color: #bbf7d0;
-    }
-    .status {
-      min-height: 1.5rem;
-      font-size: 0.85rem;
-      color: #cbd5f5;
-      margin-top: 0.25rem;
-    }
-    .status.error {
-      color: #fecaca;
-    }
-    .status.success {
-      color: #bbf7d0;
-    }
-    @media (max-width: 600px) {
+    @media (max-width: 700px) {
       body {
-        padding: 1rem;
+        padding: 1.25rem;
+      }
+      .grid {
+        grid-template-columns: 1fr;
       }
     }
   </style>
 </head>
 <body>
-  <h1>Display rotation overview</h1>
-  <div class="toolbar">
-    <label>
-      Admin API token
-      <input type="password" id="api-token" placeholder="Paste ADMIN_API_TOKEN">
-    </label>
-    <button type="button" id="apply-token">Use token</button>
-    <div class="hint" id="token-status">Stored in this browser tab only.</div>
-  </div>
+  <h1>Display overview</h1>
+  <div class="subtitle">Latest screenshots from the <strong>current</strong> folder with their font overrides.</div>
   {% if error %}
     <div class="error">{{ error }}</div>
   {% endif %}
@@ -253,312 +187,84 @@
     {% for screen in screens %}
       <div class="card" data-screen-id="{{ screen.id }}">
         <h2>{{ screen.id }}</h2>
-        <div class="frequency">Frequency: every {{ screen.frequency }} loop{{ '' if screen.frequency == 1 else 's' }}</div>
-        {% if screen.last_screenshot %}
-          <img class="screenshot" data-role="screenshot" src="{{ url_for('static', filename=screen.last_screenshot) }}" alt="Latest screenshot for {{ screen.id }}">
+        <div class="meta">
+          <span>Frequency: every {{ screen.frequency }} loop{{ '' if screen.frequency == 1 else 's' }}</span>
           {% if screen.last_captured %}
-            <div class="timestamp" data-role="timestamp">Captured {{ screen.last_captured }}</div>
-          {% else %}
-            <div class="timestamp" data-role="timestamp"></div>
+            <span data-role="timestamp">Captured {{ screen.last_captured }}</span>
           {% endif %}
+        </div>
+        {% if screen.last_screenshot %}
+          <div class="screenshot">
+            <img class="thumb" data-role="thumbnail" data-full-src="{{ url_for('static', filename=screen.last_screenshot) }}" src="{{ url_for('static', filename=screen.last_screenshot) }}" alt="Latest screenshot for {{ screen.id }}">
+          </div>
         {% else %}
           <div class="empty">No screenshot captured yet.</div>
         {% endif %}
-        <div class="style-panel style-editor" data-style='{{ style_config.get(screen.id, {}) | tojson | safe }}'>
-          <details>
-            <summary>Style overrides</summary>
-            <div class="editor-group" data-kind="fonts">
-              <div class="group-header">
-                <span>Fonts</span>
-                <button type="button" data-action="add-font">Add font slot</button>
-              </div>
-              <div class="editor-rows" data-kind="fonts"></div>
-            </div>
-            <div class="editor-group" data-kind="images">
-              <div class="group-header">
-                <span>Images</span>
-                <button type="button" data-action="add-image">Add image slot</button>
-              </div>
-              <div class="editor-rows" data-kind="images"></div>
-            </div>
-          </details>
-          <div class="actions">
-            <button type="button" class="save-style">Save overrides</button>
-            <button type="button" class="clear-style">Clear overrides</button>
-            <button type="button" class="refresh-btn">Refresh screenshot</button>
-          </div>
-          <div class="status" aria-live="polite"></div>
+        <div class="fonts">
+          <h3>Font definitions</h3>
+          {% if screen.font_definitions %}
+            <ul class="font-list">
+              {% for slot, definition in screen.font_definitions.items() %}
+                <li>
+                  <span class="font-slot">{{ slot }}</span>
+                  {% if definition.family %}
+                    <span class="font-family">{{ definition.family }}</span>
+                  {% endif %}
+                  {% if definition.size %}
+                    <span class="font-size">{{ definition.size }}px</span>
+                  {% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <div class="empty">No font overrides defined.</div>
+          {% endif %}
         </div>
       </div>
     {% endfor %}
   </div>
-  <template id="font-row-template">
-    <div class="editor-row">
-      <input type="text" class="slot-input" placeholder="Slot e.g. score">
-      <input type="text" class="family-input" placeholder="Font family or path" list="font-options">
-      <input type="number" class="size-input" min="4" max="120" placeholder="Size (px)">
-      <button type="button" class="remove-row" aria-label="Remove">×</button>
-    </div>
-  </template>
-  <template id="image-row-template">
-    <div class="editor-row">
-      <input type="text" class="slot-input" placeholder="Slot e.g. team_logo">
-      <input type="number" class="scale-input" min="0.1" step="0.05" max="5" placeholder="Scale (1 = 100%)">
-      <button type="button" class="remove-row" aria-label="Remove">×</button>
-    </div>
-  </template>
-  <datalist id="font-options">
-    {% for font in font_options %}
-      <option value="{{ font }}">
-    {% endfor %}
-  </datalist>
+  <div class="overlay" data-role="overlay">
+    <button type="button" data-role="overlay-close" aria-label="Close">✕</button>
+    <img src="" alt="Full screenshot" loading="lazy">
+  </div>
   <script>
     (function () {
-      const state = {
-        token: window.sessionStorage.getItem('adminToken') || ''
-      };
+      const overlay = document.querySelector('[data-role="overlay"]');
+      const overlayImg = overlay?.querySelector('img');
+      const closeBtn = overlay?.querySelector('[data-role="overlay-close"]');
 
-      const tokenInput = document.getElementById('api-token');
-      const tokenStatus = document.getElementById('token-status');
-      const applyToken = document.getElementById('apply-token');
-      if (tokenInput) {
-        tokenInput.value = state.token;
+      function showOverlay(src, alt) {
+        if (!overlay || !overlayImg) return;
+        overlayImg.src = src;
+        overlayImg.alt = alt || 'Full screenshot';
+        overlay.classList.add('visible');
       }
-      if (applyToken) {
-        applyToken.addEventListener('click', () => {
-          state.token = tokenInput.value.trim();
-          if (state.token) {
-            window.sessionStorage.setItem('adminToken', state.token);
-            tokenStatus.textContent = 'Token saved for this tab.';
-          } else {
-            window.sessionStorage.removeItem('adminToken');
-            tokenStatus.textContent = 'Token cleared; editing disabled.';
-          }
+
+      function hideOverlay() {
+        if (!overlay || !overlayImg) return;
+        overlay.classList.remove('visible');
+        overlayImg.src = '';
+      }
+
+      document.querySelectorAll('[data-role="thumbnail"]').forEach((thumb) => {
+        thumb.addEventListener('click', () => {
+          const src = thumb.dataset.fullSrc || thumb.src;
+          const alt = thumb.getAttribute('alt');
+          showOverlay(src, alt);
         });
-      }
-
-      const fontTemplate = document.getElementById('font-row-template');
-      const imageTemplate = document.getElementById('image-row-template');
-
-      function cssEscape(value) {
-        if (window.CSS && CSS.escape) {
-          return CSS.escape(value);
-        }
-        return value.replace(/"/g, '\\"');
-      }
-
-      function renderRows(editor, kind, data) {
-        const container = editor.querySelector(`.editor-rows[data-kind="${kind}"]`);
-        if (!container) {
-          return;
-        }
-        container.innerHTML = '';
-        const entries = Object.entries(data || {});
-        if (!entries.length) {
-          addRow(editor, kind);
-          return;
-        }
-        entries.forEach(([slot, spec]) => {
-          addRow(editor, kind, slot, spec);
-        });
-      }
-
-      function addRow(editor, kind, slot = '', spec = {}) {
-        const template = kind === 'fonts' ? fontTemplate : imageTemplate;
-        const fragment = template.content.cloneNode(true);
-        const row = fragment.querySelector('.editor-row');
-        const container = editor.querySelector(`.editor-rows[data-kind="${kind}"]`);
-        if (!container || !row) {
-          return;
-        }
-        row.querySelectorAll('input').forEach((input) => {
-          input.value = '';
-        });
-        const slotInput = row.querySelector('.slot-input');
-        if (slotInput) {
-          slotInput.value = slot || '';
-        }
-        if (kind === 'fonts') {
-          const familyInput = row.querySelector('.family-input');
-          const sizeInput = row.querySelector('.size-input');
-          if (familyInput) {
-            familyInput.value = spec.family || '';
-          }
-          if (sizeInput && spec.size) {
-            sizeInput.value = spec.size;
-          }
-        } else if (kind === 'images') {
-          const scaleInput = row.querySelector('.scale-input');
-          if (scaleInput && spec.scale) {
-            scaleInput.value = spec.scale;
-          }
-        }
-        const removeBtn = row.querySelector('.remove-row');
-        if (removeBtn) {
-          removeBtn.addEventListener('click', () => {
-            row.remove();
-          });
-        }
-        container.appendChild(row);
-      }
-
-      function collectPayload(editor) {
-        const fonts = {};
-        editor.querySelectorAll('.editor-rows[data-kind="fonts"] .editor-row').forEach((row) => {
-          const slot = row.querySelector('.slot-input')?.value.trim();
-          const family = row.querySelector('.family-input')?.value.trim();
-          const sizeValue = row.querySelector('.size-input')?.value.trim();
-          if (!slot) {
-            return;
-          }
-          const entry = {};
-          if (family) {
-            entry.family = family;
-          }
-          if (sizeValue) {
-            const parsed = Number.parseInt(sizeValue, 10);
-            if (!Number.isNaN(parsed)) {
-              entry.size = parsed;
-            }
-          }
-          if (Object.keys(entry).length) {
-            fonts[slot] = entry;
-          }
-        });
-        const images = {};
-        editor.querySelectorAll('.editor-rows[data-kind="images"] .editor-row').forEach((row) => {
-          const slot = row.querySelector('.slot-input')?.value.trim();
-          const scaleValue = row.querySelector('.scale-input')?.value.trim();
-          if (!slot || !scaleValue) {
-            return;
-          }
-          const parsed = Number.parseFloat(scaleValue);
-          if (Number.isFinite(parsed)) {
-            images[slot] = { scale: parsed };
-          }
-        });
-        const payload = {};
-        if (Object.keys(fonts).length) {
-          payload.fonts = fonts;
-        }
-        if (Object.keys(images).length) {
-          payload.images = images;
-        }
-        return payload;
-      }
-
-      function updateStatus(editor, message, type = '') {
-        const status = editor.querySelector('.status');
-        if (!status) {
-          return;
-        }
-        status.textContent = message;
-        status.classList.remove('error', 'success');
-        if (type) {
-          status.classList.add(type);
-        }
-      }
-
-      async function saveOverrides(editor, screenId, payload) {
-        if (!state.token) {
-          updateStatus(editor, 'Set the admin token before saving.', 'error');
-          return;
-        }
-        updateStatus(editor, 'Saving…');
-        try {
-          const response = await fetch(`/api/style-overrides/${encodeURIComponent(screenId)}`, {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${state.token}`,
-            },
-            body: JSON.stringify(payload),
-          });
-          const data = await response.json();
-          if (!response.ok || data.status !== 'ok') {
-            const errorMsg = data.message || 'Unable to save overrides';
-            updateStatus(editor, errorMsg, 'error');
-            return;
-          }
-          editor.dataset.style = JSON.stringify(data.config || {});
-          renderRows(editor, 'fonts', (data.config && data.config.fonts) || {});
-          renderRows(editor, 'images', (data.config && data.config.images) || {});
-          updateStatus(editor, 'Overrides saved.', 'success');
-          refreshScreens(screenId);
-        } catch (err) {
-          updateStatus(editor, 'Network error saving overrides.', 'error');
-        }
-      }
-
-      async function refreshScreens(targetId) {
-        try {
-          const response = await fetch('/api/screens');
-          const data = await response.json();
-          if (data.status !== 'ok') {
-            return;
-          }
-          const screens = data.screens || [];
-          screens.forEach((screen) => {
-            if (targetId && screen.id !== targetId) {
-              return;
-            }
-            const selector = `[data-screen-id="${cssEscape(screen.id)}"]`;
-            const card = document.querySelector(selector);
-            if (!card) {
-              return;
-            }
-            const img = card.querySelector('[data-role="screenshot"]');
-            const ts = card.querySelector('[data-role="timestamp"]');
-            if (screen.last_screenshot && img) {
-              const path = `/screenshots/${screen.last_screenshot}`;
-              img.src = `${path}?t=${Date.now()}`;
-            }
-            if (ts) {
-              ts.textContent = screen.last_captured ? `Captured ${screen.last_captured}` : '';
-            }
-          });
-        } catch (err) {
-          // ignore background refresh errors
-        }
-      }
-
-      document.querySelectorAll('.style-editor').forEach((editor) => {
-        const styleData = editor.dataset.style ? JSON.parse(editor.dataset.style) : {};
-        renderRows(editor, 'fonts', styleData.fonts || {});
-        renderRows(editor, 'images', styleData.images || {});
-
-        editor.querySelector('[data-action="add-font"]').addEventListener('click', () => addRow(editor, 'fonts'));
-        editor.querySelector('[data-action="add-image"]').addEventListener('click', () => addRow(editor, 'images'));
-
-        const card = editor.closest('.card');
-        const screenId = card?.dataset.screenId;
-        const saveBtn = editor.querySelector('.save-style');
-        const clearBtn = editor.querySelector('.clear-style');
-        const refreshBtn = editor.querySelector('.refresh-btn');
-
-        if (saveBtn) {
-          saveBtn.addEventListener('click', () => {
-            const payload = collectPayload(editor);
-            if (!Object.keys(payload).length) {
-              updateStatus(editor, 'Add at least one override to save.', 'error');
-              return;
-            }
-            saveOverrides(editor, screenId, payload);
-          });
-        }
-
-        if (clearBtn) {
-          clearBtn.addEventListener('click', () => {
-            saveOverrides(editor, screenId, { clear: true });
-          });
-        }
-
-        if (refreshBtn) {
-          refreshBtn.addEventListener('click', () => refreshScreens(screenId));
-        }
       });
 
-      setInterval(() => refreshScreens(), 60000);
+      overlay?.addEventListener('click', (event) => {
+        if (event.target === overlay) {
+          hideOverlay();
+        }
+      });
+      closeBtn?.addEventListener('click', hideOverlay);
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          hideOverlay();
+        }
+      });
     })();
   </script>
 </body>
