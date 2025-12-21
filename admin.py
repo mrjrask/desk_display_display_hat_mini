@@ -8,7 +8,7 @@ import os
 import threading
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from flask import Flask, abort, jsonify, render_template, request
 
@@ -24,7 +24,6 @@ STYLE_CONFIG_PATH = os.environ.get(
     "SCREENS_STYLE_PATH", os.path.join(SCRIPT_DIR, "screens_style.json")
 )
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg"}
-FONTS_DIR = os.path.join(SCRIPT_DIR, "fonts")
 
 _storage_paths = resolve_storage_paths(logger=_logger)
 SCREENSHOT_DIR = str(_storage_paths.screenshot_dir)
@@ -44,6 +43,7 @@ class ScreenInfo:
     frequency: int
     last_screenshot: Optional[str]
     last_captured: Optional[str]
+    font_definitions: Dict[str, Dict[str, object]]
 
 
 def _sanitize_directory_name(name: str) -> str:
@@ -143,14 +143,35 @@ def _save_style_overrides(
     return version
 
 
-def _list_font_options() -> List[str]:
-    fonts: List[str] = []
-    try:
-        for entry in sorted(os.listdir(FONTS_DIR)):
-            if entry.lower().endswith((".ttf", ".otf")):
-                fonts.append(entry)
-    except FileNotFoundError:
-        return []
+def _extract_font_definitions(
+    screen_id: str, style_overrides: Dict[str, Any]
+) -> Dict[str, Dict[str, object]]:
+    fonts: Dict[str, Dict[str, object]] = {}
+
+    screens = style_overrides.get("screens") if isinstance(style_overrides, dict) else {}
+    screen_style = screens.get(screen_id) if isinstance(screens, dict) else None
+    if not isinstance(screen_style, dict):
+        return fonts
+
+    font_specs = screen_style.get("fonts")
+    if not isinstance(font_specs, dict):
+        return fonts
+
+    for slot, spec in font_specs.items():
+        if not isinstance(slot, str) or not isinstance(spec, dict):
+            continue
+
+        entry: Dict[str, object] = {}
+        family = spec.get("family")
+        if isinstance(family, str) and family.strip():
+            entry["family"] = family.strip()
+        size = spec.get("size")
+        if isinstance(size, int) and size > 0:
+            entry["size"] = size
+
+        if entry:
+            fonts[slot] = entry
+
     return fonts
 
 
@@ -289,10 +310,15 @@ def _require_api_token() -> str:
     return token
 
 
-def _collect_screen_info() -> List[ScreenInfo]:
+def _collect_screen_info(
+    style_overrides: Optional[Dict[str, Any]] = None,
+) -> List[ScreenInfo]:
     config = _load_config()
     # Validate the configuration by attempting to build a scheduler.
     build_scheduler(config)
+
+    if style_overrides is None:
+        style_overrides = _load_style_overrides()
 
     screens: List[ScreenInfo] = []
     for screen_id, freq in config["screens"].items():
@@ -301,8 +327,9 @@ def _collect_screen_info() -> List[ScreenInfo]:
         except (TypeError, ValueError):
             frequency = 0
         latest = _latest_screenshot(screen_id)
+        font_definitions = _extract_font_definitions(screen_id, style_overrides)
         if latest is None:
-            screens.append(ScreenInfo(screen_id, frequency, None, None))
+            screens.append(ScreenInfo(screen_id, frequency, None, None, font_definitions))
         else:
             rel_path, captured = latest
             screens.append(
@@ -311,6 +338,7 @@ def _collect_screen_info() -> List[ScreenInfo]:
                     frequency,
                     rel_path,
                     captured.isoformat(timespec="seconds"),
+                    font_definitions,
                 )
             )
     return screens
@@ -358,26 +386,24 @@ def _prime_screenshots() -> None:
 @app.route("/")
 def index() -> str:
     try:
-        screens = _collect_screen_info()
+        style_overrides = _load_style_overrides()
+        screens = _collect_screen_info(style_overrides)
         error = None
     except ValueError as exc:
         screens = []
         error = str(exc)
-    style_config = _load_style_overrides()
-    font_options = _list_font_options()
     return render_template(
         "admin.html",
         screens=screens,
         error=error,
-        style_config=style_config.get("screens", {}),
-        font_options=font_options,
     )
 
 
 @app.route("/api/screens")
 def api_screens():
     try:
-        screens = _collect_screen_info()
+        style_overrides = _load_style_overrides()
+        screens = _collect_screen_info(style_overrides)
         return jsonify(status="ok", screens=[screen.__dict__ for screen in screens])
     except ValueError as exc:
         return jsonify(status="error", message=str(exc)), 500
