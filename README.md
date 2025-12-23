@@ -105,6 +105,16 @@ Override `PROJECT_DIR` when you want the installer to target a different checkou
 PROJECT_DIR=/home/pi/desk_display bash ./install_bookworm.sh
 ```
 
+### Admin service helpers
+
+Manage the Flask-based admin UI (`admin.py`) as its own systemd service with the helper scripts in the project root:
+
+- Install/start the admin service: `bash ./install_admin.sh`
+- Update the code + dependencies and restart the service: `bash ./update_admin.sh`
+- Disable and remove the service: `bash ./uninstall_admin.sh`
+
+The installer shares the primary virtual environment at `venv/` and installs the same apt/pip dependencies as the main display service. Customize where the service runs by exporting `PROJECT_DIR`, `ADMIN_HOST`, or `ADMIN_PORT` before invoking the installer. Additional environment overrides (for example `ADMIN_API_TOKEN` or `SCREENS_STYLE_PATH`) can be placed in an optional `.env.admin` file alongside the scripts; it is loaded automatically by the systemd unit.
+
 ---
 
 ## Project layout
