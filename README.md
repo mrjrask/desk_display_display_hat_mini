@@ -93,25 +93,25 @@ Two turnkey installers are provided for Raspberry Pi OS. Run the script that mat
 
 ```bash
 # Bookworm (keeps the transitional libgdk-pixbuf2.0-dev package name)
-bash ./install_bookworm.sh
+bash ./scripts/install_bookworm.sh
 
 # Trixie (uses libgdk-pixbuf-2.0-dev)
-bash ./install_trixie.sh
+bash ./scripts/install_trixie.sh
 ```
 
 Override `PROJECT_DIR` when you want the installer to target a different checkout:
 
 ```bash
-PROJECT_DIR=/home/pi/desk_display bash ./install_bookworm.sh
+PROJECT_DIR=/home/pi/desk_display bash ./scripts/install_bookworm.sh
 ```
 
 ### Admin service helpers
 
-Manage the Flask-based admin UI (`admin.py`) as its own systemd service with the helper scripts in the project root:
+Manage the Flask-based admin UI (`admin.py`) as its own systemd service with the helper scripts in `scripts/`:
 
-- Install/start the admin service: `bash ./install_admin.sh`
-- Update the code + dependencies and restart the service: `bash ./update_admin.sh`
-- Disable and remove the service: `bash ./uninstall_admin.sh`
+- Install/start the admin service: `bash ./scripts/install_admin.sh`
+- Update the code + dependencies and restart the service: `bash ./scripts/update_admin.sh`
+- Disable and remove the service: `bash ./scripts/uninstall_admin.sh`
 
 The installer shares the primary virtual environment at `venv/` and installs the same apt/pip dependencies as the main display service. Customize where the service runs by exporting `PROJECT_DIR`, `ADMIN_HOST`, or `ADMIN_PORT` before invoking the installer. Additional environment overrides (for example `ADMIN_API_TOKEN` or `SCREENS_STYLE_PATH`) can be placed in an optional `.env.admin` file alongside the scripts; it is loaded automatically by the systemd unit.
 
@@ -121,13 +121,9 @@ The installer shares the primary virtual environment at `venv/` and installs the
 
 ```
 desk_display/
-├─ main.py
-├─ config.py
-├─ data_fetch.py
-├─ screens_catalog.py
-├─ screens_config.json
-├─ utils.py
-├─ scripts_2_text.py
+├─ main.py / admin.py / utils.py / config.py
+├─ config_store.py / data_fetch.py / paths.py / schedule.py / schedule_migrations.py / screens_catalog.py
+├─ screens_config.json / screens_style.json
 ├─ services/
 │  ├─ __init__.py
 │  ├─ http_client.py              # shared requests.Session + NHL headers
@@ -153,6 +149,19 @@ desk_display/
 │  ├─ nhl_scoreboard.py
 │  ├─ nhl_standings.py
 │  └─ nfl_scoreboard.py / nfl_standings.py
+├─ scripts/
+│  ├─ check_api_statuses.py
+│  ├─ install_common.sh
+│  ├─ install_bookworm.sh / install_trixie.sh
+│  └─ install_admin.sh / update_admin.sh / uninstall_admin.sh
+├─ tools/
+│  ├─ test_screens.py             # interactive screen renderer harness
+│  └─ maintenance/
+│     ├─ cleanup.sh               # clears display + archives leftover assets on shutdown
+│     ├─ render_all_screens.py    # renders every screen to PNG and zips them
+│     └─ reset_screenshots.sh     # purges screenshots/ and screenshot_archive/
+├─ templates/                     # Flask admin templates
+├─ tests/
 ├─ images/
 │  ├─ mlb/<ABBR>.png              # MLB team logos (e.g., CUBS.png)
 │  ├─ nfl/<ABBR>.png              # NFL logos used by Bears screen
@@ -164,6 +173,10 @@ desk_display/
    ├─ DejaVuSans.ttf
    └─ DejaVuSans-Bold.ttf
 ```
+
+Run `python tools/validate_required_files.py` to confirm that every tracked
+non-image Python module stays reachable from the main entry points and helper
+scripts.
 
 ---
 
@@ -433,7 +446,7 @@ After=network-online.target
 [Service]
 WorkingDirectory=/home/pi/desk_display
 ExecStart=/home/pi/desk_display/venv/bin/python /home/pi/desk_display/main.py
-ExecStop=/bin/bash -lc '/home/pi/desk_display/cleanup.sh'
+ExecStop=/bin/bash -lc '/home/pi/desk_display/tools/maintenance/cleanup.sh'
 Restart=always
 User=pi
 
@@ -456,17 +469,17 @@ cleanup helper is executable. Make sure to create the venv first and grant execu
 ```bash
 python -m venv /home/pi/desk_display/venv
 /home/pi/desk_display/venv/bin/pip install -r /home/pi/desk_display/requirements.txt
-chmod +x /home/pi/desk_display/cleanup.sh
+chmod +x /home/pi/desk_display/tools/maintenance/cleanup.sh
 ```
 
-`ExecStop` runs `cleanup.sh` on every shutdown so the LCD blanks immediately and any lingering screenshots or videos are swept
+`ExecStop` runs `tools/maintenance/cleanup.sh` on every shutdown so the LCD blanks immediately and any lingering screenshots or videos are swept
 into the archive folders. The service is marked `Restart=always`, so crashes or manual restarts via `systemctl restart` will
 trigger a fresh boot after cleanup completes.
 
 ### Display HAT Mini controls
 
 - **X button:** skips the remainder of the current screen and moves on immediately.
-- **Y button:** requests a `systemctl restart desk_display.service`, which stops the service, runs `cleanup.sh`, and starts a
+- **Y button:** requests a `systemctl restart desk_display.service`, which stops the service, runs `tools/maintenance/cleanup.sh`, and starts a
   fresh process.
 - **A/B buttons:** currently unused but logged when pressed so you can build new shortcuts.
 
