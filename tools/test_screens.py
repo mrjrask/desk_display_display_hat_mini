@@ -1,21 +1,31 @@
 #!/usr/bin/env python3
-"""
-Interactive tester for individual screen modules.
-"""
-import os, re, sys, time, ast, importlib.util, inspect
+"""Interactive tester for individual screen modules."""
+import ast
+import importlib.util
+import inspect
+import os
+import re
+import sys
+import time
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+SCREENS_DIR = PROJECT_ROOT / "screens"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from config import SCREEN_DELAY
 import utils
 
+
 def load_display():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    main_path  = os.path.join(script_dir, "main.py")
-    namespace  = {"__file__": main_path}
-    with open(main_path, "r") as f:
-        src = f.read()
+    main_path = PROJECT_ROOT / "main.py"
+    namespace = {"__file__": str(main_path)}
+    src = main_path.read_text(encoding="utf-8")
     guard = src.find("if __name__")
     if guard != -1:
         src = src[:guard]
-    exec(compile(src, main_path, "exec"), namespace)
+    exec(compile(src, str(main_path), "exec"), namespace)
     return namespace.get("display"), namespace
 
 def list_screens(script_dir, namespace):
@@ -63,7 +73,7 @@ def invoke_screen(entry, display, namespace):
                 utils.clear_display(display)
         return
 
-    script_dir=os.path.dirname(os.path.abspath(__file__))
+    script_dir=str(SCREENS_DIR)
     fname=entry["module"]+".py"
     spec=importlib.util.spec_from_file_location(entry["module"],os.path.join(script_dir,fname))
     module=importlib.util.module_from_spec(spec)
@@ -98,7 +108,7 @@ def invoke_screen(entry, display, namespace):
         utils.clear_display(display)
 
 def main():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    script_dir = str(SCREENS_DIR)
     display, namespace = load_display()
     while True:
         screens=list_screens(script_dir,namespace)

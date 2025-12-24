@@ -9,9 +9,14 @@ import logging
 import os
 import sys
 import zipfile
+from pathlib import Path
 from typing import Dict, Iterable, Optional, Tuple
 
 from PIL import Image
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 import data_fetch
 from config import (
@@ -34,9 +39,8 @@ except ImportError:  # pragma: no cover
     utils = None  # type: ignore
 
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(SCRIPT_DIR, "screens_config.json")
-IMAGES_DIR = os.path.join(SCRIPT_DIR, "images")
+CONFIG_PATH = PROJECT_ROOT / "screens_config.json"
+IMAGES_DIR = PROJECT_ROOT / "images"
 
 _storage_paths = resolve_storage_paths(logger=logging.getLogger(__name__))
 SCREENSHOT_DIR = str(_storage_paths.screenshot_dir)
@@ -86,7 +90,7 @@ TEAM_LOGO_HEIGHT   = LOGO_SCREEN_HEIGHT
 
 
 def load_logo(filename: str, height: int = LOGO_SCREEN_HEIGHT) -> Optional[Image.Image]:
-    path = os.path.join(IMAGES_DIR, filename)
+    path = IMAGES_DIR / filename
     try:
         with Image.open(path) as img:
             has_transparency = (
@@ -355,7 +359,7 @@ def render_all_screens(
             display=display,
             cache=cache,
             logos=logos,
-            image_dir=IMAGES_DIR,
+            image_dir=str(IMAGES_DIR),
             travel_requested=travel_requested,
             travel_active=is_travel_screen_active(),
             travel_window=get_travel_active_window(),

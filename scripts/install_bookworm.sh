@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-EXPECTED_CODENAME="trixie"
+EXPECTED_CODENAME="bookworm"
 SERVICE_NAME="desk_display.service"
 PYTHON_BIN="${PYTHON:-python3}"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-PROJECT_DIR="${PROJECT_DIR:-$SCRIPT_DIR}"
+PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 VENV_DIR="$PROJECT_DIR/venv"
 SERVICE_USER="${SUDO_USER:-$(whoami)}"
+MAINTENANCE_DIR="$PROJECT_DIR/tools/maintenance"
 
 COMMON_SCRIPT="$PROJECT_DIR/scripts/install_common.sh"
 if [[ ! -f "$COMMON_SCRIPT" ]]; then
@@ -63,8 +64,8 @@ else
   warn "requirements.txt not found; skipping pip install."
 fi
 
-ensure_executable "$PROJECT_DIR/cleanup.sh"
-ensure_executable "$PROJECT_DIR/reset_screenshots.sh"
+ensure_executable "$MAINTENANCE_DIR/cleanup.sh"
+ensure_executable "$MAINTENANCE_DIR/reset_screenshots.sh"
 
 deactivate
 
@@ -78,7 +79,7 @@ After=network-online.target
 [Service]
 WorkingDirectory=$PROJECT_DIR
 ExecStart=$VENV_DIR/bin/python $PROJECT_DIR/main.py
-ExecStop=/bin/bash -lc '$PROJECT_DIR/cleanup.sh'
+ExecStop=/bin/bash -lc '$MAINTENANCE_DIR/cleanup.sh'
 Restart=always
 User=$SERVICE_USER
 

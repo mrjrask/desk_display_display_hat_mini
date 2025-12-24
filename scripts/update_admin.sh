@@ -5,7 +5,7 @@ SERVICE_NAME="desk_display_admin.service"
 PYTHON_BIN="${PYTHON:-python3}"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-PROJECT_DIR="${PROJECT_DIR:-$SCRIPT_DIR}"
+PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 VENV_DIR="${VENV_DIR:-$PROJECT_DIR/venv}"
 
 COMMON_SCRIPT="$PROJECT_DIR/scripts/install_common.sh"

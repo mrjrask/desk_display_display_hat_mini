@@ -5,16 +5,17 @@ IFS=$'\n\t'
 # Ensure Unix line endings and executable bit:
 #   sed -i 's/\r$//' cleanup.sh && chmod +x cleanup.sh
 
-echo "⏱  Running cleanup at $(date +%Y%m%d_%H%M%S)…"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)"
+PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/../.." &>/dev/null && pwd -P)"
 
-dir="$(dirname "$0")"
-cd "$dir"
+echo "⏱  Running cleanup at $(date +%Y%m%d_%H%M%S)…"
+cd "$PROJECT_ROOT"
 
 # Prefer the repo's virtualenv interpreter when available so optional
 # dependencies such as Pillow are on the path even during shutdown.
 python_bin="python3"
-if [[ -x "${dir}/venv/bin/python" ]]; then
-  python_bin="${dir}/venv/bin/python"
+if [[ -x "${PROJECT_ROOT}/venv/bin/python" ]]; then
+  python_bin="${PROJECT_ROOT}/venv/bin/python"
 elif command -v python3 >/dev/null 2>&1; then
   python_bin="$(command -v python3)"
 elif command -v python >/dev/null 2>&1; then
@@ -27,6 +28,13 @@ echo "    → Clearing display…"
 # for the Display HAT Mini hardware.
 DESK_DISPLAY_FORCE_HEADLESS=1 "${python_bin}" - <<'PY'
 import logging
+import os
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 try:
     from utils import Display, clear_display
@@ -42,11 +50,11 @@ PY
 
 # 2) Remove __pycache__ directories
 echo "    → Removing __pycache__ directories…"
-find . -type d -name "__pycache__" -prune -exec rm -rf {} +
+find "$PROJECT_ROOT" -type d -name "__pycache__" -prune -exec rm -rf {} +
 
 # 3) Archive any straggler screenshots/videos left behind
-SCREENSHOTS_DIR="screenshots"
-ARCHIVE_BASE="screenshot_archive"   # singular, to match main.py
+SCREENSHOTS_DIR="$PROJECT_ROOT/screenshots"
+ARCHIVE_BASE="$PROJECT_ROOT/screenshot_archive"   # singular, to match main.py
 ARCHIVE_DEFAULT_FOLDER="Screens"
 timestamp="$(date +%Y%m%d_%H%M%S)"
 batch="${timestamp#*_}"

@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-EXPECTED_CODENAME="bookworm"
-SERVICE_NAME="desk_display.service"
+SERVICE_NAME="desk_display_admin.service"
 PYTHON_BIN="${PYTHON:-python3}"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-PROJECT_DIR="${PROJECT_DIR:-$SCRIPT_DIR}"
-VENV_DIR="$PROJECT_DIR/venv"
+PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
+VENV_DIR="${VENV_DIR:-$PROJECT_DIR/venv}"
 SERVICE_USER="${SUDO_USER:-$(whoami)}"
+ADMIN_HOST="${ADMIN_HOST:-0.0.0.0}"
+ADMIN_PORT="${ADMIN_PORT:-5001}"
+ADMIN_ENV_FILE="${ADMIN_ENV_FILE:-$PROJECT_DIR/.env.admin}"
 
 COMMON_SCRIPT="$PROJECT_DIR/scripts/install_common.sh"
 if [[ ! -f "$COMMON_SCRIPT" ]]; then
@@ -23,14 +25,6 @@ if [[ $EUID -ne 0 ]]; then
   SUDO="sudo"
 else
   SUDO=""
-fi
-
-log "Enabling SPI/I2C when raspi-config is available."
-if command -v raspi-config >/dev/null 2>&1; then
-  $SUDO raspi-config nonint do_spi 0 || warn "Failed to enable SPI via raspi-config."
-  $SUDO raspi-config nonint do_i2c 0 || warn "Failed to enable I2C via raspi-config."
-else
-  warn "raspi-config not found; skipping SPI/I2C enablement."
 fi
 
 install_apt_packages
@@ -63,24 +57,23 @@ else
   warn "requirements.txt not found; skipping pip install."
 fi
 
-ensure_executable "$PROJECT_DIR/cleanup.sh"
-ensure_executable "$PROJECT_DIR/reset_screenshots.sh"
-
 deactivate
 
 SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
 log "Writing systemd service to $SERVICE_PATH"
 $SUDO tee "$SERVICE_PATH" >/dev/null <<SERVICE
 [Unit]
-Description=Desk Display Service - main
+Description=Desk Display Admin Service
 After=network-online.target
 
 [Service]
 WorkingDirectory=$PROJECT_DIR
-ExecStart=$VENV_DIR/bin/python $PROJECT_DIR/main.py
-ExecStop=/bin/bash -lc '$PROJECT_DIR/cleanup.sh'
-Restart=always
+ExecStart=$VENV_DIR/bin/python $PROJECT_DIR/admin.py
+Restart=on-failure
 User=$SERVICE_USER
+Environment="ADMIN_HOST=$ADMIN_HOST"
+Environment="ADMIN_PORT=$ADMIN_PORT"
+EnvironmentFile=-$ADMIN_ENV_FILE
 
 [Install]
 WantedBy=multi-user.target
