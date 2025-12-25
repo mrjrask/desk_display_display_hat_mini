@@ -52,7 +52,9 @@ pip install --upgrade pip
 
 if [[ -f "$PROJECT_DIR/requirements.txt" ]]; then
   log "Installing Python dependencies from requirements.txt"
-  pip install -r "$PROJECT_DIR/requirements.txt"
+  pushd "$PROJECT_DIR" >/dev/null
+  pip install -r "requirements.txt"
+  popd >/dev/null
 else
   warn "requirements.txt not found; skipping pip install."
 fi
