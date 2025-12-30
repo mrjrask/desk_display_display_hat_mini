@@ -77,14 +77,17 @@ def show_bears_next_game(display, transition=False):
             away_ab, home_ab, loc_sym = opp_ab, bears_ab, "@"
 
         # Bottom line text — **no spaces around the dash**
-        wk = game["week"]
+        wk = (game.get("week") or "").strip()
+        if not wk:
+            game_no = str(game.get("game_no", "")).strip()
+            wk = f"Game {game_no}" if game_no else ""
         try:
             dt0 = datetime.datetime.strptime(game["date"], "%a, %b %d")
             date_txt = f"{dt0.month}/{dt0.day}"
         except:
             date_txt = game["date"]
         t_txt = game["time"].strip()
-        bottom = f"{wk.replace('0.', 'Pre')}-{date_txt} {t_txt}"
+        bottom = f"{wk}-{date_txt} {t_txt}" if wk else f"{date_txt} {t_txt}"
         if bottom:
             try:
                 _, t, _, b = draw.textbbox((0, 0), bottom, font=config.FONT_DATE_SPORTS)
