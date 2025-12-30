@@ -676,6 +676,26 @@ def _week_sort_value(week_label: str) -> float:
         return float("inf")
 
 
+def _game_sort_value(entry: Dict[str, Any]) -> float:
+    """Return the numeric sort order for a schedule entry.
+
+    Prefers ``game_no`` (to support decimal preseason numbering) and falls back to
+    ``week`` labels.
+    """
+
+    try:
+        game_no = entry.get("game_no")
+    except AttributeError:  # pragma: no cover - defensive
+        game_no = None
+    if game_no is not None:
+        try:
+            return float(str(game_no))
+        except Exception:
+            pass
+
+    return _week_sort_value(str(entry.get("week", "")))
+
+
 def next_game_from_schedule(
     schedule: List[Dict[str, Any]], today: Optional[datetime.date] = None
 ) -> Optional[Dict[str, Any]]:
@@ -694,13 +714,13 @@ def next_game_from_schedule(
         except Exception:
             parsed_date = None
 
-        week_value = _week_sort_value(str(entry.get("week", "")))
-        candidates.append((parsed_date, week_value, idx, entry))
+        sort_value = _game_sort_value(entry)
+        candidates.append((parsed_date, sort_value, idx, entry))
 
     if not candidates:
         return None
 
-    for parsed_date, week_value, idx, entry in sorted(
+    for parsed_date, sort_value, idx, entry in sorted(
         candidates, key=lambda item: (item[1], item[0] or datetime.date.max, item[2])
     ):
         if parsed_date is not None and parsed_date < today:
