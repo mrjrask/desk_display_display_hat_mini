@@ -1054,7 +1054,23 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
                 stroke_fill=(0, 0, 0),
             )
 
-    return result
+        return result
+
+    composed_frames = [_compose_frame(frame) for frame in frames]
+
+    for _ in range(loops):
+        for frame in composed_frames:
+            display.image(frame)
+            display.show()
+            time.sleep(delay)
+
+    last_frame = composed_frames[-1]
+    if transition:
+        return ScreenImage(last_frame, displayed=True)
+
+    display.image(last_frame)
+    display.show()
+    return None
 
 
 def _next_sun_event(daily_entries, now: datetime.datetime | None = None) -> tuple[str | None, datetime.datetime | None]:
@@ -1086,20 +1102,3 @@ def _next_sun_event(daily_entries, now: datetime.datetime | None = None) -> tupl
         return events[-1]
 
     return None, None
-
-
-    composed_frames = [_compose_frame(frame) for frame in frames]
-
-    for _ in range(loops):
-        for frame in composed_frames:
-            display.image(frame)
-            display.show()
-            time.sleep(delay)
-
-    last_frame = composed_frames[-1]
-    if transition:
-        return ScreenImage(last_frame, displayed=True)
-
-    display.image(last_frame)
-    display.show()
-    return None
