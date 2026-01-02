@@ -839,7 +839,10 @@ def _same_game(a, b):
 _BULLS_TEAM_ID = str(NBA_TEAM_ID)
 _BULLS_TRICODE = (NBA_TEAM_TRICODE or "CHI").upper()
 _NBA_LOOKBACK_DAYS = 7
-_NBA_LOOKAHEAD_DAYS = 30
+# ESPN's NBA scoreboard only surfaces games within roughly the next few months.
+# A 30-day window is too short when the Bulls' next home date follows a long
+# road swing, so extend the lookahead to capture those games as well.
+_NBA_LOOKAHEAD_DAYS = 120
 
 
 def _parse_nba_datetime(value):
