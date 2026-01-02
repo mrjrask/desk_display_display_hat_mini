@@ -49,8 +49,10 @@ else:
 PY
 
 # 2) Remove __pycache__ directories
-echo "    → Removing __pycache__ directories…"
-find "$PROJECT_ROOT" -type d -name "__pycache__" -prune -exec rm -rf {} +
+echo "    → Removing __pycache__ directories (excluding virtualenv)…"
+find "$PROJECT_ROOT" \
+  -path "$PROJECT_ROOT/venv" -prune -o \
+  -type d -name "__pycache__" -prune -exec rm -rf {} +
 
 # 3) Archive any straggler screenshots/videos left behind
 SCREENSHOTS_DIR="$PROJECT_ROOT/screenshots"
