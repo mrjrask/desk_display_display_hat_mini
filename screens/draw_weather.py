@@ -541,8 +541,11 @@ def _gather_hourly_forecast(
         key=lambda h: h.get("dt") if isinstance(h, dict) and h.get("dt") is not None else float("inf")
     )
 
+    # Sample the forecast every two hours so each column represents a two-hour block
+    two_hourly_forecast = future_hours[::2]
+
     forecast = []
-    for idx, hour in enumerate(future_hours[:hours]):
+    for idx, hour in enumerate(two_hourly_forecast[:hours]):
         if not isinstance(hour, dict):
             continue
         wind_speed = None
@@ -566,7 +569,7 @@ def _gather_hourly_forecast(
 
         entry = {
             "temp": round(hour.get("temp", 0)),
-            "time": _format_hour_label(hour.get("dt"), index=idx + 1),
+            "time": _format_hour_label(hour.get("dt"), index=(idx + 1) * 2),
             "condition": _normalise_condition(hour),
             "icon": None,
             "pop": _pop_pct_from(hour),
@@ -597,7 +600,7 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
     draw = ImageDraw.Draw(img)
 
     hours_to_show = len(forecast)
-    title = f"Next {hours_to_show} Hours"
+    title = "Next 10 hours..."
     title_w, title_h = draw.textsize(title, font=FONT_WEATHER_LABEL)
     draw.text(((WIDTH - title_w) // 2, 2), title, font=FONT_WEATHER_LABEL, fill=(200, 200, 200))
 
