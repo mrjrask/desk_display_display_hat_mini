@@ -17,10 +17,12 @@ Options:
 - GH_ICON_SIZE:   height of the GitHub icon in pixels.
 """
 
-import time
 import threading
+import time
 import datetime
-from typing import Tuple, Literal
+from typing import Tuple, Literal, Callable
+
+import logging
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -42,6 +44,7 @@ from utils import (
     check_github_updates,
     clear_display,
     date_strings,
+    get_update_status,
     load_github_icon,
     measure_text,
     time_strings,
@@ -134,7 +137,11 @@ def _compose_frame(
 
     return img
 
-def _cycle_colors_after_load(display, base_order: Literal["date_time","time_date"], gh_on: bool):
+def _cycle_colors_after_load(
+    display,
+    base_order: Literal["date_time", "time_date"],
+    gh_state: Callable[[], bool],
+):
     """
     Optional subtle color-cycle that runs AFTER the first full static frame is already shown.
     Only used when transition=False (direct rendering).
@@ -143,9 +150,39 @@ def _cycle_colors_after_load(display, base_order: Literal["date_time","time_date
     time.sleep(0.6)
     # a few gentle color swaps (~2.7s extra on screen)
     for _ in range(6):
-        img = _compose_frame(base_order, bright_color(), bright_color(), gh_on)
+        img = _compose_frame(base_order, bright_color(), bright_color(), gh_state())
         display.image(img)
         time.sleep(0.45)
+
+
+def _start_update_checks(
+    order: Literal["date_time", "time_date"],
+    colors: Tuple[Tuple[int, int, int], Tuple[int, int, int]],
+    gh_state: dict,
+    display,
+):
+    """Kick off apt/GitHub checks in the background, updating the screen when ready."""
+
+    def _worker():
+        try:
+            gh_on = check_github_updates()
+            gh_state["value"] = gh_on
+            check_apt_updates()
+
+            if display is None:
+                return
+
+            refreshed = _compose_frame(order, colors[0], colors[1], gh_state["value"])
+            display.image(refreshed)
+            try:
+                display.show()
+            except AttributeError:
+                pass
+        except Exception:
+            logging.exception("Background update checks failed")
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
 
 # -----------------------------------------------------------------------------
 # Public API
@@ -160,12 +197,12 @@ def draw_date(display, transition: bool=False):
     """
     col_top    = bright_color()
     col_bottom = bright_color()
-    gh_on      = check_github_updates()
-    check_apt_updates()
+    gh_state   = {"value": get_update_status().github}
 
-    img = _compose_frame("date_time", col_top, col_bottom, gh_on)
+    img = _compose_frame("date_time", col_top, col_bottom, gh_state["value"])
 
     if transition:
+        _start_update_checks("date_time", (col_top, col_bottom), gh_state, None)
         return img
 
     clear_display(display)
@@ -176,8 +213,13 @@ def draw_date(display, transition: bool=False):
         # Some display drivers immediately refresh when image() is called.
         pass
     # run a tiny, delayed cycle in a short thread so we don't block
-    t = threading.Thread(target=_cycle_colors_after_load, args=(display, "date_time", gh_on), daemon=True)
+    t = threading.Thread(
+        target=_cycle_colors_after_load,
+        args=(display, "date_time", lambda: gh_state["value"]),
+        daemon=True,
+    )
     t.start()
+    _start_update_checks("date_time", (col_top, col_bottom), gh_state, display)
     return ScreenImage(img, displayed=True)
 
 
@@ -188,12 +230,12 @@ def draw_time(display, transition: bool=False):
     """
     col_top    = bright_color()
     col_bottom = bright_color()
-    gh_on      = check_github_updates()
-    check_apt_updates()
+    gh_state   = {"value": get_update_status().github}
 
-    img = _compose_frame("time_date", col_top, col_bottom, gh_on)
+    img = _compose_frame("time_date", col_top, col_bottom, gh_state["value"])
 
     if transition:
+        _start_update_checks("time_date", (col_top, col_bottom), gh_state, None)
         return img
 
     clear_display(display)
@@ -202,6 +244,11 @@ def draw_time(display, transition: bool=False):
         display.show()
     except AttributeError:
         pass
-    t = threading.Thread(target=_cycle_colors_after_load, args=(display, "time_date", gh_on), daemon=True)
+    t = threading.Thread(
+        target=_cycle_colors_after_load,
+        args=(display, "time_date", lambda: gh_state["value"]),
+        daemon=True,
+    )
     t.start()
+    _start_update_checks("time_date", (col_top, col_bottom), gh_state, display)
     return ScreenImage(img, displayed=True)

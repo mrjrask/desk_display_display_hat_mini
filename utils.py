@@ -75,6 +75,12 @@ _DISPLAY_UPDATE_GATE = threading.Event()
 _DISPLAY_UPDATE_GATE.set()
 
 
+def get_update_status() -> _UpdateStatus:
+    """Return the last known update status for GitHub and apt."""
+
+    return _UPDATE_STATUS
+
+
 def suspend_display_updates() -> None:
     """Prevent subsequent display updates from reaching the hardware."""
 
