@@ -777,8 +777,8 @@ def draw_sports_screen_bulls(display, game: Optional[Dict], transition: bool = F
 
 def draw_bulls_next_home_game(display, game: Optional[Dict], transition: bool = False):
     if not game:
-        img = _render_message("Next at home...", "No United Center games scheduled")
+        img = _render_message("Following at home...", "No United Center games scheduled")
         return _push(display, img, transition=transition)
     # Uses the same '@' treatment between logos
-    img = _render_next_game(game, title="Next at home...")
+    img = _render_next_game(game, title="Following at home...")
     return _push(display, img, transition=transition)

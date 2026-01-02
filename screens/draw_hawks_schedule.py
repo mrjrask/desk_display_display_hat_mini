@@ -1355,5 +1355,5 @@ def draw_sports_screen_hawks(display, game, transition: bool=False):
 
 
 def draw_hawks_next_home_game(display, game, transition: bool=False):
-    """Dedicated "Next at home..." card using the same layout as the next-game screen."""
-    return _draw_next_card(display, game, title="Next at home...", transition=transition, log_label="hawks next home")
+    """Dedicated "Following at home..." card using the same layout as the next-game screen."""
+    return _draw_next_card(display, game, title="Following at home...", transition=transition, log_label="hawks next home")
