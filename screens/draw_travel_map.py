@@ -126,16 +126,45 @@ def _traffic_color(route: Optional[dict]) -> Tuple[int, int, int]:
 def _extract_polylines(routes: Dict[str, Optional[dict]]) -> Dict[str, List[Tuple[float, float]]]:
     polylines: Dict[str, List[Tuple[float, float]]] = {}
     for key, route in routes.items():
-        encoded = None
-        overview = route.get("overview_polyline") if route else None
+        decoded: Optional[List[Tuple[float, float]]] = None
+        if not route:
+            continue
+
+        overview = route.get("overview_polyline")
         if isinstance(overview, dict):
             encoded = overview.get("points")
-        if not encoded or not isinstance(encoded, str):
-            continue
-        try:
-            polylines[key] = _decode_polyline(encoded)
-        except Exception:
-            logging.warning("Travel map: failed to decode polyline for %s", key)
+        elif isinstance(overview, str):
+            encoded = overview
+        else:
+            encoded = None
+
+        if encoded and isinstance(encoded, str):
+            try:
+                decoded = _decode_polyline(encoded)
+            except Exception:
+                logging.warning("Travel map: failed to decode overview polyline for %s", key)
+
+        if decoded is None:
+            steps = ((route.get("legs") or [{}])[0].get("steps") or [])
+            step_points: List[Tuple[float, float]] = []
+            for step in steps:
+                polyline = step.get("polyline") if isinstance(step, dict) else None
+                encoded_step = None
+                if isinstance(polyline, dict):
+                    encoded_step = polyline.get("points")
+                elif isinstance(polyline, str):
+                    encoded_step = polyline
+                if not encoded_step or not isinstance(encoded_step, str):
+                    continue
+                try:
+                    step_points.extend(_decode_polyline(encoded_step))
+                except Exception:
+                    logging.warning("Travel map: failed to decode step polyline for %s", key)
+            if step_points:
+                decoded = step_points
+
+        if decoded:
+            polylines[key] = decoded
     return polylines
 
 
