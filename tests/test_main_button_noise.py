@@ -102,3 +102,21 @@ def test_single_press_still_processed(main_for_buttons, monkeypatch):
     assert result is False
     assert handled == []
     assert main_for_buttons._BUTTON_STATE["X"] is False
+
+
+def test_b_button_advances_to_next_screen(main_for_buttons):
+    # Provide a non-None display to allow the handler to run.
+    main_for_buttons.display = object()
+
+    assert main_for_buttons._handle_button_down("B") is True
+    assert main_for_buttons._skip_request_pending is True
+    assert main_for_buttons._manual_skip_event.is_set()
+
+
+def test_a_button_returns_to_previous_screen(main_for_buttons):
+    main_for_buttons.display = object()
+    main_for_buttons._screen_history[:] = ["first", "second", "third"]
+
+    assert main_for_buttons._handle_button_down("A") is True
+    assert main_for_buttons._pending_previous_screen_id == "second"
+    assert main_for_buttons._manual_skip_event.is_set()

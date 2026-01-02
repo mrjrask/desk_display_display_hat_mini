@@ -138,37 +138,47 @@ _screen_history_lock = threading.Lock()
 _dark_hours_active = False
 
 
+def _request_next_screen() -> bool:
+    """Request that the scheduler advance to the next eligible screen."""
+
+    global _skip_request_pending
+
+    logging.info("⏭️  Skip requested – advancing to next screen.")
+    _skip_request_pending = True
+    _manual_skip_event.set()
+    return True
+
+
+def _request_previous_screen() -> bool:
+    """Request that the scheduler return to the previously shown screen."""
+
+    global _pending_previous_screen_id
+
+    with _screen_history_lock:
+        previous_id = _screen_history[-2] if len(_screen_history) >= 2 else None
+
+    if not previous_id:
+        logging.info("⏮️  Previous screen requested, but no history is available.")
+        return False
+
+    logging.info("⏮️  Returning to previous screen '%s'.", previous_id)
+    _pending_previous_screen_id = previous_id
+    _manual_skip_event.set()
+    return True
+
+
 def _handle_button_down(name: str) -> bool:
     """React to a newly pressed control button."""
-
-    global _skip_request_pending, _pending_previous_screen_id
 
     name = name.upper()
     if display is None:
         return False
     if name == "A":
-        with _screen_history_lock:
-            previous_id = _screen_history[-2] if len(_screen_history) >= 2 else None
-        if not previous_id:
-            logging.info("⏮️  A button pressed, but no previous screen is available.")
-            return False
-        logging.info(
-            "⏮️  A button pressed – returning to previous screen '%s'.", previous_id
-        )
-        _pending_previous_screen_id = previous_id
-        _skip_request_pending = False
-        _manual_skip_event.set()
-        return True
+        return _request_previous_screen()
     if name == "B":
-        logging.info("⏭️  B button pressed – skipping to next screen.")
-        _skip_request_pending = True
-        _manual_skip_event.set()
-        return True
+        return _request_next_screen()
     if name == "X":
-        logging.info("⏭️  X button pressed – skipping to next screen.")
-        _skip_request_pending = True
-        _manual_skip_event.set()
-        return True
+        return _request_next_screen()
     if name == "Y":
         logging.info("🔁 Y button pressed – restarting desk_display service…")
         _restart_desk_display_service()
