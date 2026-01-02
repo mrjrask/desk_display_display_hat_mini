@@ -720,14 +720,22 @@ def next_game_from_schedule(
     if not candidates:
         return None
 
-    for parsed_date, sort_value, idx, entry in sorted(
-        candidates, key=lambda item: (item[1], item[0] or datetime.date.max, item[2])
-    ):
-        if parsed_date is not None and parsed_date < today:
-            continue
+    future_dated = [
+        (parsed_date, sort_value, idx, entry)
+        for parsed_date, sort_value, idx, entry in candidates
+        if parsed_date is not None and parsed_date >= today
+    ]
+
+    if future_dated:
+        parsed_date, _, _, entry = min(
+            future_dated, key=lambda item: (item[0], item[1], item[2])
+        )
         return entry
 
-    return None
+    parsed_date, _, _, entry = min(
+        candidates, key=lambda item: (item[1], item[0] or datetime.date.max, item[2])
+    )
+    return entry
 
 
 _LOGO_BRIGHTNESS_OVERRIDES: dict[tuple[str, str], float] = {

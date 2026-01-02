@@ -61,4 +61,31 @@ def test_next_game_falls_back_to_week_when_date_missing():
     finally:
         datetime.datetime = original
 
-    assert game["week"] == "Week 16"
+    assert game["week"] == "Week 17"
+
+
+def test_next_game_uses_game_number_when_no_future_dates():
+    schedule = [
+        {
+            "game_no": "19",
+            "week": "Week 19",
+            "date": "Sun, Dec 1",
+            "opponent": "Detroit Lions",
+            "home_away": "Home",
+            "time": "12:00PM",
+        },
+        {
+            "game_no": "20",
+            "week": "Week 20",
+            "date": "Sun, Dec 8",
+            "opponent": "Minnesota Vikings",
+            "home_away": "Away",
+            "time": "12:00PM",
+        },
+    ]
+
+    today = datetime.date(2025, 12, 31)
+
+    game = next_game_from_schedule(schedule, today)
+
+    assert game["game_no"] == "19"
