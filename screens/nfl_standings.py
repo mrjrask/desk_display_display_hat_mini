@@ -301,7 +301,7 @@ def _team_display_name(team: dict) -> str:
     base_name = team.get("name") or _team_name_for_abbr(team.get("abbr", ""))
     indicator = str(team.get("indicator") or "").strip()
     if indicator:
-        return f"{indicator} {base_name}".strip()
+        return f"{indicator} - {base_name}".strip()
     return base_name
 
 
