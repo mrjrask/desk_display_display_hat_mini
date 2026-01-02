@@ -789,7 +789,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                     context.display,
                     data,
                     os.path.join(context.image_dir, "nba/CHI.png"),
-                    "Central Division",
+                    "Western conf.",
                     transition=True,
                 ),
                 available=True,
