@@ -282,6 +282,29 @@ def _build_column_layout(team_names: Iterable[str] | None = None) -> dict[str, i
     return layout
 
 
+def _playoff_indicator(row: dict) -> str:
+    seed = _normalize_int(row.get("seed"))
+    playoff_text = str(row.get("playoff") or "").strip()
+    made_playoffs = bool(playoff_text) or seed > 0
+    if not made_playoffs:
+        return ""
+
+    division_rank = _normalize_int(row.get("div_rank"))
+    if division_rank == 1:
+        return "Z"  # Clinched Division
+    if seed > 0:
+        return "Y"  # Clinched Wild Card (non-division seeds)
+    return "X"  # Clinched Playoff Berth (fallback)
+
+
+def _team_display_name(team: dict) -> str:
+    base_name = team.get("name") or _team_name_for_abbr(team.get("abbr", ""))
+    indicator = str(team.get("indicator") or "").strip()
+    if indicator:
+        return f"{indicator} {base_name}".strip()
+    return base_name
+
+
 def _load_logo_for_height(
     abbr: str, height: int, cache: Dict[str, Optional[Image.Image]]
 ) -> Optional[Image.Image]:
@@ -416,6 +439,7 @@ def _build_standings_from_rows(rows: Iterable[dict], *, conference_key: str) -> 
             "losses": losses,
             "ties": ties,
             "order": order if order > 0 else len(bucket) + 1,
+            "indicator": _playoff_indicator(row),
         }
         bucket.append(entry)
 
@@ -1011,7 +1035,7 @@ def _render_conference(title: str, division_order: List[str], standings: Dict[st
     team_names: List[str] = []
     for division in division_order:
         for team in standings.get(division, []) or []:
-            name = team.get("name") or _team_name_for_abbr(team.get("abbr", ""))
+            name = _team_display_name(team)
             if name:
                 team_names.append(name)
 
@@ -1063,8 +1087,7 @@ def _render_conference(title: str, division_order: List[str], standings: Dict[st
         # Team rows
         for team in teams:
             abbr = team.get("abbr", "")
-            team_name = team.get("name") or _team_name_for_abbr(abbr)
-            display_text = team_name or abbr
+            display_text = _team_display_name(team) or abbr
             wins = str(team.get("wins", 0))
             losses = str(team.get("losses", 0))
             ties = str(team.get("ties", 0))
