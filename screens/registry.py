@@ -778,8 +778,9 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         register_logo("bulls logo")
         bulls_next = bulls.get("next")
         bulls_next_home = bulls.get("next_home")
-        if _games_match(bulls_next_home, bulls_next):
-            bulls_next_home = None
+        # Always show the Bulls "next home" card, even if the next game is at home.
+        # This avoids dropping the screen when the next home matchup matches the
+        # general "next" game entry.
 
         if bulls.get("stand"):
             register(
