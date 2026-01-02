@@ -984,10 +984,16 @@ def fetch_bulls_next_game():
 
 def fetch_bulls_next_home_game():
     try:
+        next_game = fetch_bulls_next_game()
         fallback_game = None
+        skipped_next_home = False
         for game in _future_bulls_games(_NBA_LOOKAHEAD_DAYS):
             teams = game.get("teams") or {}
             if not _is_bulls_team(teams.get("home")):
+                continue
+
+            if next_game and _same_game(game, next_game):
+                skipped_next_home = True
                 continue
 
             state = _nba_game_state(game)
@@ -995,7 +1001,7 @@ def fetch_bulls_next_home_game():
                 return game
             if fallback_game is None and state not in {"final", "postponed"}:
                 fallback_game = game
-        return fallback_game
+        return fallback_game if fallback_game or not skipped_next_home else None
     except Exception as exc:
         logging.error("Error fetching next Bulls home game: %s", exc)
     return None
