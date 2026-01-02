@@ -147,21 +147,21 @@ def _handle_button_down(name: str) -> bool:
     if display is None:
         return False
     if name == "A":
-        logging.info("⏭️  A button pressed – skipping to next screen.")
-        _skip_request_pending = True
-        _manual_skip_event.set()
-        return True
-    if name == "B":
         with _screen_history_lock:
             previous_id = _screen_history[-2] if len(_screen_history) >= 2 else None
         if not previous_id:
-            logging.info("⏮️  B button pressed, but no previous screen is available.")
+            logging.info("⏮️  A button pressed, but no previous screen is available.")
             return False
         logging.info(
-            "⏮️  B button pressed – returning to previous screen '%s'.", previous_id
+            "⏮️  A button pressed – returning to previous screen '%s'.", previous_id
         )
         _pending_previous_screen_id = previous_id
         _skip_request_pending = False
+        _manual_skip_event.set()
+        return True
+    if name == "B":
+        logging.info("⏭️  B button pressed – skipping to next screen.")
+        _skip_request_pending = True
         _manual_skip_event.set()
         return True
     if name == "X":
