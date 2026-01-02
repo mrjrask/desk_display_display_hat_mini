@@ -22,6 +22,19 @@ elif command -v python >/dev/null 2>&1; then
   python_bin="$(command -v python)"
 fi
 
+# Ask the running service to stop scheduling new screens immediately.
+if command -v systemctl >/dev/null 2>&1; then
+  SERVICE_NAME="desk_display.service"
+  main_pid="$(systemctl show -p MainPID --value "$SERVICE_NAME" 2>/dev/null || true)"
+  if [[ -n "${main_pid}" && "${main_pid}" != "0" ]]; then
+    echo "    → Requesting ${SERVICE_NAME} shutdown (SIGTERM to PID ${main_pid})…"
+    kill -TERM "${main_pid}" 2>/dev/null || true
+    # Give the process a brief moment to halt screen rotation before we touch
+    # the display directly.
+    sleep 1
+  fi
+fi
+
 # 1) Clear the display before touching the filesystem
 echo "    → Clearing display…"
 # Force headless mode so cleanup doesn't fight a still-shutting-down service
