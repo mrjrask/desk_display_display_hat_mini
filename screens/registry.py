@@ -42,6 +42,7 @@ from screens.draw_weather import (
     draw_weather_screen_1,
     draw_weather_screen_2,
 )
+from screens.draw_nixie import draw_nixie
 from screens.draw_date_time import draw_date, draw_time
 from screens.mlb_schedule import (
     draw_box_score,
@@ -247,6 +248,7 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
 
     register("date", lambda: draw_date(context.display, transition=False))
     register("time", lambda: draw_time(context.display, transition=True))
+    register("nixie", lambda: draw_nixie(context.display, transition=True))
 
     weather_data = context.cache.get("weather")
     weather_logo = context.logos.get("weather logo")
