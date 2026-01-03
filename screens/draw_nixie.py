@@ -13,7 +13,7 @@ from typing import Dict, Iterable, Optional, Sequence
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
-from config import HEIGHT, WIDTH, TIMES_SQUARE_FONT_PATH
+from config import HEIGHT, WIDTH, SCREEN_DELAY, TIMES_SQUARE_FONT_PATH
 from utils import ScreenImage, clear_display, log_call
 
 BACKGROUND_COLOR = (0, 0, 0)
@@ -379,17 +379,34 @@ def _play_flicker(display, base: Image.Image) -> None:
 def draw_nixie(display, transition: bool = False):
     frame = _compose_frame()
 
-    if transition:
+    if transition and not hasattr(display, "image"):
         return frame
 
     clear_display(display)
-    try:
-        display.image(frame)
-        if hasattr(display, "show"):
-            display.show()
-    except Exception:  # pragma: no cover - defensive refresh guard
-        logging.exception("Failed to render Nixie clock")
-        return ScreenImage(frame, displayed=False)
 
-    _play_flicker(display, frame)
-    return ScreenImage(frame, displayed=True)
+    last_frame = frame
+    end_time = time.monotonic() + max(1, SCREEN_DELAY)
+    last_second = None
+
+    while True:
+        now = dt.datetime.now()
+        if now.second != last_second:
+            last_second = now.second
+            last_frame = _compose_frame(now)
+            try:
+                display.image(last_frame)
+                if hasattr(display, "show"):
+                    display.show()
+            except Exception:  # pragma: no cover - defensive refresh guard
+                logging.exception("Failed to render Nixie clock")
+                return ScreenImage(last_frame, displayed=False)
+
+            if not transition:
+                _play_flicker(display, last_frame)
+
+        remaining = end_time - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(0.25, remaining))
+
+    return ScreenImage(last_frame, displayed=True)
