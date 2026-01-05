@@ -1119,42 +1119,17 @@ def _draw_next_card(
     away_logo = _load_logo_png(away_tri, height=logo_h)
     home_logo = _load_logo_png(home_tri, height=logo_h)
 
+    frame_w = standard_next_game_logo_frame_width(logo_h, (away_logo, home_logo))
     gap = 10
 
     # Center '@' between logos
     at_txt = "@"
     at_w   = _text_w(d, at_txt, FONT_NEXT_OPP)
     at_h   = _text_h(d, FONT_NEXT_OPP)
+    block_h = logo_h if (away_logo or home_logo) else at_h
 
-    frame_w = standard_next_game_logo_frame_width(logo_h, (away_logo, home_logo))
-    max_frame_w = max(1, (WIDTH - (gap * 2) - at_w) // 2)
-    if frame_w > max_frame_w:
-        scale = max_frame_w / float(frame_w)
-        logo_h = max(1, int(round(logo_h * scale)))
-
-        def _scale_logo(logo):
-            if not logo:
-                return None
-            new_w = max(1, int(round(logo.width * scale)))
-            new_h = max(1, int(round(logo.height * scale)))
-            return logo.resize((new_w, new_h), Image.ANTIALIAS)
-
-        away_logo = _scale_logo(away_logo)
-        home_logo = _scale_logo(home_logo)
-        frame_w = min(max_frame_w, standard_next_game_logo_frame_width(logo_h, (away_logo, home_logo)))
-
-    block_h = max(
-        (away_logo.height if away_logo else 0),
-        (home_logo.height if home_logo else 0),
-        at_h,
-    )
     total_w = (frame_w * 2) + (gap * 2) + at_w
     start_x = max(0, (WIDTH - total_w) // 2)
-
-    # Compute a row top such that the logos row is **centered vertically**.
-    # But never allow overlap with top content nor with bottom label.
-    centered_top = (HEIGHT - block_h) // 2
-    row_y = max(y_top + 1, min(centered_top, bottom_y - block_h - 1))
 
     left_x = start_x
     at_x   = left_x + frame_w + gap
@@ -1165,7 +1140,7 @@ def _draw_next_card(
     def _paste_logo_or_text(logo, tri, frame_x, fallback_label):
         if logo:
             lx = frame_x + (frame_w - logo.width)//2
-            ly = row_y + (block_h - logo.height)//2
+            ly = row_y + (logo_h - logo.height)//2
             img.paste(logo, (lx, ly), logo)
             return
         txt = fallback_label

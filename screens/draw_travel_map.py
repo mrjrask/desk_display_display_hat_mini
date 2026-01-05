@@ -37,10 +37,20 @@ ROUTE_ICON_HEIGHT = 26
 MAP_MARGIN = 12
 LEGEND_GAP = 6
 BACKGROUND_COLOR = (18, 18, 18)
-MAP_COLOR = (60, 60, 60)
+MAP_COLOR = (36, 36, 36)
 STATIC_MAP_TIMEOUT = 6
 STATIC_MAP_USER_AGENT = "desk-display/traffic-map"
 MAP_ZOOM_LEVELS = range(15, 6, -1)
+MAP_DARK_STYLES = (
+    "style=element:geometry|color:0x1b1b1b",
+    "style=element:labels.text.fill|color:0xffffff",
+    "style=element:labels.text.stroke|color:0x000000|lightness:80",
+    "style=feature:road|element:geometry|color:0x303030",
+    "style=feature:road.highway|element:geometry|color:0x3a3a3a",
+    "style=feature:poi|visibility:off",
+    "style=feature:transit|visibility:off",
+    "style=feature:water|element:geometry|color:0x0d171f",
+)
 
 
 def _decode_polyline(polyline: str) -> List[Tuple[float, float]]:
@@ -114,20 +124,82 @@ def _traffic_color(route: Optional[dict]) -> Tuple[int, int, int]:
     baseline = route.get("_duration_base_sec")
     if traffic and baseline:
         ratio = traffic / baseline if baseline else 1
-        if ratio <= 1.1:
-            return (40, 200, 120)
-        if ratio <= 1.35:
-            return (255, 195, 60)
-        return (240, 80, 80)
+        return _traffic_color_for_ratio(ratio)
 
     return (160, 160, 160)
 
 
-def _extract_polylines(routes: Dict[str, Optional[dict]]) -> Dict[str, List[Tuple[float, float]]]:
-    polylines: Dict[str, List[Tuple[float, float]]] = {}
+def _traffic_color_for_ratio(ratio: Optional[float]) -> Tuple[int, int, int]:
+    if ratio is None:
+        return (160, 160, 160)
+
+    if ratio <= 1.1:
+        return (40, 200, 120)
+    if ratio <= 1.35:
+        return (255, 195, 60)
+    return (240, 80, 80)
+
+
+def _route_ratio(route: Optional[dict]) -> Optional[float]:
+    if not route:
+        return None
+    traffic = route.get("_duration_sec")
+    baseline = route.get("_duration_base_sec")
+    if traffic and baseline:
+        return traffic / baseline if baseline else None
+    return None
+
+
+def _step_ratio(step: dict, fallback: Optional[float]) -> Optional[float]:
+    duration = (step.get("duration") or {}).get("value")
+    traffic = (step.get("duration_in_traffic") or {}).get("value")
+    baseline = duration
+    value = traffic or duration
+    if value and baseline:
+        return value / baseline
+    return fallback
+
+
+def _step_points(step: dict) -> List[Tuple[float, float]]:
+    if not isinstance(step, dict):
+        return []
+
+    polyline = step.get("polyline") if isinstance(step, dict) else None
+    encoded_step = None
+    if isinstance(polyline, dict):
+        encoded_step = polyline.get("points")
+    elif isinstance(polyline, str):
+        encoded_step = polyline
+    if not encoded_step or not isinstance(encoded_step, str):
+        return []
+    try:
+        return _decode_polyline(encoded_step)
+    except Exception:
+        logging.warning("Travel map: failed to decode step polyline")
+    return []
+
+
+def _extract_route_segments(
+    routes: Dict[str, Optional[dict]],
+) -> Dict[str, List[Tuple[List[Tuple[float, float]], Tuple[int, int, int]]]]:
+    """Return decoded route segments with per-step traffic colors."""
+
+    segments: Dict[str, List[Tuple[List[Tuple[float, float]], Tuple[int, int, int]]]] = {}
     for key, route in routes.items():
-        decoded: Optional[List[Tuple[float, float]]] = None
         if not route:
+            continue
+
+        route_ratio = _route_ratio(route)
+        steps = ((route.get("legs") or [{}])[0].get("steps") or [])
+        for step in steps:
+            points = _step_points(step)
+            if len(points) < 2:
+                continue
+            ratio = _step_ratio(step, route_ratio)
+            color = _traffic_color_for_ratio(ratio)
+            segments.setdefault(key, []).append((points, color))
+
+        if segments.get(key):
             continue
 
         overview = route.get("overview_polyline")
@@ -141,30 +213,25 @@ def _extract_polylines(routes: Dict[str, Optional[dict]]) -> Dict[str, List[Tupl
         if encoded and isinstance(encoded, str):
             try:
                 decoded = _decode_polyline(encoded)
+                color = _traffic_color(route)
+                segments[key] = [(decoded, color)]
             except Exception:
                 logging.warning("Travel map: failed to decode overview polyline for %s", key)
 
-        if decoded is None:
-            steps = ((route.get("legs") or [{}])[0].get("steps") or [])
-            step_points: List[Tuple[float, float]] = []
-            for step in steps:
-                polyline = step.get("polyline") if isinstance(step, dict) else None
-                encoded_step = None
-                if isinstance(polyline, dict):
-                    encoded_step = polyline.get("points")
-                elif isinstance(polyline, str):
-                    encoded_step = polyline
-                if not encoded_step or not isinstance(encoded_step, str):
-                    continue
-                try:
-                    step_points.extend(_decode_polyline(encoded_step))
-                except Exception:
-                    logging.warning("Travel map: failed to decode step polyline for %s", key)
-            if step_points:
-                decoded = step_points
+    return segments
 
-        if decoded:
-            polylines[key] = decoded
+
+def _extract_polylines(routes: Dict[str, Optional[dict]]) -> Dict[str, List[Tuple[float, float]]]:
+    """Backward-compatible helper for tests and ancillary callers."""
+
+    polylines: Dict[str, List[Tuple[float, float]]] = {}
+    segments = _extract_route_segments(routes)
+    for key, route_segments in segments.items():
+        combined: List[Tuple[float, float]] = []
+        for points, _ in route_segments:
+            combined.extend(points)
+        if combined:
+            polylines[key] = combined
     return polylines
 
 
@@ -233,7 +300,9 @@ def _fetch_base_map(
 
     url = (
         "https://maps.googleapis.com/maps/api/staticmap?"
-        f"center={lat},{lng}&zoom={zoom}&size={width}x{height}&maptype=roadmap&key={GOOGLE_MAPS_API_KEY}"
+        f"center={lat},{lng}&zoom={zoom}&size={width}x{height}&maptype=roadmap&"
+        + "&".join(MAP_DARK_STYLES)
+        + f"&key={GOOGLE_MAPS_API_KEY}"
     )
     headers = {"User-Agent": STATIC_MAP_USER_AGENT}
     try:
@@ -247,31 +316,27 @@ def _fetch_base_map(
 
 def _draw_routes(
     draw: ImageDraw.ImageDraw,
-    routes: Dict[str, Optional[dict]],
+    route_segments: Dict[str, List[Tuple[List[Tuple[float, float]], Tuple[int, int, int]]]],
     canvas_size: Tuple[int, int],
-    polylines: Optional[Dict[str, List[Tuple[float, float]]]] = None,
     map_view: Optional[Tuple[Tuple[float, float], int]] = None,
 ) -> None:
-    if polylines is None:
-        polylines = _extract_polylines(routes)
-
-    if not polylines:
+    if not route_segments:
         return
 
     if map_view:
         center, zoom = map_view
         projector = lambda pt: _project_to_map(pt, center, zoom, *canvas_size)
     else:
-        all_points = _flatten(polylines.values())
+        all_points = _flatten(points for segments in route_segments.values() for points, _ in segments)
         top_left, bottom_right = _bounds(all_points)
         projector = lambda pt: _project(pt, top_left, bottom_right, *canvas_size)
 
-    for key, points in polylines.items():
-        if len(points) < 2:
-            continue
-        color = _traffic_color(routes.get(key))
-        projected = [projector(pt) for pt in points]
-        draw.line(projected, fill=color, width=5, joint="curve")
+    for segments in route_segments.values():
+        for points, color in segments:
+            if len(points) < 2:
+                continue
+            projected = [projector(pt) for pt in points]
+            draw.line(projected, fill=color, width=5, joint="curve")
 
 
 def _compose_legend_entry(
@@ -309,8 +374,9 @@ def _compose_legend_entry(
 
 def _compose_travel_map(routes: Dict[str, Optional[dict]]) -> Image.Image:
     map_height = HEIGHT
-    polylines = _extract_polylines(routes)
-    map_view = _select_map_view(polylines.values(), (WIDTH, map_height), (LATITUDE, LONGITUDE))
+    route_segments = _extract_route_segments(routes)
+    polylines = [points for segments in route_segments.values() for points, _ in segments]
+    map_view = _select_map_view(polylines, (WIDTH, map_height), (LATITUDE, LONGITUDE))
 
     base_map = _fetch_base_map(map_view[0], map_view[1], (WIDTH, map_height))
     if base_map is None:
@@ -319,7 +385,7 @@ def _compose_travel_map(routes: Dict[str, Optional[dict]]) -> Image.Image:
         canvas = base_map
 
     draw = ImageDraw.Draw(canvas)
-    _draw_routes(draw, routes, (WIDTH, map_height), polylines=polylines, map_view=map_view)
+    _draw_routes(draw, route_segments, (WIDTH, map_height), map_view=map_view)
 
     return canvas
 

@@ -106,6 +106,7 @@ def show_bears_next_game(display, transition=False):
         logo_away = load_team_logo(NFL_LOGO_DIR, away_ab, height=logo_h)
         logo_home = load_team_logo(NFL_LOGO_DIR, home_ab, height=logo_h)
 
+        frame_w = standard_next_game_logo_frame_width(logo_h, (logo_away, logo_home))
         gap = 10
         at_symbol = "@"
         try:
@@ -115,28 +116,7 @@ def show_bears_next_game(display, transition=False):
             at_w, at_h = draw.textsize(at_symbol, font=config.FONT_TEAM_SPORTS)
             at_t = 0
 
-        frame_w = standard_next_game_logo_frame_width(logo_h, (logo_away, logo_home))
-        max_frame_w = max(1, (config.WIDTH - (gap * 2) - at_w) // 2)
-        if frame_w > max_frame_w:
-            scale = max_frame_w / float(frame_w)
-            logo_h = max(1, int(round(logo_h * scale)))
-
-            def _scale_logo(logo):
-                if not logo:
-                    return None
-                new_w = max(1, int(round(logo.width * scale)))
-                new_h = max(1, int(round(logo.height * scale)))
-                return logo.resize((new_w, new_h), Image.ANTIALIAS)
-
-            logo_away = _scale_logo(logo_away)
-            logo_home = _scale_logo(logo_home)
-            frame_w = min(max_frame_w, standard_next_game_logo_frame_width(logo_h, (logo_away, logo_home)))
-
-        block_h = max(
-            (logo_away.height if logo_away else 0),
-            (logo_home.height if logo_home else 0),
-            at_h,
-        )
+        block_h = logo_h if (logo_away or logo_home) else at_h
         total_w = (frame_w * 2) + (gap * 2) + at_w
         x0 = max(0, (config.WIDTH - total_w) // 2)
 
@@ -151,7 +131,7 @@ def show_bears_next_game(display, transition=False):
             if not logo:
                 return
             lx = frame_x + (frame_w - logo.width)//2
-            ly = y_logo + (block_h - logo.height)//2
+            ly = y_logo + (logo_h - logo.height)//2
             img.paste(logo, (lx, ly), logo)
 
         _paste_logo(logo_away, left_x)
