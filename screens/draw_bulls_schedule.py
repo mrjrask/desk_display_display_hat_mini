@@ -39,6 +39,7 @@ from utils import (
     clear_display,
     LED_INDICATOR_LEVEL,
     ScreenImage,
+    standard_next_game_logo_frame_width,
     standard_next_game_logo_height,
     temporary_display_led,
 )
@@ -666,33 +667,33 @@ def _render_next_game(game: Dict, *, title: str) -> Image.Image:
     logo_left  = _load_logo_png(away["tri"], logo_h) if away else None
     logo_right = _load_logo_png(home["tri"], logo_h) if home else None
 
-    gap_between_logos = 28  # includes space for '@'
+    frame_w = standard_next_game_logo_frame_width(logo_h, (logo_left, logo_right))
+    gap = 10
     at_symbol = "@"
     at_font = FONT_ABBR
 
-    lw = logo_left.width if logo_left else 0
-    rw = logo_right.width if logo_right else 0
     at_w, at_h, at_l, at_t = _measure(draw, at_symbol, at_font)
-    total_w = lw + gap_between_logos + at_w + gap_between_logos + rw
+    block_h = logo_h if (logo_left or logo_right) else at_h
+    total_w = (frame_w * 2) + (gap * 2) + at_w
 
     x = max(0, (WIDTH - total_w) // 2)
     y2 = y + 6
-    baseline_y = y2 + max(0, (logo_h - at_h) // 2) - at_t
+    baseline_y = y2 + (block_h - at_h) // 2 - at_t
 
-    # Left logo
-    cur_x = x
-    if logo_left:
-        img.paste(logo_left, (cur_x, y2), logo_left)
-        cur_x += lw
+    left_x = x
+    at_x = left_x + frame_w + gap
+    right_x = at_x + at_w + gap
 
-    # Gap then '@' then gap
-    cur_x += gap_between_logos
-    draw.text((cur_x, baseline_y), at_symbol, font=at_font, fill=TEXT_COLOR)
-    cur_x += at_w + gap_between_logos
+    def _paste_logo(logo, frame_x):
+        if not logo:
+            return
+        lx = frame_x + (frame_w - logo.width) // 2
+        ly = y2 + (logo_h - logo.height) // 2
+        img.paste(logo, (lx, ly), logo)
 
-    # Right logo
-    if logo_right:
-        img.paste(logo_right, (cur_x, y2), logo_right)
+    _paste_logo(logo_left, left_x)
+    draw.text((at_x, baseline_y), at_symbol, font=at_font, fill=TEXT_COLOR)
+    _paste_logo(logo_right, right_x)
 
     if footer:
         by = HEIGHT - _text_h(draw, FONT_BOTTOM) - BOTTOM_LINE_MARGIN
