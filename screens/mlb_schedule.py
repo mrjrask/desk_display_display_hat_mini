@@ -27,6 +27,7 @@ from utils import (
     get_mlb_abbreviation,
     log_call,
     load_team_logo,
+    standard_next_game_logo_frame_width,
     standard_next_game_logo_height,
     temporary_display_led,
     wrap_text,
@@ -556,34 +557,33 @@ def draw_sports_screen(display, game, title, transition=False):
     logo_away = load_logo_for_tm(away_tm, logo_h)
     logo_home = load_logo_for_tm(home_tm, logo_h)
 
-    elems = []
-    if logo_away: elems.append(("img", logo_away))
-    elems.append(("text", "@"))
-    if logo_home: elems.append(("img", logo_home))
+    frame_w = standard_next_game_logo_frame_width(logo_h, (logo_away, logo_home))
+    gap = 10
 
-    spacing  = 8
-    widths_el = [
-        (obj.width if tp=="img" else draw.textsize(obj, font=FONT_TEAM_SPORTS)[0])
-        for tp,obj in elems
-    ]
-    total_el_w = sum(widths_el) + spacing*(len(widths_el)-1)
-    x0 = (WIDTH - total_el_w)//2
+    at_txt = "@"
+    at_w, at_h = draw.textsize(at_txt, font=FONT_TEAM_SPORTS)
+    block_h = logo_h if (logo_away or logo_home) else at_h
 
-    block_h = logo_h if elems else draw.textsize("@", font=FONT_TEAM_SPORTS)[1]
     centered_top = (HEIGHT - block_h) // 2
     row_y = max(y_text + 1, min(centered_top, bottom_y - block_h - 1))
 
-    x = x0
-    for tp, obj in elems:
-        if tp=="img":
-            paste_y = row_y + (block_h - obj.height)//2
-            img.paste(obj, (x, paste_y), obj)
-            x += obj.width + spacing
-        else:
-            w_t, h_t = draw.textsize(obj, font=FONT_TEAM_SPORTS)
-            y_o = row_y + (block_h - h_t)//2
-            draw.text((x, y_o), obj, font=FONT_TEAM_SPORTS, fill=(255,255,255))
-            x += w_t + spacing
+    total_w = frame_w * 2 + (gap * 2) + at_w
+    start_x = max(0, (WIDTH - total_w) // 2)
+
+    left_x = start_x
+    at_x = left_x + frame_w + gap
+    right_x = at_x + at_w + gap
+
+    def _paste_logo(logo, frame_x):
+        if not logo:
+            return
+        lx = frame_x + (frame_w - logo.width) // 2
+        ly = row_y + (logo_h - logo.height) // 2
+        img.paste(logo, (lx, ly), logo)
+
+    _paste_logo(logo_away, left_x)
+    draw.text((at_x, row_y + (block_h - at_h)//2), at_txt, font=FONT_TEAM_SPORTS, fill=(255,255,255))
+    _paste_logo(logo_home, right_x)
 
     _center_bottom_text(draw, bottom, FONT_DATE_SPORTS)
 

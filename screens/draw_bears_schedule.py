@@ -19,6 +19,7 @@ from config import BEARS_BOTTOM_MARGIN, BEARS_SCHEDULE, NFL_TEAM_ABBREVIATIONS
 from utils import (
     load_team_logo,
     next_game_from_schedule,
+    standard_next_game_logo_frame_width,
     standard_next_game_logo_height,
     wrap_text,
 )
@@ -54,7 +55,7 @@ def show_bears_next_game(display, transition=False):
     if game:
         opp = game["opponent"]
         ha  = game["home_away"].lower()
-        prefix = "@" if ha=="away" else "vs."
+        prefix = "@" if ha == "away" else "vs."
 
         # Opponent text (up to 2 lines)
         lines  = wrap_text(f"{prefix} {opp}", config.FONT_TEAM_SPORTS, config.WIDTH)[:2]
@@ -71,10 +72,10 @@ def show_bears_next_game(display, transition=False):
         opp_ab   = NFL_TEAM_ABBREVIATIONS.get(opp_key, opp_key[:3])
         if opp_ab == "was":
             opp_ab = "wsh"
-        if ha=="away":
-            away_ab, home_ab, loc_sym = bears_ab, opp_ab, "@"
+        if ha == "away":
+            away_ab, home_ab = bears_ab, opp_ab
         else:
-            away_ab, home_ab, loc_sym = opp_ab, bears_ab, "@"
+            away_ab, home_ab = opp_ab, bears_ab
 
         # Bottom line text — **no spaces around the dash**
         wk = (game.get("week") or "").strip()
@@ -105,32 +106,58 @@ def show_bears_next_game(display, transition=False):
         logo_away = load_team_logo(NFL_LOGO_DIR, away_ab, height=logo_h)
         logo_home = load_team_logo(NFL_LOGO_DIR, home_ab, height=logo_h)
 
-        elems   = [logo_away, loc_sym, logo_home]
-        spacing = 8
-        widths  = [
-            el.width if isinstance(el, Image.Image)
-            else draw.textsize(el, font=config.FONT_TEAM_SPORTS)[0]
-            for el in elems
-        ]
-        total_w = sum(widths) + spacing*(len(widths)-1)
-        x0      = (config.WIDTH - total_w)//2
+        gap = 10
+        at_symbol = "@"
+        try:
+            l, t, r, b = draw.textbbox((0, 0), at_symbol, font=config.FONT_TEAM_SPORTS)
+            at_w, at_h, at_t = r - l, b - t, t
+        except Exception:
+            at_w, at_h = draw.textsize(at_symbol, font=config.FONT_TEAM_SPORTS)
+            at_t = 0
+
+        frame_w = standard_next_game_logo_frame_width(logo_h, (logo_away, logo_home))
+        max_frame_w = max(1, (config.WIDTH - (gap * 2) - at_w) // 2)
+        if frame_w > max_frame_w:
+            scale = max_frame_w / float(frame_w)
+            logo_h = max(1, int(round(logo_h * scale)))
+
+            def _scale_logo(logo):
+                if not logo:
+                    return None
+                new_w = max(1, int(round(logo.width * scale)))
+                new_h = max(1, int(round(logo.height * scale)))
+                return logo.resize((new_w, new_h), Image.ANTIALIAS)
+
+            logo_away = _scale_logo(logo_away)
+            logo_home = _scale_logo(logo_home)
+            frame_w = min(max_frame_w, standard_next_game_logo_frame_width(logo_h, (logo_away, logo_home)))
+
+        block_h = max(
+            (logo_away.height if logo_away else 0),
+            (logo_home.height if logo_home else 0),
+            at_h,
+        )
+        total_w = (frame_w * 2) + (gap * 2) + at_w
+        x0 = max(0, (config.WIDTH - total_w) // 2)
 
         # Vertical center of logos/text block between opponent text and bottom label
-        block_h = logo_h
         y_logo = y_txt + ((bottom_y - y_txt) - block_h)//2
 
-        # Draw logos and '@'
-        x = x0
-        for el in elems:
-            if isinstance(el, Image.Image):
-                img.paste(el, (x, y_logo), el)
-                x += el.width + spacing
-            else:
-                w_sy, h_sy = draw.textsize(el, font=config.FONT_TEAM_SPORTS)
-                y_sy = y_logo + (block_h - h_sy)//2
-                draw.text((x, y_sy), el,
-                          font=config.FONT_TEAM_SPORTS, fill=(255,255,255))
-                x += w_sy + spacing
+        left_x = x0
+        at_x = left_x + frame_w + gap
+        right_x = at_x + at_w + gap
+
+        def _paste_logo(logo, frame_x):
+            if not logo:
+                return
+            lx = frame_x + (frame_w - logo.width)//2
+            ly = y_logo + (block_h - logo.height)//2
+            img.paste(logo, (lx, ly), logo)
+
+        _paste_logo(logo_away, left_x)
+        at_y = y_logo + (block_h - at_h)//2 - at_t
+        draw.text((at_x, at_y), at_symbol, font=config.FONT_TEAM_SPORTS, fill=(255,255,255))
+        _paste_logo(logo_home, right_x)
 
         # Draw bottom text
         if bottom:
