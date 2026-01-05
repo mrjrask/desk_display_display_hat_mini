@@ -1114,10 +1114,6 @@ def _draw_next_card(
     # Compute max logo height to fit between the top content and bottom line
     available_h = max(10, bottom_y - (y_top + 2))  # space for logos row
     logo_h = min(desired_logo_h, available_h)
-    # Compute a row top such that the logos row is **centered vertically**.
-    # But never allow overlap with top content nor with bottom label.
-    centered_top = (HEIGHT - logo_h) // 2
-    row_y = max(y_top + 1, min(centered_top, bottom_y - logo_h - 1))
 
     # Render logos at computed height (from local PNGs)
     away_logo = _load_logo_png(away_tri, height=logo_h)
