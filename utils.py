@@ -20,7 +20,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 import functools
 import logging
@@ -771,6 +771,21 @@ def standard_next_game_logo_height(panel_height: int) -> int:
     if panel_height >= 96:
         return 109
     return 89
+
+
+def standard_next_game_logo_frame_width(
+    logo_height: int, logos: Iterable[Image.Image | None] = ()
+) -> int:
+    """Width to reserve for each logo on next-game screens.
+
+    The returned width ensures that both logos share the same frame size, avoiding
+    "crowding" around the centered "@" regardless of each logo's aspect ratio.
+    """
+
+    # Slightly wider than tall to give horizontally oriented marks breathing room.
+    min_width = int(round(max(1, logo_height) * 1.1))
+    max_logo_width = max((logo.width for logo in logos if logo), default=0)
+    return max(min_width, max_logo_width)
 
 
 def load_team_logo(base_dir: str, abbr: str, height: int = 36) -> Image.Image | None:

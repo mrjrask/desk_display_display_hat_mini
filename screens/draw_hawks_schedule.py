@@ -56,6 +56,7 @@ from services.http_client import NHL_HEADERS, get_session, request_json
 from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
+    standard_next_game_logo_frame_width,
     standard_next_game_logo_height,
     temporary_display_led,
 )
@@ -1122,41 +1123,39 @@ def _draw_next_card(
     away_logo = _load_logo_png(away_tri, height=logo_h)
     home_logo = _load_logo_png(home_tri, height=logo_h)
 
+    frame_w = standard_next_game_logo_frame_width(logo_h, (away_logo, home_logo))
+    gap = 10
+
     # Center '@' between logos
     at_txt = "@"
     at_w   = _text_w(d, at_txt, FONT_NEXT_OPP)
     at_h   = _text_h(d, FONT_NEXT_OPP)
-    at_x   = (WIDTH - at_w) // 2
-    at_y   = row_y + (logo_h - at_h)//2
+    block_h = logo_h if (away_logo or home_logo) else at_h
+
+    total_w = (frame_w * 2) + (gap * 2) + at_w
+    start_x = max(0, (WIDTH - total_w) // 2)
+
+    left_x = start_x
+    at_x   = left_x + frame_w + gap
+    right_x = at_x + at_w + gap
+    at_y   = row_y + (block_h - at_h)//2
     d.text((at_x, at_y), at_txt, font=FONT_NEXT_OPP, fill="white")
 
-    # Away logo left of '@'
-    if away_logo:
-        aw, ah = away_logo.size
-        right_limit = at_x - 4
-        ax = max(2, right_limit - aw)
-        ay = row_y + (logo_h - ah)//2
-        img.paste(away_logo, (ax, ay), away_logo)
-    else:
-        # fallback text
-        txt = (away_tri or "AWY")
-        tx  = (at_x - 6) // 2 - _text_w(d, txt, FONT_NEXT_OPP)//2
-        ty  = row_y + (logo_h - at_h)//2
+    def _paste_logo_or_text(logo, tri, frame_x, fallback_label):
+        if logo:
+            lx = frame_x + (frame_w - logo.width)//2
+            ly = row_y + (logo_h - logo.height)//2
+            img.paste(logo, (lx, ly), logo)
+            return
+        txt = fallback_label
+        tw = _text_w(d, txt, FONT_NEXT_OPP)
+        th = _text_h(d, FONT_NEXT_OPP)
+        tx = frame_x + (frame_w - tw)//2
+        ty = row_y + (block_h - th)//2
         d.text((tx, ty), txt, font=FONT_NEXT_OPP, fill="white")
 
-    # Home logo right of '@'
-    if home_logo:
-        hw, hh = home_logo.size
-        left_limit = at_x + at_w + 4
-        hx = min(WIDTH - hw - 2, left_limit)
-        hy = row_y + (logo_h - hh)//2
-        img.paste(home_logo, (hx, hy), home_logo)
-    else:
-        # fallback text
-        txt = (home_tri or "HME")
-        tx  = at_x + at_w + ((WIDTH - (at_x + at_w)) // 2) - _text_w(d, txt, FONT_NEXT_OPP)//2
-        ty  = row_y + (logo_h - at_h)//2
-        d.text((tx, ty), txt, font=FONT_NEXT_OPP, fill="white")
+    _paste_logo_or_text(away_logo, away_tri, left_x, (away_tri or "AWY"))
+    _paste_logo_or_text(home_logo, home_tri, right_x, (home_tri or "HME"))
 
     # Bottom label (always includes time)
     if bottom_text:
