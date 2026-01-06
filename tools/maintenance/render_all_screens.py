@@ -23,6 +23,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+# Ensure the shared .env file is loaded before importing project modules so that
+# configuration values (API keys, flags, etc.) are available to the renderer.
+os.environ.setdefault("CONFIG_LOAD_DOTENV", "1")
+
 import data_fetch
 from config import (
     AHL_TEAM_TRICODE,
