@@ -125,19 +125,27 @@ def _build_wildcard_standings(
 def _wildcard_overview_divisions(
     wildcard_standings: dict[str, dict[str, list[dict]]]
 ) -> list[tuple[str, list[dict]]]:
-    divisions: list[tuple[str, list[dict]]] = []
-    for conf_key, label, division_order in (
-        (CONFERENCE_WEST_KEY, "West", DIVISION_ORDER_WEST),
-        (CONFERENCE_EAST_KEY, "East", DIVISION_ORDER_EAST),
-    ):
-        conference = wildcard_standings.get(conf_key, {})
-        teams: list[dict] = []
-        for division in division_order:
-            teams.extend(conference.get(division, []))
-        teams.extend(conference.get(WILDCARD_SECTION_NAME, []))
-        divisions.append((label, teams))
+    west = wildcard_standings.get(CONFERENCE_WEST_KEY, {})
+    east = wildcard_standings.get(CONFERENCE_EAST_KEY, {})
 
-    return divisions
+    west_wildcard = list(west.get(WILDCARD_SECTION_NAME, []))
+    west_wc_top_two = west_wildcard[:2]
+    west_wc_rest = west_wildcard[2:]
+
+    east_wildcard = list(east.get(WILDCARD_SECTION_NAME, []))
+    east_wc_top_two = east_wildcard[:2]
+    east_wc_rest = east_wildcard[2:]
+
+    return [
+        ("Central Top 3", west.get("Central", [])),
+        ("Pacific Top 3", west.get("Pacific", [])),
+        ("West Wild Card", west_wc_top_two),
+        ("West Wild Card Rest", west_wc_rest),
+        ("Metropolitan Top 3", east.get("Metropolitan", [])),
+        ("Atlantic Top 3", east.get("Atlantic", [])),
+        ("East Wild Card", east_wc_top_two),
+        ("East Wild Card Rest", east_wc_rest),
+    ]
 
 
 @log_call
