@@ -146,6 +146,7 @@ class Display:
         self._button_callback: Optional[Callable[[str], None]] = None
         self._backlight_level = 1.0
         self._backlight_lock = threading.Lock()
+        self._skip_event: Optional[threading.Event] = None
 
         if _FORCE_HEADLESS:
             logging.info(
@@ -187,6 +188,36 @@ class Display:
                 )
 
         _ACTIVE_DISPLAY = self
+
+    def register_skip_event(self, event: Optional[threading.Event]) -> None:
+        """Associate a skip event so long-running screens can bail out early."""
+
+        self._skip_event = event
+
+    def skip_requested(self) -> bool:
+        """Return True when a registered skip event is active."""
+
+        return bool(self._skip_event and self._skip_event.is_set())
+
+    def wait_for_skip(self, timeout: float, *, poll_interval: float = 0.05) -> bool:
+        """Sleep up to *timeout* seconds, returning True if a skip is requested."""
+
+        if not self._skip_event:
+            time.sleep(timeout)
+            return False
+
+        end = time.monotonic() + timeout
+        while True:
+            if self._skip_event.is_set():
+                return True
+
+            remaining = end - time.monotonic()
+            if remaining <= 0:
+                break
+
+            time.sleep(min(poll_interval, remaining))
+
+        return False
 
     def _update_display(self):
         if not display_updates_enabled():

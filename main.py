@@ -968,6 +968,7 @@ def init_runtime() -> None:
 
     # Display & Wi-Fi monitor
     display = Display()
+    display.register_skip_event(_manual_skip_event)
     try:
         display.set_button_callback(_button_event_callback)
     except Exception:
