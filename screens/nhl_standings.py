@@ -928,6 +928,17 @@ def _draw_text(draw: ImageDraw.ImageDraw, text: str, font, x: int, top: int, hei
         draw.text((x, y), text, font=font, fill=WHITE)
 
 
+def _draw_dotted_line(draw: ImageDraw.ImageDraw, y: int, dash: int = 6, gap: int = 4) -> None:
+    """Draw a horizontal dotted (dash-gap) line across the standings table."""
+
+    x = LEFT_MARGIN
+    right = WIDTH - RIGHT_MARGIN
+    while x < right:
+        x_end = min(x + dash, right)
+        draw.line((x, y, x_end, y), fill=WHITE)
+        x = x_end + gap
+
+
 def _truncate_text_to_width(text: str, font, max_width: int) -> str:
     if max_width <= 0 or not text:
         return text
@@ -961,6 +972,9 @@ def _draw_division(
     y += COLUMN_ROW_HEIGHT + COLUMN_GAP_BELOW
 
     for team in teams:
+        if team.get("_wildcard_cutoff_before"):
+            cutoff_y = max(y - max(1, ROW_SPACING // 2), top)
+            _draw_dotted_line(draw, cutoff_y)
         row_top = y
         abbr = team.get("abbr", "")
         logo = _load_logo_cached(abbr)
@@ -1027,11 +1041,14 @@ def _render_conference(
         teams = standings.get(division, [])
         if not teams:
             continue
+        division_title = (
+            division if division == WILDCARD_SECTION_NAME else f"{division} Division"
+        )
         y = _draw_division(
             img,
             draw,
             y,
-            f"{division} Division",
+            division_title,
             teams,
             column_layout,
             team_name_max_width,

@@ -97,9 +97,10 @@ def _conference_wildcard_standings(
         remaining.extend(teams[3:])
 
     remaining.sort(key=_wildcard_sort_key)
-    wildcards = remaining[:2]
-    if wildcards:
-        wildcard_conf[WILDCARD_SECTION_NAME] = wildcards
+    if len(remaining) >= 3:
+        remaining[2]["_wildcard_cutoff_before"] = True
+    if remaining:
+        wildcard_conf[WILDCARD_SECTION_NAME] = remaining
 
     return wildcard_conf
 
