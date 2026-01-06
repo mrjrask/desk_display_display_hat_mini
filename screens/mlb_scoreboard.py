@@ -47,6 +47,7 @@ from utils import (
     ScreenImage,
     clear_display,
     get_mlb_abbreviation,
+    get_mlb_tricode,
     load_team_logo,
     log_call,
 )
@@ -142,16 +143,12 @@ def _get_league_logo() -> Optional[Image.Image]:
 
 
 def _team_logo_abbr(team: dict) -> str:
-    for key in ("abbreviation", "fileCode"):
-        val = (team or {}).get(key)
-        if isinstance(val, str) and val.strip():
-            cand = val.strip().upper()
-            if os.path.exists(os.path.join(LOGO_DIR, f"{cand}.png")):
-                return cand
-    name = (team or {}).get("name", "")
-    abbr = get_mlb_abbreviation(name).upper()
-    if os.path.exists(os.path.join(LOGO_DIR, f"{abbr}.png")):
-        return abbr
+    tricode = get_mlb_tricode(team)
+    if not tricode:
+        return ""
+    cand = tricode.upper()
+    if os.path.exists(os.path.join(LOGO_DIR, f"{cand}.png")):
+        return cand
     return ""
 
 

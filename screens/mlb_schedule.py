@@ -25,6 +25,7 @@ from utils import (
     clear_display,
     get_team_display_name,
     get_mlb_abbreviation,
+    get_mlb_tricode,
     log_call,
     load_team_logo,
     standard_next_game_logo_frame_width,
@@ -530,7 +531,7 @@ def draw_sports_screen(display, game, title, transition=False):
 
     # logos + “@” inline
     def load_logo_for_tm(tm, height: int):
-        ab = get_mlb_abbreviation(get_team_display_name(tm)).upper()
+        ab = get_mlb_tricode(tm) or get_mlb_abbreviation(get_team_display_name(tm))
         if not ab or height <= 0:
             return None
         return load_team_logo(MLB_LOGOS_DIR, ab, height=height)

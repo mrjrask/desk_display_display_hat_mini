@@ -1217,7 +1217,7 @@ MLB_ABBREVIATIONS = {
     "San Diego Padres": "SD",
     "San Francisco Giants": "SF",
     "St. Louis Cardinals": "STL",
-    "Washington Nationals": "WAS",
+    "Washington Nationals": "WSH",
 
     # American League
     "Baltimore Orioles": "BAL",
@@ -1235,10 +1235,52 @@ MLB_ABBREVIATIONS = {
     "Tampa Bay Rays": "TB",
     "Texas Rangers": "TEX",
     "Toronto Blue Jays": "TOR",
+    "Las Vegas Athletics": "ATH",
+    "Athletics": "ATH",
 }
 
+MLB_LOGO_OVERRIDES = {
+    "CHC": "CUBS",
+    "CWS": "SOX",
+    "OAK": "ATH",
+}
+
+
+def _normalize_mlb_tricode(abbr: str | None) -> str:
+    if not isinstance(abbr, str):
+        return ""
+    normalized = abbr.strip().upper()
+    return MLB_LOGO_OVERRIDES.get(normalized, normalized)
+
+
 def get_mlb_abbreviation(team_name: str) -> str:
-    return MLB_ABBREVIATIONS.get(team_name, team_name)
+    abbr = MLB_ABBREVIATIONS.get(team_name)
+    if isinstance(abbr, str):
+        return _normalize_mlb_tricode(abbr)
+    return str(team_name)
+
+
+def get_mlb_tricode(team: dict | str | None) -> str:
+    if isinstance(team, dict):
+        for key in (
+            "triCode",
+            "tricode",
+            "teamTricode",
+            "abbreviation",
+            "teamCode",
+            "fileCode",
+        ):
+            val = team.get(key)
+            normalized = _normalize_mlb_tricode(val)
+            if normalized:
+                return normalized
+        team_name = team.get("name")
+        if isinstance(team_name, str):
+            return get_mlb_abbreviation(team_name).upper()
+        return ""
+    if isinstance(team, str):
+        return get_mlb_abbreviation(team).upper()
+    return ""
 
 # ─── Weather helpers ──────────────────────────────────────────────────────────
 def _draw_cloud(draw: ImageDraw.ImageDraw, center: tuple[float, float], radius: float, color: tuple[int, int, int]):
