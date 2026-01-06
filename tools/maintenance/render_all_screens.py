@@ -14,6 +14,11 @@ from typing import Dict, Iterable, Optional, Tuple
 
 from PIL import Image
 
+try:
+    RESAMPLE_LANCZOS = Image.Resampling.LANCZOS
+except AttributeError:  # Pillow<9 compatibility
+    RESAMPLE_LANCZOS = Image.LANCZOS
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -100,7 +105,7 @@ def load_logo(filename: str, height: int = LOGO_SCREEN_HEIGHT) -> Optional[Image
             target_mode = "RGBA" if has_transparency else "RGB"
             img = img.convert(target_mode)
             ratio = height / img.height if img.height else 1
-            resized = img.resize((int(img.width * ratio), height), Image.ANTIALIAS)
+            resized = img.resize((int(img.width * ratio), height), RESAMPLE_LANCZOS)
         return resized
     except Exception as exc:
         logging.warning("Logo load failed '%s': %s", filename, exc)
