@@ -541,8 +541,13 @@ def _gather_hourly_forecast(
         key=lambda h: h.get("dt") if isinstance(h, dict) and h.get("dt") is not None else float("inf")
     )
 
-    # Sample the forecast every two hours so each column represents a two-hour block
-    two_hourly_forecast = future_hours[::2]
+    # Sample the forecast every two hours so each column represents a two-hour block when there
+    # is enough data. If we only have a handful of entries, show them all to avoid dropping
+    # recent hours.
+    if len(future_hours) > hours:
+        two_hourly_forecast = future_hours[::2]
+    else:
+        two_hourly_forecast = future_hours
 
     forecast = []
     for idx, hour in enumerate(two_hourly_forecast[:hours]):
@@ -567,6 +572,12 @@ def _gather_hourly_forecast(
         hourly_weather = (weather_list or [{}])[0]
         is_snow = _is_snow_condition(hour)
 
+        feels_like_val = None
+        try:
+            feels_like_val = round(float(hour.get("feels_like", 0)))
+        except Exception:
+            feels_like_val = None
+
         entry = {
             "temp": round(hour.get("temp", 0)),
             "time": _format_hour_label(hour.get("dt"), index=(idx + 1) * 2),
@@ -577,6 +588,7 @@ def _gather_hourly_forecast(
             "wind_dir": wind_dir,
             "uvi": uvi_val,
             "is_snow": is_snow,
+            "feels_like": feels_like_val,
         }
         if weather_list:
             entry["icon"] = weather_list[0].get("icon")
@@ -725,6 +737,21 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
                     cond_w, cond_h = draw.textsize(display_text, font=FONT_WEATHER_DETAILS)
                 cond_y = icon_area_top + max(0, (icon_area_bottom - icon_area_top - cond_h) // 2)
                 draw.text((cx - cond_w // 2, cond_y), display_text, font=FONT_WEATHER_DETAILS, fill=(170, 180, 240))
+
+        feels_like = hour.get("feels_like")
+        feels_like_text = None
+        if feels_like is not None:
+            try:
+                feels_like_val = int(round(float(feels_like)))
+                feels_like_text = f"Feels {feels_like_val}°"
+            except Exception:
+                feels_like_text = None
+
+        if feels_like_text:
+            feels_font = FONT_WEATHER_DETAILS_TINY_LARGE
+            feels_w, feels_h = draw.textsize(feels_like_text, font=feels_font)
+            feels_y = max(icon_area_bottom + 2, stat_area_top - feels_h - 3)
+            draw.text((cx - feels_w // 2, feels_y), feels_like_text, font=feels_font, fill=(80, 80, 80))
 
         draw.line((x0 + 6, stat_area_top, x1 - 6, stat_area_top), fill=(50, 50, 80), width=1)
 
