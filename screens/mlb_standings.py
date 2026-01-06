@@ -43,6 +43,7 @@ OV_ROWS = 5           # max teams to show per division on Overview
 OVERVIEW_DROP_STEPS = 30
 OVERVIEW_DROP_STAGGER = 0.4  # fraction of steps before next rank begins dropping
 OVERVIEW_DROP_FRAME_DELAY = 0.02
+PAUSE_END = 0.5
 
 LEAGUE_DIVISION_IDS: Dict[int, Dict[str, int]] = {
     104: {"East": 204, "Central": 205, "West": 203},  # National League
