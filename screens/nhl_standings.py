@@ -167,6 +167,7 @@ _dns_block_until = 0.0
 DIVISION_ORDER_WEST = ["Central", "Pacific"]
 DIVISION_ORDER_EAST = ["Metropolitan", "Atlantic"]
 VALID_DIVISIONS = set(DIVISION_ORDER_WEST + DIVISION_ORDER_EAST)
+WILDCARD_SECTION_NAME = "Wild Card"
 
 STATS_COLUMNS = ("wins", "losses", "ot", "points")
 
@@ -249,7 +250,7 @@ COLUMN_HEADERS = [
     ("", "team", "left"),
     ("W", "wins", "right"),
     ("L", "losses", "right"),
-    ("O", "ot", "right"),
+    ("OT", "ot", "right"),
     ("PTS", "points", "right"),
 ]
 
@@ -414,12 +415,14 @@ def _normalize_int(value) -> int:
 
 def _division_sort_key(team: dict) -> tuple[int, int, int, int, str]:
     points = _normalize_int(team.get("points"))
+    regulation_wins = _normalize_int(team.get("regulationWins"))
     wins = _normalize_int(team.get("wins"))
     ot = _normalize_int(team.get("ot"))
     rank = _normalize_int(team.get("_rank", 99)) or 99
     abbr = str(team.get("abbr", ""))
-    # Sort by points (desc), wins (desc), overtime losses (asc), then fallback rank and abbr.
-    return (-points, -wins, ot, rank, abbr)
+    # Sort by points (desc), regulation wins (desc), overall wins (desc),
+    # overtime losses (asc), then fallback rank and abbr.
+    return (-points, -regulation_wins, -wins, ot, rank, abbr)
 
 
 def _normalize_conference_name(name: object) -> str:
@@ -555,6 +558,8 @@ def _fetch_standings_statsapi() -> Optional[dict[str, dict[str, list[dict]]]]:
                     "wins": _normalize_int(record_info.get("wins")),
                     "losses": _normalize_int(record_info.get("losses")),
                     "ot": _normalize_int(record_info.get("ot")),
+                    "gamesPlayed": _normalize_int(team_record.get("gamesPlayed")),
+                    "regulationWins": _normalize_int(team_record.get("regulationWins")),
                     "points": _normalize_int(team_record.get("points")),
                 }
             )
@@ -608,6 +613,8 @@ def _parse_grouped_standings(groups: Iterable[dict]) -> dict[str, dict[str, list
             wins = _extract_stat(row, ("wins", "w"))
             losses = _extract_stat(row, ("losses", "l"))
             ot = _extract_stat(row, ("ot", "otLosses", "otl"))
+            games_played = _extract_stat(row, ("gamesPlayed", "gp"))
+            regulation_wins = _extract_stat(row, ("regulationWins", "rw"))
             points = _extract_stat(row, ("points", "pts"))
 
             team_entry = {
@@ -616,6 +623,8 @@ def _parse_grouped_standings(groups: Iterable[dict]) -> dict[str, dict[str, list
                 "wins": wins,
                 "losses": losses,
                 "ot": ot,
+                "gamesPlayed": games_played or wins + losses + ot,
+                "regulationWins": regulation_wins,
                 "points": points,
                 "_rank": _extract_rank(row),
             }
@@ -624,6 +633,64 @@ def _parse_grouped_standings(groups: Iterable[dict]) -> dict[str, dict[str, list
             divisions.setdefault(division_name, []).append(team_entry)
 
     return conferences
+
+
+def _normalize_wildcard_team(team: dict) -> dict:
+    normalized = dict(team)
+    wins = _normalize_int(normalized.get("wins"))
+    losses = _normalize_int(normalized.get("losses"))
+    ot = _normalize_int(normalized.get("ot"))
+    normalized.setdefault("gamesPlayed", wins + losses + ot)
+    normalized.setdefault("regulationWins", 0)
+    return normalized
+
+
+def _wildcard_sort_key(team: dict) -> tuple[int, int, int, int, str]:
+    points = _normalize_int(team.get("points"))
+    regulation_wins = _normalize_int(team.get("regulationWins"))
+    wins = _normalize_int(team.get("wins"))
+    games_played = _normalize_int(team.get("gamesPlayed"))
+    abbr = str(team.get("abbr", ""))
+    # Sort by points (desc), regulation wins (desc), overall wins (desc),
+    # games played (asc), then abbreviation for determinism.
+    return (-points, -regulation_wins, -wins, games_played, abbr)
+
+
+def _conference_wildcard_standings(
+    conference: dict[str, list[dict]], division_order: Sequence[str]
+) -> dict[str, list[dict]]:
+    wildcard_conf: dict[str, list[dict]] = {}
+    remaining: list[dict] = []
+
+    for division in division_order:
+        teams = [_normalize_wildcard_team(team) for team in conference.get(division, [])]
+        teams.sort(key=_wildcard_sort_key)
+        wildcard_conf[division] = teams[:3]
+        remaining.extend(teams[3:])
+
+    remaining.sort(key=_wildcard_sort_key)
+    wildcards = remaining[:2]
+    if wildcards:
+        wildcard_conf[WILDCARD_SECTION_NAME] = wildcards
+
+    return wildcard_conf
+
+
+def _build_wildcard_standings(
+    standings_by_conf: dict[str, dict[str, list[dict]]]
+) -> dict[str, dict[str, list[dict]]]:
+    wildcard: dict[str, dict[str, list[dict]]] = {}
+    conference_orders = {
+        CONFERENCE_WEST_KEY: DIVISION_ORDER_WEST,
+        CONFERENCE_EAST_KEY: DIVISION_ORDER_EAST,
+    }
+
+    for conf_key, order in conference_orders.items():
+        conference = standings_by_conf.get(conf_key, {})
+        if conference:
+            wildcard[conf_key] = _conference_wildcard_standings(conference, order)
+
+    return wildcard
 
 
 def _parse_generic_standings(payload: object) -> dict[str, dict[str, list[dict]]]:
@@ -664,6 +731,8 @@ def _parse_generic_standings(payload: object) -> dict[str, dict[str, list[dict]]
         wins = _extract_stat(node, ("wins", "w"))
         losses = _extract_stat(node, ("losses", "l"))
         ot = _extract_stat(node, ("ot", "otLosses", "otl"))
+        games_played = _extract_stat(node, ("gamesPlayed", "gp"))
+        regulation_wins = _extract_stat(node, ("regulationWins", "rw"))
         points = _extract_stat(node, ("points", "pts"))
 
         key = (conference_name, division_name, abbr)
@@ -677,6 +746,8 @@ def _parse_generic_standings(payload: object) -> dict[str, dict[str, list[dict]]
             "wins": wins,
             "losses": losses,
             "ot": ot,
+            "gamesPlayed": games_played or wins + losses + ot,
+            "regulationWins": regulation_wins,
             "points": points,
             "_rank": _extract_rank(node),
         }
@@ -1155,6 +1226,24 @@ def _prepare_overview(divisions: List[tuple[str, List[dict]]]) -> tuple[Image.Im
     return base, row_positions
 
 
+def _wildcard_overview_divisions(
+    wildcard_standings: dict[str, dict[str, list[dict]]]
+) -> list[tuple[str, list[dict]]]:
+    divisions: list[tuple[str, list[dict]]] = []
+    for conf_key, label, division_order in (
+        (CONFERENCE_WEST_KEY, "West", DIVISION_ORDER_WEST),
+        (CONFERENCE_EAST_KEY, "East", DIVISION_ORDER_EAST),
+    ):
+        conference = wildcard_standings.get(conf_key, {})
+        teams: list[dict] = []
+        for division in division_order:
+            teams.extend(conference.get(division, []))
+        teams.extend(conference.get(WILDCARD_SECTION_NAME, []))
+        divisions.append((label, teams))
+
+    return divisions
+
+
 def _render_empty(title: str) -> Image.Image:
     img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
@@ -1195,13 +1284,10 @@ def _scroll_vertical(display, image: Image.Image) -> None:
 @log_call
 def draw_nhl_standings_overview(display, transition: bool = False) -> ScreenImage:
     standings_by_conf = _fetch_standings_data()
+    wildcard_standings = _build_wildcard_standings(standings_by_conf)
     _apply_style_overrides("NHL Standings Overview")
 
-    divisions: List[tuple[str, List[dict]]] = []
-    for conference_key, division_name, label in OVERVIEW_DIVISIONS:
-        conference = standings_by_conf.get(conference_key, {})
-        teams = conference.get(division_name, [])
-        divisions.append((label, teams))
+    divisions: List[tuple[str, List[dict]]] = _wildcard_overview_divisions(wildcard_standings)
 
     if not any(teams for _, teams in divisions):
         clear_display(display)
@@ -1226,9 +1312,12 @@ def draw_nhl_standings_overview(display, transition: bool = False) -> ScreenImag
 @log_call
 def draw_nhl_standings_west(display, transition: bool = False) -> ScreenImage:
     standings_by_conf = _fetch_standings_data()
+    wildcard_standings = _build_wildcard_standings(standings_by_conf)
     _apply_style_overrides("NHL Standings West")
-    conference = standings_by_conf.get(CONFERENCE_WEST_KEY, {})
+    conference = wildcard_standings.get(CONFERENCE_WEST_KEY, {})
     divisions = [d for d in DIVISION_ORDER_WEST if conference.get(d)]
+    if conference.get(WILDCARD_SECTION_NAME):
+        divisions.append(WILDCARD_SECTION_NAME)
     if not divisions:
         clear_display(display)
         img = _render_empty(TITLE_WEST)
@@ -1246,9 +1335,12 @@ def draw_nhl_standings_west(display, transition: bool = False) -> ScreenImage:
 @log_call
 def draw_nhl_standings_east(display, transition: bool = False) -> ScreenImage:
     standings_by_conf = _fetch_standings_data()
+    wildcard_standings = _build_wildcard_standings(standings_by_conf)
     _apply_style_overrides("NHL Standings East")
-    conference = standings_by_conf.get(CONFERENCE_EAST_KEY, {})
+    conference = wildcard_standings.get(CONFERENCE_EAST_KEY, {})
     divisions = [d for d in DIVISION_ORDER_EAST if conference.get(d)]
+    if conference.get(WILDCARD_SECTION_NAME):
+        divisions.append(WILDCARD_SECTION_NAME)
     if not divisions:
         clear_display(display)
         img = _render_empty(TITLE_EAST)
