@@ -151,7 +151,15 @@ def _push(
         except Exception as e:
             logging.exception("Failed to push image to display: %s", e)
 
-    _show_image()
+    if led_override:
+        try:
+            with temporary_display_led(*led_override):
+                _show_image()
+        except Exception:
+            logging.exception("Failed to set LED override; rendering without it.")
+            _show_image()
+    else:
+        _show_image()
     return ScreenImage(img, displayed=True, led_override=led_override)
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1127,6 +1135,9 @@ def _draw_next_card(
     at_w   = _text_w(d, at_txt, FONT_NEXT_OPP)
     at_h   = _text_h(d, FONT_NEXT_OPP)
     block_h = logo_h if (away_logo or home_logo) else at_h
+
+    centered_top = (HEIGHT - block_h) // 2
+    row_y = max(y_top + 1, min(centered_top, bottom_y - block_h - 1))
 
     total_w = (frame_w * 2) + (gap * 2) + at_w
     start_x = max(0, (WIDTH - total_w) // 2)
