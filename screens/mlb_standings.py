@@ -22,7 +22,7 @@ from config import (
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
 )
-from utils import clear_display, get_mlb_abbreviation, log_call
+from utils import clear_display, get_mlb_abbreviation, get_mlb_tricode, log_call
 from screens.mlb_team_standings import format_games_back
 
 # ─── Fonts / geometry from config ────────────────────────────────────────────
@@ -174,7 +174,7 @@ def draw_overview(display, title: str, league_id: int, transition=False):
         recs = fetch_division_records(league_id, div_id)[:OV_ROWS]
         logos: List[Optional[Image.Image]] = []
         for rec in recs:
-            abbr = get_mlb_abbreviation(rec["team"]["name"])
+            abbr = get_mlb_tricode(rec.get("team")) or get_mlb_abbreviation(rec["team"]["name"])
             logos.append(_load_logo(abbr, LOGO_SIZE))
         # ensure length OV_ROWS (pad with None if short)
         while len(logos) < OV_ROWS:
@@ -292,7 +292,7 @@ def draw_division_screen(display, league_id: int, division_id: int, title: str, 
         y = i * row_h
 
         # Logo
-        abbr = get_mlb_abbreviation(rec["team"]["name"])
+        abbr = get_mlb_tricode(rec.get("team")) or get_mlb_abbreviation(rec["team"]["name"])
         ic = _load_logo(abbr, LOGO_SIZE)
         if ic:
             logo_x = MARGIN + (LOGO_SIZE - ic.width)//2
@@ -382,7 +382,7 @@ def draw_wildcard_screen(display, league_id: int, title: str, transition=False):
         y = i * row_h
 
         # Team logo
-        abbr = get_mlb_abbreviation(rec["team"]["name"])
+        abbr = get_mlb_tricode(rec.get("team")) or get_mlb_abbreviation(rec["team"]["name"])
         ic = _load_logo(abbr, LOGO_SIZE)
         if ic:
             canvas.paste(ic, (MARGIN + (LOGO_SIZE - ic.width)//2,

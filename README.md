@@ -163,11 +163,11 @@ desk_display/
 ├─ templates/                     # Flask admin templates
 ├─ tests/
 ├─ images/
-│  ├─ mlb/<ABBR>.png              # MLB team logos (e.g., CUBS.png)
+│  ├─ mlb/<ABBR>.png              # MLB team logos (e.g., CHC.png)
 │  ├─ nfl/<ABBR>.png              # NFL logos used by Bears screen
 │  ├─ W_flag.webp / L_flag.webp   # animated WebP flags (preferred)
 │  ├─ mlb/W.png / mlb/L.png       # fallback PNG flags
-│  ├─ mlb/CUBS.png, mlb/SOX.png, nhl/CHI.png, mlb/MLB.png, weather.jpg, verano.jpg, nfl/chi.png
+│  ├─ mlb/CHC.png, mlb/CWS.png, nhl/CHI.png, mlb/MLB.png, weather.jpg, verano.jpg, nfl/chi.png
 └─ fonts/
    ├─ TimesSquare-m105.ttf
    ├─ DejaVuSans.ttf
@@ -387,7 +387,7 @@ INSIDE_SENSOR=pimoroni_bme280
 
 ## Images & Fonts
 
-- **MLB logos:** put team PNGs into `images/mlb/` named with your abbreviations (e.g., `CUBS.png`, `MIL.png`).
+- **MLB logos:** put team PNGs into `images/mlb/` named with the team tricode (e.g., `CUBS.png`, `MIL.png`).
 - **NFL logos:** for the Bears screen, `images/nfl/<abbr>.png` (e.g., `gb.png`, `min.png`).
 - **Cubs W/L flag:** use `images/W_flag.webp` and `images/L_flag.webp` (animated). If missing, the code falls back to `images/mlb/W.png` / `images/mlb/L.png`.
 - **Fonts:** copy `TimesSquare-m105.ttf`, `DejaVuSans.ttf`, and `DejaVuSans-Bold.ttf` into `fonts/`.
@@ -510,7 +510,7 @@ The update checker also logs **which files have diverged** when GitHub updates e
 ## Troubleshooting
 
 - **Too‑dark colors on date/time:** this project forces high‑brightness random RGB values to ensure legibility on the LCD.
-- **Missing logos:** you’ll see a warning like `Logo file missing: CUBS.png`. Add the correct file into `images/mlb/`.
+- **Missing logos:** you’ll see a warning like `Logo file missing: CHC.png`. Add the correct file into `images/mlb/`.
 - **No WebP animation:** ensure your Pillow build supports WebP (`pip3 show pillow`). PNG fallback will still work.
 - **Network/API errors:** WeatherKit/MLB requests are time‑bounded; transient timeouts are logged and screens are skipped gracefully.
 - **NHL statsapi diagnostics:** run `python3 nhl_scoreboard.py --diagnose-dns` to print resolver details, `/etc/resolv.conf`, and
