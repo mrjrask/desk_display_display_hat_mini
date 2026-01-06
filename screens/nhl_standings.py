@@ -1329,12 +1329,9 @@ def draw_nhl_standings_overview(display, transition: bool = False) -> ScreenImag
 @log_call
 def draw_nhl_standings_west(display, transition: bool = False) -> ScreenImage:
     standings_by_conf = _fetch_standings_data()
-    wildcard_standings = _build_wildcard_standings(standings_by_conf)
     _apply_style_overrides("NHL Standings West")
-    conference = wildcard_standings.get(CONFERENCE_WEST_KEY, {})
+    conference = standings_by_conf.get(CONFERENCE_WEST_KEY, {})
     divisions = [d for d in DIVISION_ORDER_WEST if conference.get(d)]
-    if conference.get(WILDCARD_SECTION_NAME):
-        divisions.append(WILDCARD_SECTION_NAME)
     if not divisions:
         clear_display(display)
         img = _render_empty(TITLE_WEST)
@@ -1352,12 +1349,9 @@ def draw_nhl_standings_west(display, transition: bool = False) -> ScreenImage:
 @log_call
 def draw_nhl_standings_east(display, transition: bool = False) -> ScreenImage:
     standings_by_conf = _fetch_standings_data()
-    wildcard_standings = _build_wildcard_standings(standings_by_conf)
     _apply_style_overrides("NHL Standings East")
-    conference = wildcard_standings.get(CONFERENCE_EAST_KEY, {})
+    conference = standings_by_conf.get(CONFERENCE_EAST_KEY, {})
     divisions = [d for d in DIVISION_ORDER_EAST if conference.get(d)]
-    if conference.get(WILDCARD_SECTION_NAME):
-        divisions.append(WILDCARD_SECTION_NAME)
     if not divisions:
         clear_display(display)
         img = _render_empty(TITLE_EAST)
