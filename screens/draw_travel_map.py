@@ -9,7 +9,7 @@ from io import BytesIO
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import requests
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageEnhance
 
 from config import (
     FONT_TRAVEL_HEADER,
@@ -38,6 +38,7 @@ MAP_MARGIN = 12
 LEGEND_GAP = 6
 BACKGROUND_COLOR = (18, 18, 18)
 MAP_COLOR = (36, 36, 36)
+MAP_BRIGHTNESS = 1.35
 STATIC_MAP_TIMEOUT = 6
 STATIC_MAP_USER_AGENT = "desk-display/traffic-map"
 MAP_ZOOM_LEVELS = range(15, 6, -1)
@@ -382,7 +383,7 @@ def _compose_travel_map(routes: Dict[str, Optional[dict]]) -> Image.Image:
     if base_map is None:
         canvas = Image.new("RGB", (WIDTH, map_height), MAP_COLOR)
     else:
-        canvas = base_map
+        canvas = ImageEnhance.Brightness(base_map).enhance(MAP_BRIGHTNESS)
 
     draw = ImageDraw.Draw(canvas)
     _draw_routes(draw, route_segments, (WIDTH, map_height), map_view=map_view)
