@@ -106,8 +106,8 @@ def show_bears_next_game(display, transition=False):
         logo_away = load_team_logo(NFL_LOGO_DIR, away_ab, height=logo_h)
         logo_home = load_team_logo(NFL_LOGO_DIR, home_ab, height=logo_h)
 
+        gap = max(6, min(10, config.WIDTH // 30))
         frame_w = standard_next_game_logo_frame_width(logo_h, (logo_away, logo_home))
-        gap = 10
         at_symbol = "@"
         try:
             l, t, r, b = draw.textbbox((0, 0), at_symbol, font=config.FONT_TEAM_SPORTS)
@@ -118,6 +118,32 @@ def show_bears_next_game(display, transition=False):
 
         block_h = logo_h if (logo_away or logo_home) else at_h
         total_w = (frame_w * 2) + (gap * 2) + at_w
+
+        if total_w > config.WIDTH:
+            gap = max(4, int(round(gap * (config.WIDTH / max(total_w, 1)))))
+            total_w = (frame_w * 2) + (gap * 2) + at_w
+
+        if total_w > config.WIDTH:
+            max_frame = max(1, (config.WIDTH - at_w - (gap * 2)) // 2)
+            if max_frame < frame_w:
+                scale = max_frame / frame_w if frame_w else 1.0
+                logo_h = max(1, int(round(logo_h * scale)))
+                logo_away = load_team_logo(NFL_LOGO_DIR, away_ab, height=logo_h)
+                logo_home = load_team_logo(NFL_LOGO_DIR, home_ab, height=logo_h)
+                frame_w = min(standard_next_game_logo_frame_width(logo_h, (logo_away, logo_home)), max_frame)
+
+            def _fit_logo(logo):
+                if logo and logo.width > frame_w:
+                    ratio = frame_w / logo.width
+                    new_h = max(1, int(round(logo.height * ratio)))
+                    return logo.resize((frame_w, new_h), Image.ANTIALIAS)
+                return logo
+
+            logo_away = _fit_logo(logo_away)
+            logo_home = _fit_logo(logo_home)
+            block_h = max((logo.height for logo in (logo_away, logo_home) if logo), default=at_h if not (logo_away or logo_home) else logo_h)
+            total_w = (frame_w * 2) + (gap * 2) + at_w
+
         x0 = max(0, (config.WIDTH - total_w) // 2)
 
         # Vertical center of logos/text block between opponent text and bottom label
