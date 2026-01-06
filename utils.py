@@ -684,16 +684,6 @@ def center_coords(
     cw, ch = content_size
     return ((w - cw)//2, (h - ch)//2 + y_offset)
 
-# ─── MLB Abbreviations ────────────────────────────────────────────────────────
-MLB_ABBREVIATIONS = {
-    "Chicago Cubs": "CUBS", "Atlanta Braves": "ATL", "Miami Marlins": "MIA",
-    # ... other teams ...
-}
-
-def get_mlb_abbreviation(team_name: str) -> str:
-    return MLB_ABBREVIATIONS.get(team_name, team_name)
-
-
 def _week_sort_value(week_label: str) -> float:
     """Return a numeric sort key for week labels.
 
@@ -1212,16 +1202,39 @@ def check_apt_updates() -> bool:
     return updates_available
 
 MLB_ABBREVIATIONS = {
-    "Chicago Cubs": "CUBS", "Atlanta Braves": "ATL",  "Miami Marlins": "MIA",
-    "New York Mets": "NYM", "Philadelphia Phillies": "PHI","Washington Nationals": "WAS",
-    "Cincinnati Reds": "CIN","Milwaukee Brewers": "MIL", "Pittsburgh Pirates": "PIT",
-    "St. Louis Cardinals": "STL","Arizona Diamondbacks": "ARI","Colorado Rockies": "COL",
-    "Los Angeles Dodgers": "LAD","San Diego Padres": "SD", "San Francisco Giants": "SF",
-    "Baltimore Orioles": "BAL","Boston Red Sox": "BOS",  "New York Yankees": "NYY",
-    "Tampa Bay Rays": "TB", "Toronto Blue Jays": "TOR", "Chicago White Sox": "SOX",
-    "Cleveland Guardians": "CLE","Detroit Tigers": "DET", "Kansas City Royals": "KC",
-    "Minnesota Twins": "MIN","Houston Astros": "HOU",    "Los Angeles Angels": "LAA",
-    "Athletics": "ATH",     "Seattle Mariners": "SEA","Texas Rangers": "TEX",
+    # National League
+    "Arizona Diamondbacks": "ARI",
+    "Atlanta Braves": "ATL",
+    "Chicago Cubs": "CUBS",
+    "Cincinnati Reds": "CIN",
+    "Colorado Rockies": "COL",
+    "Los Angeles Dodgers": "LAD",
+    "Miami Marlins": "MIA",
+    "Milwaukee Brewers": "MIL",
+    "New York Mets": "NYM",
+    "Philadelphia Phillies": "PHI",
+    "Pittsburgh Pirates": "PIT",
+    "San Diego Padres": "SD",
+    "San Francisco Giants": "SF",
+    "St. Louis Cardinals": "STL",
+    "Washington Nationals": "WAS",
+
+    # American League
+    "Baltimore Orioles": "BAL",
+    "Boston Red Sox": "BOS",
+    "Chicago White Sox": "SOX",
+    "Cleveland Guardians": "CLE",
+    "Detroit Tigers": "DET",
+    "Houston Astros": "HOU",
+    "Kansas City Royals": "KC",
+    "Los Angeles Angels": "LAA",
+    "Minnesota Twins": "MIN",
+    "New York Yankees": "NYY",
+    "Oakland Athletics": "ATH",
+    "Seattle Mariners": "SEA",
+    "Tampa Bay Rays": "TB",
+    "Texas Rangers": "TEX",
+    "Toronto Blue Jays": "TOR",
 }
 
 def get_mlb_abbreviation(team_name: str) -> str:
