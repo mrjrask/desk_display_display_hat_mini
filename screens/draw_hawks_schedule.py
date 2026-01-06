@@ -1115,20 +1115,62 @@ def _draw_next_card(
     available_h = max(10, bottom_y - (y_top + 2))  # space for logos row
     logo_h = min(desired_logo_h, available_h)
 
-    # Render logos at computed height (from local PNGs)
-    away_logo = _load_logo_png(away_tri, height=logo_h)
-    home_logo = _load_logo_png(home_tri, height=logo_h)
+    def _load_logos(height: int) -> Tuple[Optional[Image.Image], Optional[Image.Image]]:
+        return (
+            _load_logo_png(away_tri, height=height),
+            _load_logo_png(home_tri, height=height),
+        )
 
-    frame_w = standard_next_game_logo_frame_width(logo_h, (away_logo, home_logo))
-    gap = 10
+    gap = max(6, min(10, WIDTH // 30))
 
     # Center '@' between logos
     at_txt = "@"
     at_w   = _text_w(d, at_txt, FONT_NEXT_OPP)
     at_h   = _text_h(d, FONT_NEXT_OPP)
-    block_h = logo_h if (away_logo or home_logo) else at_h
 
-    total_w = (frame_w * 2) + (gap * 2) + at_w
+    def _layout_for_height(height: int):
+        logos = _load_logos(height)
+        frame_w = standard_next_game_logo_frame_width(height, logos)
+        block_h = height if any(logos) else at_h
+        total_w = (frame_w * 2) + (gap * 2) + at_w
+        return logos, frame_w, block_h, total_w
+
+    away_logo, home_logo, frame_w, block_h, total_w = (None, None, 0, 0, 0)
+    logos, frame_w, block_h, total_w = _layout_for_height(logo_h)
+    away_logo, home_logo = logos
+
+    if total_w > WIDTH:
+        gap = max(4, int(round(gap * (WIDTH / max(total_w, 1)))))
+        logos, frame_w, block_h, total_w = _layout_for_height(logo_h)
+        away_logo, home_logo = logos
+
+    if total_w > WIDTH:
+        max_frame = max(1, (WIDTH - at_w - (gap * 2)) // 2)
+        if max_frame < frame_w:
+            scale = max_frame / frame_w if frame_w else 1.0
+            logo_h = max(1, int(round(logo_h * scale)))
+            logos, frame_w, block_h, total_w = _layout_for_height(logo_h)
+            away_logo, home_logo = logos
+            frame_w = min(frame_w, max_frame)
+
+        # Ensure logos fit inside the new frame width
+        def _fit_logo(logo: Optional[Image.Image]) -> Optional[Image.Image]:
+            if logo and logo.width > frame_w:
+                ratio = frame_w / logo.width
+                new_h = max(1, int(round(logo.height * ratio)))
+                return logo.resize((frame_w, new_h), Image.ANTIALIAS)
+            return logo
+
+        away_logo = _fit_logo(away_logo)
+        home_logo = _fit_logo(home_logo)
+        if away_logo or home_logo:
+            block_h = max(logo.height for logo in (away_logo, home_logo) if logo)
+        else:
+            block_h = at_h
+        total_w = (frame_w * 2) + (gap * 2) + at_w
+
+    row_y = y_top + max(0, (available_h - block_h) // 2)
+
     start_x = max(0, (WIDTH - total_w) // 2)
 
     left_x = start_x
@@ -1232,20 +1274,20 @@ def draw_last_hawks_game(display, game, transition: bool=False):
     elif hawks_tri and hawks_tri == away_tri:
         hawks_score, opponent_score = away_score, home_score
 
-    if hawks_score is None or opponent_score is None:
-        teams = last_final.get("teams") or {}
-        raw_home = teams.get("home") or last_final.get("homeTeam") or {}
-        raw_away = teams.get("away") or last_final.get("awayTeam") or {}
+    def _team_id(entry: Dict) -> str:
+        info = entry.get("team") if isinstance(entry.get("team"), dict) else entry
+        return str(
+            info.get("id")
+            or info.get("teamId")
+            or info.get("team_id")
+            or info.get("teamID")
+            or "",
+        )
 
-        def _team_id(entry: Dict) -> str:
-            info = entry.get("team") if isinstance(entry.get("team"), dict) else entry
-            return str(
-                info.get("id")
-                or info.get("teamId")
-                or info.get("team_id")
-                or info.get("teamID")
-                or ""
-            )
+    if hawks_score is None or opponent_score is None:
+        teams_feed = (feed or {}).get("teams") or {}
+        raw_home = teams_feed.get("home") or {}
+        raw_away = teams_feed.get("away") or {}
 
         if team_id and _team_id(raw_home) == team_id:
             hawks_score = _as_int(raw_home.get("score"))
@@ -1253,6 +1295,19 @@ def draw_last_hawks_game(display, game, transition: bool=False):
         elif team_id and _team_id(raw_away) == team_id:
             hawks_score = _as_int(raw_away.get("score"))
             opponent_score = _as_int(raw_home.get("score"))
+
+    if hawks_score is None or opponent_score is None:
+        teams = last_final.get("teams") or {}
+        raw_home = teams.get("home") or last_final.get("homeTeam") or {}
+        raw_away = teams.get("away") or last_final.get("awayTeam") or {}
+
+        if team_id and _team_id(raw_home) == team_id:
+            hawks_score = _as_int(raw_home.get("score"))
+            opponent_score = _as_int(raw_away.get("score"))
+        elif team_id and _team_id(raw_away) == team_id:
+            hawks_score = _as_int(raw_away.get("score"))
+            opponent_score = _as_int(raw_home.get("score"))
+
 
     led_override: Optional[Tuple[float, float, float]] = None
     if (
