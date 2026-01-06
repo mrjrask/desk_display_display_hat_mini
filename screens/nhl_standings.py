@@ -1247,16 +1247,14 @@ def _wildcard_overview_divisions(
     wildcard_standings: dict[str, dict[str, list[dict]]]
 ) -> list[tuple[str, list[dict]]]:
     divisions: list[tuple[str, list[dict]]] = []
-    for conf_key, label, division_order in (
-        (CONFERENCE_WEST_KEY, "West", DIVISION_ORDER_WEST),
-        (CONFERENCE_EAST_KEY, "East", DIVISION_ORDER_EAST),
+    for division, conf_key in (
+        ("Central", CONFERENCE_WEST_KEY),
+        ("Pacific", CONFERENCE_WEST_KEY),
+        ("Metropolitan", CONFERENCE_EAST_KEY),
+        ("Atlantic", CONFERENCE_EAST_KEY),
     ):
         conference = wildcard_standings.get(conf_key, {})
-        teams: list[dict] = []
-        for division in division_order:
-            teams.extend(conference.get(division, []))
-        teams.extend(conference.get(WILDCARD_SECTION_NAME, []))
-        divisions.append((label, teams))
+        divisions.append((division, conference.get(division, [])))
 
     return divisions
 
