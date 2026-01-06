@@ -1148,7 +1148,7 @@ BEARS_SCHEDULE = [
     },
     {
         "game_no": "19",
-        "week": "Wild Card",
+        "week": "Wild Card ",
         "date": "Sat, Jan 10",
         "opponent": "Green Bay Packers",
         "home_away": "Home",
