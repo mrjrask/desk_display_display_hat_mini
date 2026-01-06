@@ -95,6 +95,11 @@ from screens.nhl_standings import (
     draw_nhl_standings_overview,
     draw_nhl_standings_west,
 )
+from screens.nhl_standings_v2 import (
+    draw_nhl_standings_east_v2,
+    draw_nhl_standings_overview_v2,
+    draw_nhl_standings_west_v2,
+)
 
 RenderCallable = Callable[[], Optional[Image.Image | ScreenImage]]
 
@@ -573,6 +578,18 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         register(
             "NHL Standings East",
             lambda: draw_nhl_standings_east(context.display, transition=True),
+        )
+        register(
+            "NHL Standings Overview v2",
+            lambda: draw_nhl_standings_overview_v2(context.display, transition=True),
+        )
+        register(
+            "NHL Standings West v2",
+            lambda: draw_nhl_standings_west_v2(context.display, transition=True),
+        )
+        register(
+            "NHL Standings East v2",
+            lambda: draw_nhl_standings_east_v2(context.display, transition=True),
         )
 
     wolves = context.cache.get("wolves") or {}
