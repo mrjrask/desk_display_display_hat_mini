@@ -1255,6 +1255,18 @@ def _render_overview(
     transition: bool,
     fallback_message: Optional[str],
 ) -> ScreenImage:
+    wait_for_skip = getattr(display, "wait_for_skip", None)
+    skip_requested = getattr(display, "skip_requested", None)
+
+    def _should_skip() -> bool:
+        return bool(skip_requested and skip_requested())
+
+    def _sleep(duration: float) -> bool:
+        if callable(wait_for_skip):
+            return bool(wait_for_skip(duration))
+        time.sleep(duration)
+        return False
+
     if not any(standings.get(division) for division in division_order):
         return _render_overview_fallback(display, title, fallback_message, transition)
 
@@ -1291,6 +1303,9 @@ def _render_overview(
         completed = [False] * len(schedule)
 
         for current_step in range(total_duration):
+            if _should_skip():
+                return ScreenImage(header.copy(), displayed=True)
+
             for idx, (start, drops) in enumerate(schedule):
                 if current_step >= start + steps and not completed[idx]:
                     placed.extend(
@@ -1336,7 +1351,8 @@ def _render_overview(
 
             display.image(frame)
             display.show()
-            time.sleep(OVERVIEW_FRAME_DELAY)
+            if _sleep(OVERVIEW_FRAME_DELAY):
+                return ScreenImage(header.copy(), displayed=True)
 
     final = header.copy()
     all_placements: List[Dict[str, Any]] = []
@@ -1348,7 +1364,7 @@ def _render_overview(
 
     display.image(final)
     display.show()
-    time.sleep(OVERVIEW_PAUSE_END)
+    _sleep(OVERVIEW_PAUSE_END)
     return ScreenImage(final, displayed=True)
 
 
