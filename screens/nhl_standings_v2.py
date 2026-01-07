@@ -128,21 +128,27 @@ def _wildcard_overview_divisions(
     west = wildcard_standings.get(CONFERENCE_WEST_KEY, {})
     east = wildcard_standings.get(CONFERENCE_EAST_KEY, {})
 
-    west_wildcard = list(west.get(WILDCARD_SECTION_NAME, []))
+    def _sort_by_points(teams: list[dict]) -> list[dict]:
+        return sorted(
+            teams,
+            key=lambda team: (-_normalize_int(team.get("points")), str(team.get("abbr", ""))),
+        )
+
+    west_wildcard = _sort_by_points(list(west.get(WILDCARD_SECTION_NAME, [])))
     west_wc_top_two = west_wildcard[:2]
     west_wc_rest = west_wildcard[2:]
 
-    east_wildcard = list(east.get(WILDCARD_SECTION_NAME, []))
+    east_wildcard = _sort_by_points(list(east.get(WILDCARD_SECTION_NAME, [])))
     east_wc_top_two = east_wildcard[:2]
     east_wc_rest = east_wildcard[2:]
 
     return [
-        ("Central Top 3", west.get("Central", [])),
-        ("Pacific Top 3", west.get("Pacific", [])),
+        ("Central Top 3", _sort_by_points(west.get("Central", []))),
+        ("Pacific Top 3", _sort_by_points(west.get("Pacific", []))),
         ("West Wild Card", west_wc_top_two),
         ("West Wild Card Rest", west_wc_rest),
-        ("Metropolitan Top 3", east.get("Metropolitan", [])),
-        ("Atlantic Top 3", east.get("Atlantic", [])),
+        ("Metropolitan Top 3", _sort_by_points(east.get("Metropolitan", []))),
+        ("Atlantic Top 3", _sort_by_points(east.get("Atlantic", []))),
         ("East Wild Card", east_wc_top_two),
         ("East Wild Card Rest", east_wc_rest),
     ]
