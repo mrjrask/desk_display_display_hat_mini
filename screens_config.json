@@ -58,14 +58,14 @@
       "frequency": 0,
       "alt": {
         "screen": "NFL Standings NFC",
-        "frequency": 0
+        "frequency": 1
       }
     },
     "NFL Overview AFC": {
       "frequency": 0,
       "alt": {
         "screen": "NFL Standings AFC",
-        "frequency": 0
+        "frequency": 1
       }
     },
     "NFL Standings NFC": 0,
