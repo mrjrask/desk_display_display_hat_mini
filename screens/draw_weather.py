@@ -743,14 +743,15 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         if feels_like is not None:
             try:
                 feels_like_val = int(round(float(feels_like)))
-                feels_like_text = f"Feels {feels_like_val}°"
+                feels_like_text = f"{feels_like_val}°"
             except Exception:
                 feels_like_text = None
 
         if feels_like_text:
             feels_font = FONT_WEATHER_DETAILS_TINY_LARGE
             feels_w, feels_h = draw.textsize(feels_like_text, font=feels_font)
-            feels_y = max(icon_area_bottom + 2, stat_area_top - feels_h - 3)
+            feels_y = temp_text_y + temp_h + 2
+            feels_y = max(trend_top, min(trend_bottom - feels_h, feels_y))
             draw.text((cx - feels_w // 2, feels_y), feels_like_text, font=feels_font, fill=(80, 80, 80))
 
         draw.line((x0 + 6, stat_area_top, x1 - 6, stat_area_top), fill=(50, 50, 80), width=1)
