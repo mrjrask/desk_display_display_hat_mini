@@ -55,17 +55,17 @@
     "NFL Scoreboard": 1,
     "NFL Scoreboard v2": 0,
     "NFL Overview NFC": {
-      "frequency": 3,
+      "frequency": 0,
       "alt": {
         "screen": "NFL Standings NFC",
-        "frequency": 3
+        "frequency": 0
       }
     },
     "NFL Overview AFC": {
-      "frequency": 3,
+      "frequency": 0,
       "alt": {
         "screen": "NFL Standings AFC",
-        "frequency": 3
+        "frequency": 0
       }
     },
     "NFL Standings NFC": 0,
@@ -84,14 +84,14 @@
       "frequency": 1,
       "alt": {
         "screen": ["NHL Standings West v2"],
-        "frequency": 1
+        "frequency": 2
       }
     },
     "NHL Standings East": {
       "frequency": 1,
       "alt": {
         "screen": ["NHL Standings East v2"],
-        "frequency": 1
+        "frequency": 2
       }
     },
     "NHL Standings Overview v2": 0,
