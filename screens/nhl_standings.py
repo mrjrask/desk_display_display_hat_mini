@@ -128,8 +128,8 @@ def _apply_style_overrides(screen_id: str) -> None:
     OVERVIEW_MAX_LOGO_HEIGHT = max(1, int(round(_OVERVIEW_MAX_LOGO_BASE * overview_scale)))
 
 OVERVIEW_TITLE = "NHL Overview"
-OVERVIEW_TITLE_WEST = "NHL WC Wild Card"
-OVERVIEW_TITLE_EAST = "NHL EC Wild Card"
+OVERVIEW_TITLE_WEST = "NHL West Wild Card"
+OVERVIEW_TITLE_EAST = "NHL East Wild Card"
 OVERVIEW_DIVISIONS = [
     (CONFERENCE_EAST_KEY, "Metropolitan", "Metro"),
     (CONFERENCE_EAST_KEY, "Atlantic", "Atlantic"),

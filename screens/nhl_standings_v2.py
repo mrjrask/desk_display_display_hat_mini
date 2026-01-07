@@ -44,8 +44,8 @@ from screens.nhl_standings import (
 )
 
 WILDCARD_SECTION_NAME = "Wild Card"
-OVERVIEW_TITLE_WEST_V3 = "NHL WC Wild Card"
-OVERVIEW_TITLE_EAST_V3 = "NHL EC Wild Card"
+OVERVIEW_TITLE_WEST_V3 = "NHL West Wild Card"
+OVERVIEW_TITLE_EAST_V3 = "NHL East Wild Card"
 
 
 @contextmanager
