@@ -84,16 +84,14 @@
       "frequency": 1,
       "alt": {
         "screen": ["NHL Standings West v2"],
-        "frequency": 1,
+        "frequency": 1
       }
     },
     "NHL Standings East": {
       "frequency": 1,
       "alt": {
         "screen": ["NHL Standings East v2"],
-        "frequency": 1,
-    "NHL Standings Overview v2": {
-      "frequency": 1,
+        "frequency": 1
       }
     },
     "NHL Standings Overview v2": 0,
