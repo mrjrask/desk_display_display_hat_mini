@@ -596,11 +596,11 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             lambda: draw_nhl_standings_overview_v2_east(context.display, transition=True),
         )
         register(
-            "NHL Overview West v3",
+            "NHL Standings Overview v3 West",
             lambda: draw_nhl_overview_west_v3(context.display, transition=True),
         )
         register(
-            "NHL Overview East v3",
+            "NHL Standings Overview v3 East",
             lambda: draw_nhl_overview_east_v3(context.display, transition=True),
         )
         register(
