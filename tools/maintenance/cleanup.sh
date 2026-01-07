@@ -57,6 +57,7 @@ else:
     try:
         display = Display()
         clear_display(display)
+        display.set_led(0.0, 0.0, 0.0)
     except Exception as exc:  # pragma: no cover - best effort during shutdown
         logging.warning("Display cleanup failed: %s", exc)
 PY
