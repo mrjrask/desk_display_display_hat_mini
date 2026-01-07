@@ -73,14 +73,21 @@
     "nhl logo": 0,
     "NHL Scoreboard": 1,
     "NHL Scoreboard v2": 0,
-    "NHL Standings Overview": {
+    "NHL Standings Overview West": {
       "frequency": 1,
       "alt": {
-        "screen": ["NHL Standings Overview v2"],
+        "screen": ["NHL Standings Overview v2 West"],
         "frequency": 1
       }
     },
-        "NHL Standings West": {
+    "NHL Standings Overview East": {
+      "frequency": 1,
+      "alt": {
+        "screen": ["NHL Standings Overview v2 East"],
+        "frequency": 1
+      }
+    },
+    "NHL Standings West": {
       "frequency": 1,
       "alt": {
         "screen": ["NHL Standings West v2"],
@@ -94,7 +101,8 @@
         "frequency": 2
       }
     },
-    "NHL Standings Overview v2": 0,
+    "NHL Standings Overview v2 West": 0,
+    "NHL Standings Overview v2 East": 0,
     "NHL Standings West v2": 0,
     "NHL Standings East v2": 0,
     "mlb logo": 0,

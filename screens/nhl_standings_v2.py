@@ -24,7 +24,8 @@ from screens.nhl_standings import (
     _render_conference,
     _render_empty,
     _scroll_vertical,
-    OVERVIEW_TITLE,
+    OVERVIEW_TITLE_EAST,
+    OVERVIEW_TITLE_WEST,
 )
 
 WILDCARD_SECTION_NAME = "Wild Card"
@@ -122,59 +123,86 @@ def _build_wildcard_standings(
     return wildcard
 
 
-def _wildcard_overview_divisions(
-    wildcard_standings: dict[str, dict[str, list[dict]]]
+def _sort_by_points(teams: list[dict]) -> list[dict]:
+    return sorted(
+        teams,
+        key=lambda team: (-_normalize_int(team.get("points")), str(team.get("abbr", ""))),
+    )
+
+
+def _conference_overview_divisions(
+    conference: dict[str, list[dict]],
+    division_order: Sequence[str],
+    label: str,
 ) -> list[tuple[str, list[dict]]]:
-    west = wildcard_standings.get(CONFERENCE_WEST_KEY, {})
-    east = wildcard_standings.get(CONFERENCE_EAST_KEY, {})
-
-    def _sort_by_points(teams: list[dict]) -> list[dict]:
-        return sorted(
-            teams,
-            key=lambda team: (-_normalize_int(team.get("points")), str(team.get("abbr", ""))),
-        )
-
-    west_wildcard = _sort_by_points(list(west.get(WILDCARD_SECTION_NAME, [])))
-    west_wc_top_two = west_wildcard[:2]
-    west_wc_rest = west_wildcard[2:]
-
-    east_wildcard = _sort_by_points(list(east.get(WILDCARD_SECTION_NAME, [])))
-    east_wc_top_two = east_wildcard[:2]
-    east_wc_rest = east_wildcard[2:]
-
-    return [
-        ("Central Top 3", _sort_by_points(west.get("Central", []))),
-        ("Pacific Top 3", _sort_by_points(west.get("Pacific", []))),
-        ("West Wild Card", west_wc_top_two),
-        ("West Wild Card Rest", west_wc_rest),
-        ("Metropolitan Top 3", _sort_by_points(east.get("Metropolitan", []))),
-        ("Atlantic Top 3", _sort_by_points(east.get("Atlantic", []))),
-        ("East Wild Card", east_wc_top_two),
-        ("East Wild Card Rest", east_wc_rest),
+    divisions: list[tuple[str, list[dict]]] = [
+        (f"{division} Top 3", _sort_by_points(conference.get(division, [])))
+        for division in division_order
     ]
+
+    wildcard = _sort_by_points(list(conference.get(WILDCARD_SECTION_NAME, [])))
+    divisions.append((f"{label} Wild Card", wildcard[:2]))
+    divisions.append((f"{label} Wild Card Rest", wildcard[2:]))
+    return divisions
 
 
 @log_call
-def draw_nhl_standings_overview_v2(display, transition: bool = False) -> ScreenImage:
+def draw_nhl_standings_overview_v2_west(display, transition: bool = False) -> ScreenImage:
     with _wildcard_columns():
         standings_by_conf = _fetch_standings_data()
         wildcard_standings = _build_wildcard_standings(standings_by_conf)
-        _apply_style_overrides("NHL Standings Overview v2")
+        _apply_style_overrides("NHL Standings Overview v2 West")
         _update_column_metrics()
 
-        divisions: List[tuple[str, List[dict]]] = _wildcard_overview_divisions(
-            wildcard_standings
+        divisions: List[tuple[str, List[dict]]] = _conference_overview_divisions(
+            wildcard_standings.get(CONFERENCE_WEST_KEY, {}),
+            DIVISION_ORDER_WEST,
+            "West",
         )
 
         if not any(teams for _, teams in divisions):
             clear_display(display)
-            img = _render_empty(OVERVIEW_TITLE)
+            img = _render_empty(OVERVIEW_TITLE_WEST)
             if transition:
                 return ScreenImage(img, displayed=False)
             display.image(img)
             return ScreenImage(img, displayed=True)
 
-        base, row_positions = _prepare_overview(divisions)
+        base, row_positions = _prepare_overview(divisions, title=OVERVIEW_TITLE_WEST)
+        final_img, _ = _compose_overview_image(base, row_positions)
+
+        clear_display(display)
+        _animate_overview_drop(display, base, row_positions)
+        display.image(final_img)
+        if hasattr(display, "show"):
+            display.show()
+
+    return ScreenImage(final_img, displayed=True)
+
+
+@log_call
+def draw_nhl_standings_overview_v2_east(display, transition: bool = False) -> ScreenImage:
+    with _wildcard_columns():
+        standings_by_conf = _fetch_standings_data()
+        wildcard_standings = _build_wildcard_standings(standings_by_conf)
+        _apply_style_overrides("NHL Standings Overview v2 East")
+        _update_column_metrics()
+
+        divisions: List[tuple[str, List[dict]]] = _conference_overview_divisions(
+            wildcard_standings.get(CONFERENCE_EAST_KEY, {}),
+            DIVISION_ORDER_EAST,
+            "East",
+        )
+
+        if not any(teams for _, teams in divisions):
+            clear_display(display)
+            img = _render_empty(OVERVIEW_TITLE_EAST)
+            if transition:
+                return ScreenImage(img, displayed=False)
+            display.image(img)
+            return ScreenImage(img, displayed=True)
+
+        base, row_positions = _prepare_overview(divisions, title=OVERVIEW_TITLE_EAST)
         final_img, _ = _compose_overview_image(base, row_positions)
 
         clear_display(display)
