@@ -751,8 +751,9 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
             feels_font = FONT_WEATHER_DETAILS_TINY_LARGE
             feels_w, feels_h = draw.textsize(feels_like_text, font=feels_font)
             feels_y = temp_text_y + temp_h + 2
-            feels_y = max(trend_top, min(trend_bottom - feels_h, feels_y))
-            draw.text((cx - feels_w // 2, feels_y), feels_like_text, font=feels_font, fill=(80, 80, 80))
+            feels_max_y = icon_area_top - feels_h - 2
+            feels_y = max(trend_top, min(feels_max_y, feels_y))
+            draw.text((cx - feels_w // 2, feels_y), feels_like_text, font=feels_font, fill=(90, 90, 90))
 
         draw.line((x0 + 6, stat_area_top, x1 - 6, stat_area_top), fill=(50, 50, 80), width=1)
 
