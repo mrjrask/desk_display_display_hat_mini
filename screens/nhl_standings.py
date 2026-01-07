@@ -1177,6 +1177,18 @@ def _animate_overview_drop(
     if not has_logos:
         return
 
+    wait_for_skip = getattr(display, "wait_for_skip", None)
+    skip_requested = getattr(display, "skip_requested", None)
+
+    def _should_skip() -> bool:
+        return bool(skip_requested and skip_requested())
+
+    def _sleep(duration: float) -> bool:
+        if callable(wait_for_skip):
+            return bool(wait_for_skip(duration))
+        time.sleep(duration)
+        return False
+
     steps = max(2, OVERVIEW_DROP_STEPS)
     stagger = max(1, int(round(steps * OVERVIEW_DROP_STAGGER)))
 
@@ -1197,6 +1209,9 @@ def _animate_overview_drop(
     completed = [False] * len(schedule)
 
     for current_step in range(total_duration):
+        if _should_skip():
+            return
+
         frame_start = time.time()
 
         for idx, (start, drops) in enumerate(schedule):
@@ -1233,8 +1248,8 @@ def _animate_overview_drop(
         # Account for rendering time to maintain consistent frame rate
         elapsed = time.time() - frame_start
         sleep_time = max(0, DROP_FRAME_DELAY - elapsed)
-        if sleep_time > 0:
-            time.sleep(sleep_time)
+        if sleep_time > 0 and _sleep(sleep_time):
+            return
 
 
 def _prepare_overview(divisions: List[tuple[str, List[dict]]]) -> tuple[Image.Image, List[List[Placement]]]:

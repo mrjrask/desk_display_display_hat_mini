@@ -166,6 +166,18 @@ def draw_overview(display, title: str, league_id: int, transition=False):
     Animated overview showing 3 columns (East, Central, West). Each column drops
     logos from last place up to first, onto a header-only background.
     """
+    wait_for_skip = getattr(display, "wait_for_skip", None)
+    skip_requested = getattr(display, "skip_requested", None)
+
+    def _should_skip() -> bool:
+        return bool(skip_requested and skip_requested())
+
+    def _sleep(duration: float) -> bool:
+        if callable(wait_for_skip):
+            return bool(wait_for_skip(duration))
+        time.sleep(duration)
+        return False
+
     divisions = ["East", "Central", "West"]
 
     # Load logos per division in standings order (1..N), trimmed to OV_ROWS
@@ -219,6 +231,9 @@ def draw_overview(display, title: str, league_id: int, transition=False):
         completed = [False] * len(schedule)
 
         for current_step in range(total_duration):
+            if _should_skip():
+                return header.copy() if transition else None
+
             frame_start = time.time()
 
             for idx, (start, drops) in enumerate(schedule):
@@ -250,8 +265,8 @@ def draw_overview(display, title: str, league_id: int, transition=False):
             # Account for rendering time to maintain consistent frame rate
             elapsed = time.time() - frame_start
             sleep_time = max(0, OVERVIEW_DROP_FRAME_DELAY - elapsed)
-            if sleep_time > 0:
-                time.sleep(sleep_time)
+            if sleep_time > 0 and _sleep(sleep_time):
+                return header.copy() if transition else None
 
     # Final static image
     final = header.copy()
@@ -265,7 +280,7 @@ def draw_overview(display, title: str, league_id: int, transition=False):
 
     display.image(final)
     display.show()
-    time.sleep(PAUSE_END)
+    _sleep(PAUSE_END)
 
     return final if transition else None
 
