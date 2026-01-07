@@ -92,12 +92,14 @@ from screens.nhl_scoreboard import draw_nhl_scoreboard
 from screens.nhl_scoreboard_v2 import draw_nhl_scoreboard_v2
 from screens.nhl_standings import (
     draw_nhl_standings_east,
-    draw_nhl_standings_overview,
+    draw_nhl_standings_overview_east,
+    draw_nhl_standings_overview_west,
     draw_nhl_standings_west,
 )
 from screens.nhl_standings_v2 import (
     draw_nhl_standings_east_v2,
-    draw_nhl_standings_overview_v2,
+    draw_nhl_standings_overview_v2_east,
+    draw_nhl_standings_overview_v2_west,
     draw_nhl_standings_west_v2,
 )
 
@@ -568,8 +570,12 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         register("NHL Scoreboard", lambda: draw_nhl_scoreboard(context.display, transition=True))
         register("NHL Scoreboard v2", lambda: draw_nhl_scoreboard_v2(context.display, transition=True))
         register(
-            "NHL Standings Overview",
-            lambda: draw_nhl_standings_overview(context.display, transition=True),
+            "NHL Standings Overview West",
+            lambda: draw_nhl_standings_overview_west(context.display, transition=True),
+        )
+        register(
+            "NHL Standings Overview East",
+            lambda: draw_nhl_standings_overview_east(context.display, transition=True),
         )
         register(
             "NHL Standings West",
@@ -580,8 +586,12 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             lambda: draw_nhl_standings_east(context.display, transition=True),
         )
         register(
-            "NHL Standings Overview v2",
-            lambda: draw_nhl_standings_overview_v2(context.display, transition=True),
+            "NHL Standings Overview v2 West",
+            lambda: draw_nhl_standings_overview_v2_west(context.display, transition=True),
+        )
+        register(
+            "NHL Standings Overview v2 East",
+            lambda: draw_nhl_standings_overview_v2_east(context.display, transition=True),
         )
         register(
             "NHL Standings West v2",
