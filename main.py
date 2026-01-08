@@ -139,6 +139,7 @@ _screen_history_lock = threading.Lock()
 
 _dark_hours_active = False
 _manual_display_off = False
+_manual_backlight_level: Optional[float] = None
 
 
 def _request_next_screen() -> bool:
@@ -192,7 +193,7 @@ def _handle_button_down(name: str) -> bool:
 def _toggle_display_updates() -> bool:
     """Toggle the display on/off without stopping the main loop."""
 
-    global _manual_display_off
+    global _manual_display_off, _manual_backlight_level
 
     if display is None:
         return False
@@ -200,12 +201,24 @@ def _toggle_display_updates() -> bool:
     if _manual_display_off:
         _manual_display_off = False
         logging.info("🔆 Display toggled on.")
+        if _manual_backlight_level is not None and hasattr(display, "set_backlight"):
+            try:
+                display.set_backlight(_manual_backlight_level)
+            except Exception:
+                pass
+        _manual_backlight_level = None
         if not _dark_hours_active:
             resume_display_updates()
         return True
 
     _manual_display_off = True
     logging.info("🌑 Display toggled off.")
+    if hasattr(display, "backlight_level") and hasattr(display, "set_backlight"):
+        try:
+            _manual_backlight_level = display.backlight_level()
+            display.set_backlight(0.0)
+        except Exception:
+            _manual_backlight_level = None
     try:
         resume_display_updates()
         clear_display(display)
