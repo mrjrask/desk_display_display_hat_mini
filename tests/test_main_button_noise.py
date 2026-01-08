@@ -40,6 +40,7 @@ def main_for_buttons(monkeypatch):
     main._manual_skip_event.clear()
     main._skip_request_pending = False
     main._BUTTON_STATE = {name: False for name in main._BUTTON_NAMES}
+    main._manual_display_off = False
 
     yield main
 
@@ -104,19 +105,59 @@ def test_single_press_still_processed(main_for_buttons, monkeypatch):
     assert main_for_buttons._BUTTON_STATE["X"] is False
 
 
-def test_b_button_advances_to_next_screen(main_for_buttons):
+def test_a_button_advances_to_next_screen(main_for_buttons):
     # Provide a non-None display to allow the handler to run.
     main_for_buttons.display = object()
 
-    assert main_for_buttons._handle_button_down("B") is True
+    assert main_for_buttons._handle_button_down("A") is True
     assert main_for_buttons._skip_request_pending is True
     assert main_for_buttons._manual_skip_event.is_set()
 
 
-def test_a_button_returns_to_previous_screen(main_for_buttons):
+def test_x_button_returns_to_previous_screen(main_for_buttons):
     main_for_buttons.display = object()
     main_for_buttons._screen_history[:] = ["first", "second", "third"]
 
-    assert main_for_buttons._handle_button_down("A") is True
+    assert main_for_buttons._handle_button_down("X") is True
     assert main_for_buttons._pending_previous_screen_id == "second"
     assert main_for_buttons._manual_skip_event.is_set()
+
+
+def test_b_button_toggles_display(main_for_buttons, monkeypatch):
+    class _PowerDisplay:
+        def __init__(self):
+            self.cleared = False
+            self.shown = False
+
+        def clear(self):
+            self.cleared = True
+
+        def show(self):
+            self.shown = True
+
+    display = _PowerDisplay()
+    main_for_buttons.display = display
+    main_for_buttons._manual_display_off = False
+    main_for_buttons._dark_hours_active = False
+
+    called = {"resume": 0, "suspend": 0}
+
+    def fake_resume():
+        called["resume"] += 1
+
+    def fake_suspend():
+        called["suspend"] += 1
+
+    monkeypatch.setattr(main_for_buttons, "resume_display_updates", fake_resume)
+    monkeypatch.setattr(main_for_buttons, "suspend_display_updates", fake_suspend)
+
+    assert main_for_buttons._handle_button_down("B") is True
+    assert main_for_buttons._manual_display_off is True
+    assert called["resume"] == 1
+    assert called["suspend"] == 1
+    assert display.cleared is True
+    assert display.shown is True
+
+    assert main_for_buttons._handle_button_down("B") is True
+    assert main_for_buttons._manual_display_off is False
+    assert called["resume"] == 2

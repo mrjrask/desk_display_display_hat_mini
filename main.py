@@ -138,6 +138,7 @@ _screen_history = []
 _screen_history_lock = threading.Lock()
 
 _dark_hours_active = False
+_manual_display_off = False
 
 
 def _request_next_screen() -> bool:
@@ -175,17 +176,44 @@ def _handle_button_down(name: str) -> bool:
     name = name.upper()
     if display is None:
         return False
-    if name == "A":
-        return _request_previous_screen()
-    if name == "B":
-        return _request_next_screen()
     if name == "X":
+        return _request_previous_screen()
+    if name == "A":
         return _request_next_screen()
+    if name == "B":
+        return _toggle_display_updates()
     if name == "Y":
         logging.info("🔁 Y button pressed – restarting desk_display service…")
         _restart_desk_display_service()
         return False
     return False
+
+
+def _toggle_display_updates() -> bool:
+    """Toggle the display on/off without stopping the main loop."""
+
+    global _manual_display_off
+
+    if display is None:
+        return False
+
+    if _manual_display_off:
+        _manual_display_off = False
+        logging.info("🔆 Display toggled on.")
+        if not _dark_hours_active:
+            resume_display_updates()
+        return True
+
+    _manual_display_off = True
+    logging.info("🌑 Display toggled off.")
+    try:
+        resume_display_updates()
+        clear_display(display)
+        display.show()
+    except Exception:
+        pass
+    suspend_display_updates()
+    return True
 
 
 def _button_event_callback(name: str) -> None:
@@ -1084,7 +1112,8 @@ def main_loop():
             if _dark_hours_active:
                 logging.info("🌅 Leaving dark hours; resuming screen rotation.")
                 _dark_hours_active = False
-                resume_display_updates()
+                if not _manual_display_off:
+                    resume_display_updates()
 
             # Wi-Fi outage handling
             if ENABLE_WIFI_MONITOR and hasattr(wifi_utils, "get_wifi_state"):
