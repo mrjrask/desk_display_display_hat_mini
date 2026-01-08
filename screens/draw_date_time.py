@@ -160,6 +160,7 @@ def _start_update_checks(
     colors: Tuple[Tuple[int, int, int], Tuple[int, int, int]],
     gh_state: dict,
     display,
+    expected_frame_id: int | None = None,
 ):
     """Kick off apt/GitHub checks in the background, updating the screen when ready."""
 
@@ -170,6 +171,11 @@ def _start_update_checks(
             check_apt_updates()
 
             if display is None:
+                return
+            if expected_frame_id is not None and display.frame_id() != expected_frame_id:
+                logging.info(
+                    "Background update checks skipped; display already updated."
+                )
                 return
 
             refreshed = _compose_frame(order, colors[0], colors[1], gh_state["value"])
@@ -212,6 +218,7 @@ def draw_date(display, transition: bool=False):
     except AttributeError:
         # Some display drivers immediately refresh when image() is called.
         pass
+    frame_id = display.frame_id()
     # run a tiny, delayed cycle in a short thread so we don't block
     t = threading.Thread(
         target=_cycle_colors_after_load,
@@ -219,7 +226,13 @@ def draw_date(display, transition: bool=False):
         daemon=True,
     )
     t.start()
-    _start_update_checks("date_time", (col_top, col_bottom), gh_state, display)
+    _start_update_checks(
+        "date_time",
+        (col_top, col_bottom),
+        gh_state,
+        display,
+        expected_frame_id=frame_id,
+    )
     return ScreenImage(img, displayed=True)
 
 
@@ -244,11 +257,18 @@ def draw_time(display, transition: bool=False):
         display.show()
     except AttributeError:
         pass
+    frame_id = display.frame_id()
     t = threading.Thread(
         target=_cycle_colors_after_load,
         args=(display, "time_date", lambda: gh_state["value"]),
         daemon=True,
     )
     t.start()
-    _start_update_checks("time_date", (col_top, col_bottom), gh_state, display)
+    _start_update_checks(
+        "time_date",
+        (col_top, col_bottom),
+        gh_state,
+        display,
+        expected_frame_id=frame_id,
+    )
     return ScreenImage(img, displayed=True)

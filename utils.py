@@ -159,6 +159,8 @@ class Display:
         self._backlight_level = 1.0
         self._backlight_lock = threading.Lock()
         self._skip_event: Optional[threading.Event] = None
+        self._frame_id = 0
+        self._frame_lock = threading.Lock()
 
         if _FORCE_HEADLESS:
             logging.info(
@@ -245,8 +247,13 @@ class Display:
         except Exception as exc:  # pragma: no cover - hardware import
             logging.warning("Display refresh failed: %s", exc)
 
+    def _bump_frame_id(self) -> None:
+        with self._frame_lock:
+            self._frame_id += 1
+
     def clear(self):
         self._buffer = Image.new("RGB", (self.width, self.height), "black")
+        self._bump_frame_id()
         self._update_display()
 
     def image(self, pil_img: Image.Image):
@@ -255,6 +262,7 @@ class Display:
         if pil_img.mode != "RGB":
             pil_img = pil_img.convert("RGB")
         self._buffer = pil_img.copy()
+        self._bump_frame_id()
         self._update_display()
 
     def show(self):
@@ -265,6 +273,12 @@ class Display:
         """Return a copy of the currently buffered frame."""
 
         return self._buffer.copy()
+
+    def frame_id(self) -> int:
+        """Return the current frame identifier."""
+
+        with self._frame_lock:
+            return self._frame_id
 
     # ----- Hardware helpers -------------------------------------------------
     def set_backlight(self, level: float) -> float:
