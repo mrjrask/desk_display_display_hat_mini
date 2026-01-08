@@ -10,9 +10,9 @@ import os
 import sys
 import zipfile
 from pathlib import Path
-from typing import Dict, Iterable, Optional, Tuple
+from typing import Callable, Dict, Iterable, Optional, Tuple
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 try:
     RESAMPLE_LANCZOS = Image.Resampling.LANCZOS
@@ -361,11 +361,33 @@ def _suppress_animation_delay():
     return restore
 
 
-def render_all_screens(
+def _suppress_image_loading() -> Callable[[], None]:
+    original_open = Image.open
+
+    def placeholder_open(*_args, **_kwargs) -> Image.Image:
+        size = (max(1, WIDTH // 2), max(1, HEIGHT // 2))
+        img = Image.new("RGBA", size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        for inset in range(0, 6, 2):
+            draw.rectangle(
+                [inset, inset, size[0] - 1 - inset, size[1] - 1 - inset],
+                outline=(255, 255, 255, 255),
+            )
+        return img
+
+    def restore() -> None:
+        Image.open = original_open
+
+    Image.open = placeholder_open
+    return restore
+
+
+def _render_all_screens_impl(
     *,
     sync_screenshots: bool = ENABLE_SCREENSHOTS,
     create_archive: bool = True,
     ignore_schedule: bool = False,
+    suppress_images: bool = False,
 ) -> int:
     logging.basicConfig(
         level=logging.INFO,
@@ -375,6 +397,7 @@ def render_all_screens(
     )
 
     restore_sleep = _suppress_animation_delay()
+    restore_images = _suppress_image_loading() if suppress_images else lambda: None
     assets: list[Tuple[str, Image.Image]] = []
     now = _dt.datetime.now(CENTRAL_TIME)
     try:
@@ -440,6 +463,7 @@ def render_all_screens(
             display.clear()
 
     finally:
+        restore_images()
         restore_sleep()
 
     if not assets:
@@ -462,6 +486,33 @@ def render_all_screens(
         logging.info("Rendered %d screen(s) (no outputs written)", len(assets))
 
     return 0
+
+
+def render_all_screens(
+    *,
+    sync_screenshots: bool = ENABLE_SCREENSHOTS,
+    create_archive: bool = True,
+    ignore_schedule: bool = False,
+) -> int:
+    return _render_all_screens_impl(
+        sync_screenshots=sync_screenshots,
+        create_archive=create_archive,
+        ignore_schedule=ignore_schedule,
+    )
+
+
+def render_all_screens_without_images(
+    *,
+    sync_screenshots: bool = ENABLE_SCREENSHOTS,
+    create_archive: bool = True,
+    ignore_schedule: bool = False,
+) -> int:
+    return _render_all_screens_impl(
+        sync_screenshots=sync_screenshots,
+        create_archive=create_archive,
+        ignore_schedule=ignore_schedule,
+        suppress_images=True,
+    )
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
@@ -494,16 +545,22 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Skip creating the ZIP archive of rendered screens.",
     )
+    parser.add_argument(
+        "--no-images",
+        action="store_true",
+        help="Render with placeholder frames instead of loading images.",
+    )
     return parser
 
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
-    return render_all_screens(
+    return _render_all_screens_impl(
         sync_screenshots=args.sync_screenshots,
         create_archive=not args.no_archive,
         ignore_schedule=args.ignore_schedule,
+        suppress_images=args.no_images,
     )
 
 
