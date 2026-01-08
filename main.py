@@ -698,12 +698,14 @@ signal.signal(signal.SIGTERM, _handle_sigterm)
 # ─── Logos ───────────────────────────────────────────────────────────────────
 IMAGES_DIR = os.path.join(SCRIPT_DIR, "images")
 # Logos scroll across the screen; keep them just a bit shorter than the display
-# while preserving aspect ratio during resize.
+# while preserving aspect ratio during resize. Use a fixed width so replacement
+# logos with different aspect ratios render consistently.
 LOGO_SCREEN_HEIGHT = max(1, HEIGHT - 30)
 TEAM_LOGO_HEIGHT   = LOGO_SCREEN_HEIGHT
+LOGO_SCREEN_WIDTH = max(1, min(WIDTH, int(round(LOGO_SCREEN_HEIGHT * 1.5))))
 
 
-def load_logo(fn, height=LOGO_SCREEN_HEIGHT):
+def load_logo(fn, height=LOGO_SCREEN_HEIGHT, width=LOGO_SCREEN_WIDTH):
     path = os.path.join(IMAGES_DIR, fn)
     try:
         with Image.open(path) as img:
@@ -713,9 +715,31 @@ def load_logo(fn, height=LOGO_SCREEN_HEIGHT):
             )
             target_mode = "RGBA" if has_transparency else "RGB"
             img = img.convert(target_mode)
-            ratio = height / img.height if img.height else 1
-            resized = img.resize((int(img.width * ratio), height), Image.ANTIALIAS)
-        return resized
+            target_height = max(1, int(height))
+            target_width = max(1, int(width))
+            if img.height == 0 or img.width == 0:
+                return None
+            width_ratio = target_width / img.width
+            height_ratio = target_height / img.height
+            scale = min(width_ratio, height_ratio)
+            resized_size = (
+                max(1, int(round(img.width * scale))),
+                max(1, int(round(img.height * scale))),
+            )
+            resized = img.resize(resized_size, Image.ANTIALIAS)
+            if resized_size == (target_width, target_height):
+                return resized
+            background = (0, 0, 0, 0) if has_transparency else (0, 0, 0)
+            canvas = Image.new(target_mode, (target_width, target_height), background)
+            offset = (
+                (target_width - resized_size[0]) // 2,
+                (target_height - resized_size[1]) // 2,
+            )
+            if has_transparency:
+                canvas.paste(resized, offset, resized)
+            else:
+                canvas.paste(resized, offset)
+        return canvas
     except Exception as e:
         logging.warning(f"Logo load failed '{fn}': {e}")
         return None

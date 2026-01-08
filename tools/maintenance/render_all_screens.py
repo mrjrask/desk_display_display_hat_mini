@@ -96,9 +96,14 @@ def _sanitize_filename_prefix(name: str) -> str:
 
 LOGO_SCREEN_HEIGHT = max(1, HEIGHT - 30)
 TEAM_LOGO_HEIGHT   = LOGO_SCREEN_HEIGHT
+LOGO_SCREEN_WIDTH = max(1, min(WIDTH, int(round(LOGO_SCREEN_HEIGHT * 1.5))))
 
 
-def load_logo(filename: str, height: int = LOGO_SCREEN_HEIGHT) -> Optional[Image.Image]:
+def load_logo(
+    filename: str,
+    height: int = LOGO_SCREEN_HEIGHT,
+    width: int = LOGO_SCREEN_WIDTH,
+) -> Optional[Image.Image]:
     path = IMAGES_DIR / filename
     try:
         with Image.open(path) as img:
@@ -108,9 +113,31 @@ def load_logo(filename: str, height: int = LOGO_SCREEN_HEIGHT) -> Optional[Image
             )
             target_mode = "RGBA" if has_transparency else "RGB"
             img = img.convert(target_mode)
-            ratio = height / img.height if img.height else 1
-            resized = img.resize((int(img.width * ratio), height), RESAMPLE_LANCZOS)
-        return resized
+            target_height = max(1, int(height))
+            target_width = max(1, int(width))
+            if img.height == 0 or img.width == 0:
+                return None
+            width_ratio = target_width / img.width
+            height_ratio = target_height / img.height
+            scale = min(width_ratio, height_ratio)
+            resized_size = (
+                max(1, int(round(img.width * scale))),
+                max(1, int(round(img.height * scale))),
+            )
+            resized = img.resize(resized_size, RESAMPLE_LANCZOS)
+            if resized_size == (target_width, target_height):
+                return resized
+            background = (0, 0, 0, 0) if has_transparency else (0, 0, 0)
+            canvas = Image.new(target_mode, (target_width, target_height), background)
+            offset = (
+                (target_width - resized_size[0]) // 2,
+                (target_height - resized_size[1]) // 2,
+            )
+            if has_transparency:
+                canvas.paste(resized, offset, resized)
+            else:
+                canvas.paste(resized, offset)
+        return canvas
     except Exception as exc:
         logging.warning("Logo load failed '%s': %s", filename, exc)
         return None
