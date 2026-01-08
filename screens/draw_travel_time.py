@@ -49,12 +49,13 @@ def _api_key() -> str:
 # Helpers: Google Directions fetching/parsing
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _fetch_routes(avoid_highways: bool = False) -> List[Dict[str, Any]]:
+def _fetch_routes(avoid_highways: bool = False, avoid_tolls: bool = False) -> List[Dict[str, Any]]:
     routes = fetch_directions_routes(
         TRAVEL_ORIGIN,
         TRAVEL_DESTINATION,
         _api_key(),
         avoid_highways=avoid_highways,
+        avoid_tolls=avoid_tolls,
         url=TRAVEL_DIRECTIONS_URL,
     )
 
@@ -186,8 +187,17 @@ def get_travel_active_window() -> Optional[Tuple[dt.time, dt.time]]:
     return start, end
 
 
-def _select_travel_routes(routes: List[dict]) -> Dict[str, Optional[dict]]:
+def _select_travel_routes(
+    routes: List[dict],
+    *,
+    lake_shore_routes: Optional[List[dict]] = None,
+    kennedy_edens_routes: Optional[List[dict]] = None,
+) -> Dict[str, Optional[dict]]:
     remaining = list(routes)
+    lake_shore_pool = list(lake_shore_routes) if lake_shore_routes is not None else remaining
+    kennedy_edens_pool = (
+        list(kennedy_edens_routes) if kennedy_edens_routes is not None else remaining
+    )
 
     lake_shore_tokens = [
         "lake shore",
@@ -226,8 +236,8 @@ def _select_travel_routes(routes: List[dict]) -> Dict[str, Optional[dict]]:
     ]
 
     return {
-        "lake_shore": _pop_route(remaining, lake_shore_tokens),
-        "kennedy_edens": _pop_route(remaining, kennedy_edens_tokens),
+        "lake_shore": _pop_route(lake_shore_pool, lake_shore_tokens),
+        "kennedy_edens": _pop_route(kennedy_edens_pool, kennedy_edens_tokens),
         "kennedy_294": _pop_route(remaining, kennedy_294_tokens),
     }
 
@@ -237,7 +247,13 @@ def get_travel_routes() -> Dict[str, Optional[dict]]:
 
     try:
         routes_all = list(_fetch_routes(avoid_highways=False))
-        return _select_travel_routes(routes_all)
+        lake_shore_routes = list(_fetch_routes(avoid_highways=True))
+        kennedy_edens_routes = list(_fetch_routes(avoid_tolls=True))
+        return _select_travel_routes(
+            routes_all,
+            lake_shore_routes=lake_shore_routes,
+            kennedy_edens_routes=kennedy_edens_routes,
+        )
     except Exception as exc:  # pragma: no cover - defensive guard for runtime issues
         logging.warning("Travel route fetch failed: %s", exc)
         return {
