@@ -478,10 +478,11 @@ trigger a fresh boot after cleanup completes.
 
 ### Display HAT Mini controls
 
-- **X button:** skips the remainder of the current screen and moves on immediately.
+- **X button:** returns to the previously displayed screen.
 - **Y button:** requests a `systemctl restart desk_display.service`, which stops the service, runs `tools/maintenance/cleanup.sh`, and starts a
   fresh process.
-- **A/B buttons:** currently unused but logged when pressed so you can build new shortcuts.
+- **A button:** skips the remainder of the current screen and moves on immediately.
+- **B button:** toggles the display on/off without stopping the scheduler.
 
 ---
 
