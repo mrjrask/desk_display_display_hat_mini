@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Render a traffic map for the configured commute routes."""
+"""Render a traffic map for the configured commute routes.
+
+Uses the same route selection logic as the travel time screen, including any
+avoid-highways or avoid-tolls route pools configured there.
+"""
 
 from __future__ import annotations
 
