@@ -983,11 +983,6 @@ def _fetch_rainviewer_frames(zoom: int = 7, max_frames: int = 6) -> list[RadarFr
 
         frame_img = Image.new("RGBA", tile.size, (0, 0, 0, 255))
         frame_img.alpha_composite(tile)
-        marker_x = int((x_offset or 0.5) * tile.width)
-        marker_y = int((y_offset or 0.5) * tile.height)
-        draw = ImageDraw.Draw(frame_img)
-        draw.ellipse((marker_x - 3, marker_y - 3, marker_x + 3, marker_y + 3), fill=(255, 0, 0, 255))
-
         final_frame = frame_img.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
         images.append(RadarFrame(final_frame, timestamp))
 
