@@ -998,7 +998,7 @@ def _fetch_base_map(zoom: int = 7) -> Optional[Image.Image]:
     lon = LONGITUDE
     url = (
         "https://maps.googleapis.com/maps/api/staticmap?"
-        f"center={lat},{lon}&zoom={zoom}&size={WIDTH}x{HEIGHT}&maptype=roadmap&markers=color:red|{lat},{lon}"
+        f"center={lat},{lon}&zoom={zoom}&size={WIDTH}x{HEIGHT}&maptype=roadmap"
         f"&key={GOOGLE_MAPS_API_KEY}"
     )
     headers = {
