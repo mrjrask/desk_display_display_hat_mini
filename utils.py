@@ -73,6 +73,7 @@ _UPDATE_STATUS = _UpdateStatus()
 
 _DISPLAY_UPDATE_GATE = threading.Event()
 _DISPLAY_UPDATE_GATE.set()
+_DEFER_CLEAR_DISPLAY = threading.Event()
 
 
 def get_update_status() -> _UpdateStatus:
@@ -97,6 +98,17 @@ def display_updates_enabled() -> bool:
     """Return True when display updates are currently allowed."""
 
     return _DISPLAY_UPDATE_GATE.is_set()
+
+
+@contextmanager
+def defer_clear_display() -> Iterable[None]:
+    """Temporarily suppress immediate clears to avoid black flashes."""
+
+    _DEFER_CLEAR_DISPLAY.set()
+    try:
+        yield
+    finally:
+        _DEFER_CLEAR_DISPLAY.clear()
 
 # Use the dimmest still-visible LED brightness.
 LED_INDICATOR_LEVEL = 1 / 1024.0
@@ -401,6 +413,17 @@ def clear_display(display):
     """
     Clear the connected display, falling back to a blank frame.
     """
+    if _DEFER_CLEAR_DISPLAY.is_set():
+        try:
+            if hasattr(display, "_buffer"):
+                display._buffer = Image.new(
+                    "RGB",
+                    (getattr(display, "width", WIDTH), getattr(display, "height", HEIGHT)),
+                    "black",
+                )
+            return
+        except Exception:
+            return
     try:
         display.clear()
     except Exception:

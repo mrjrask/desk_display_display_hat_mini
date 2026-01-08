@@ -60,6 +60,7 @@ from utils import (
     animate_fade_in,
     clear_display,
     clear_update_indicator,
+    defer_clear_display,
     draw_text_centered,
     resume_display_updates,
     suspend_display_updates,
@@ -1166,7 +1167,8 @@ def main_loop():
             logging.info("🎬 Presenting '%s' (iteration %d)", sid, loop_count)
 
             try:
-                result = entry.render()
+                with defer_clear_display():
+                    result = entry.render()
             except Exception as exc:
                 logging.error(f"Error in screen '{sid}': {exc}")
                 gc.collect()
