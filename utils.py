@@ -271,7 +271,8 @@ class Display:
         """Set the LCD backlight brightness (0.0 – 1.0)."""
 
         # Clamp the requested level to keep the screen visible but not blinding.
-        level = max(0.05, min(1.0, level))
+        # Allow 0.0 for explicit "off" requests (used by display toggle).
+        level = max(0.0, min(1.0, level))
 
         with self._backlight_lock:
             self._backlight_level = level
