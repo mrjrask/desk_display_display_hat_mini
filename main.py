@@ -61,6 +61,7 @@ from utils import (
     clear_display,
     clear_update_indicator,
     defer_clear_display,
+    display_updates_enabled,
     draw_text_centered,
     resume_display_updates,
     suspend_display_updates,
@@ -1113,6 +1114,13 @@ def main_loop():
                 logging.info("🌅 Leaving dark hours; resuming screen rotation.")
                 _dark_hours_active = False
                 if not _manual_display_off:
+                    resume_display_updates()
+
+            if not _manual_display_off and not _dark_hours_active:
+                if not display_updates_enabled():
+                    logging.warning(
+                        "Display updates were suspended unexpectedly; resuming."
+                    )
                     resume_display_updates()
 
             # Wi-Fi outage handling
