@@ -59,6 +59,7 @@ from utils import (
     ScreenImage,
     animate_fade_in,
     clear_display,
+    clear_update_indicator,
     draw_text_centered,
     resume_display_updates,
     suspend_display_updates,
@@ -511,6 +512,7 @@ def _finalize_shutdown() -> None:
         _button_monitor_thread.join(timeout=1.0)
         _button_monitor_thread = None
 
+    clear_update_indicator(display)
     _shutdown_complete.set()
     logging.info("👋 Shutdown cleanup finished.")
 
@@ -973,6 +975,7 @@ def init_runtime() -> None:
         display.set_button_callback(_button_event_callback)
     except Exception:
         logging.debug("Button callback registration unavailable.")
+    clear_update_indicator(display)
     if ENABLE_WIFI_MONITOR and hasattr(wifi_utils, "start_monitor"):
         logging.info("🔌 Starting Wi-Fi monitor…")
         try:
