@@ -993,6 +993,31 @@ def _set_update_status(github: Optional[bool] = None, apt: Optional[bool] = None
     _refresh_led_indicator()
 
 
+def clear_update_indicator(display: Optional["Display"] = None) -> None:
+    """Stop the update LED animation and turn the LED off."""
+
+    global _LED_INDICATOR_ANIMATOR, _UPDATE_STATUS
+
+    _UPDATE_STATUS = _UpdateStatus()
+    display = display or get_active_display()
+
+    if _LED_INDICATOR_ANIMATOR is not None:
+        try:  # pragma: no cover - hardware import
+            _LED_INDICATOR_ANIMATOR.stop()
+        except Exception as exc:
+            logging.debug("Failed to stop LED animator during cleanup: %s", exc)
+        finally:
+            _LED_INDICATOR_ANIMATOR = None
+
+    if display is None:
+        return
+
+    try:
+        display.set_led(r=0.0, g=0.0, b=0.0)
+    except Exception as exc:  # pragma: no cover - hardware import
+        logging.debug("Failed to clear LED during cleanup: %s", exc)
+
+
 @contextmanager
 def temporary_display_led(r: float, g: float, b: float):
     """Temporarily override the display LED, restoring update status after."""
