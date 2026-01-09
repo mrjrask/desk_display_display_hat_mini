@@ -308,6 +308,8 @@ def _format_status(game: dict) -> str:
     short_detail = (type_info.get("shortDetail") or "").strip()
     detail = (type_info.get("detail") or "").strip()
     state = (type_info.get("state") or "").lower()
+    short_detail_lower = short_detail.lower()
+    detail_lower = detail.lower()
 
     def _override_in_game_status() -> Optional[str]:
         for candidate in (short_detail, detail):
@@ -319,6 +321,8 @@ def _format_status(game: dict) -> str:
                 return IN_GAME_STATUS_OVERRIDES[key]
         return None
 
+    if state == "postponed" or "postponed" in short_detail_lower or "postponed" in detail_lower:
+        return "Postponed"
     if state == "post":
         return short_detail or detail or "Final"
     if state == "in":
