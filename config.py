@@ -1154,6 +1154,14 @@ BEARS_SCHEDULE = [
         "home_away": "Home",
         "time": "7PM",
     },
+    {
+        "game_no": "20",
+        "week": "Division Playoff",
+        "date": "TBD",
+        "opponent": "TBD",
+        "home_away": "Home",
+        "time": "TBD",
+    },
 ]
 
 NFL_TEAM_ABBREVIATIONS = {
