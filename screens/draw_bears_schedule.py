@@ -40,6 +40,22 @@ def _center_bottom_text(draw, text, *, font, margin):
     draw.text((tx, ty), text, font=font, fill=(255, 255, 255))
     return ty
 
+
+def _format_game_date(date_text: str) -> str:
+    if not date_text:
+        return ""
+    date_text = str(date_text).strip()
+    if not date_text:
+        return ""
+    for fmt in ("%a, %b %d %Y", "%a, %b %d, %Y", "%a, %b %d"):
+        try:
+            dt0 = datetime.datetime.strptime(date_text, fmt)
+            return f"{dt0.month}/{dt0.day}"
+        except Exception:
+            continue
+    return date_text
+
+
 NFL_LOGO_DIR = os.path.join(config.IMAGES_DIR, "nfl")
 def show_bears_next_game(display, transition=False):
     game = next_game_from_schedule(BEARS_SCHEDULE)
@@ -68,8 +84,14 @@ def show_bears_next_game(display, transition=False):
 
         # Logos row: AWAY @ HOME
         bears_ab = "chi"
-        opp_key  = opp.split()[-1].lower()
-        opp_ab   = NFL_TEAM_ABBREVIATIONS.get(opp_key, opp_key[:3])
+        opp_key = opp.split()[-1].lower()
+        opp_ab = NFL_TEAM_ABBREVIATIONS.get(opp_key, opp_key[:3])
+        week_label = str(game.get("week", "") or "")
+        if opp.strip().upper() == "TBD":
+            if "super bowl" in week_label.lower():
+                opp_ab = "afc"
+            else:
+                opp_ab = "nfc"
         if opp_ab == "was":
             opp_ab = "wsh"
         if ha == "away":
@@ -82,11 +104,7 @@ def show_bears_next_game(display, transition=False):
         if not wk:
             game_no = str(game.get("game_no", "")).strip()
             wk = f"Game {game_no}" if game_no else ""
-        try:
-            dt0 = datetime.datetime.strptime(game["date"], "%a, %b %d")
-            date_txt = f"{dt0.month}/{dt0.day}"
-        except:
-            date_txt = game["date"]
+        date_txt = _format_game_date(game.get("date", ""))
         t_txt = game["time"].strip()
         bottom = f"{wk}-{date_txt} {t_txt}" if wk else f"{date_txt} {t_txt}"
         if bottom:
