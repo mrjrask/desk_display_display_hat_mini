@@ -981,7 +981,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "0.1",
         "week": "Preseason 1",
-        "date": "Sat, Aug 9",
+        "date": "Sat, Aug 9, 2025",
         "opponent": "Miami Dolphins",
         "home_away": "Home",
         "time": "Noon",
@@ -989,7 +989,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "0.2",
         "week": "Preseason 2",
-        "date": "Sun, Aug 17",
+        "date": "Sun, Aug 17, 2025",
         "opponent": "Buffalo Bills",
         "home_away": "Home",
         "time": "7PM",
@@ -997,7 +997,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "0.3",
         "week": "Preseason 3",
-        "date": "Fri, Aug 22",
+        "date": "Fri, Aug 22, 2025",
         "opponent": "Kansas City Chiefs",
         "home_away": "Away",
         "time": "7:20PM",
@@ -1005,7 +1005,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "1",
         "week": "Week 1",
-        "date": "Mon, Sep 8",
+        "date": "Mon, Sep 8, 2025",
         "opponent": "Minnesota Vikings",
         "home_away": "Home",
         "time": "7:15PM",
@@ -1013,7 +1013,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "2",
         "week": "Week 2",
-        "date": "Sun, Sep 14",
+        "date": "Sun, Sep 14, 2025",
         "opponent": "Detroit Lions",
         "home_away": "Away",
         "time": "Noon",
@@ -1021,7 +1021,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "3",
         "week": "Week 3",
-        "date": "Sun, Sep 21",
+        "date": "Sun, Sep 21, 2025",
         "opponent": "Dallas Cowboys",
         "home_away": "Home",
         "time": "3:25PM",
@@ -1029,7 +1029,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "4",
         "week": "Week 4",
-        "date": "Sun, Sep 28",
+        "date": "Sun, Sep 28, 2025",
         "opponent": "Las Vegas Raiders",
         "home_away": "Away",
         "time": "3:25PM",
@@ -1045,7 +1045,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "6",
         "week": "Week 6",
-        "date": "Mon, Oct 13",
+        "date": "Mon, Oct 13, 2025",
         "opponent": "Washington Commanders",
         "home_away": "Away",
         "time": "7:15PM",
@@ -1053,7 +1053,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "7",
         "week": "Week 7",
-        "date": "Sun, Oct 19",
+        "date": "Sun, Oct 19, 2025",
         "opponent": "New Orleans Saints",
         "home_away": "Home",
         "time": "Noon",
@@ -1061,7 +1061,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "8",
         "week": "Week 8",
-        "date": "Sun, Oct 26",
+        "date": "Sun, Oct 26, 2025",
         "opponent": "Baltimore Ravens",
         "home_away": "Away",
         "time": "Noon",
@@ -1069,7 +1069,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "9",
         "week": "Week 9",
-        "date": "Sun, Nov 2",
+        "date": "Sun, Nov 2, 2025",
         "opponent": "Cincinnati Bengals",
         "home_away": "Away",
         "time": "Noon",
@@ -1077,7 +1077,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "10",
         "week": "Week 10",
-        "date": "Sun, Nov 9",
+        "date": "Sun, Nov 9, 2025",
         "opponent": "New York Giants",
         "home_away": "Home",
         "time": "Noon",
@@ -1085,7 +1085,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "11",
         "week": "Week 11",
-        "date": "Sun, Nov 16",
+        "date": "Sun, Nov 16, 2025",
         "opponent": "Minnesota Vikings",
         "home_away": "Away",
         "time": "Noon",
@@ -1093,7 +1093,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "12",
         "week": "Week 12",
-        "date": "Sun, Nov 23",
+        "date": "Sun, Nov 23, 2025",
         "opponent": "Pittsburgh Steelers",
         "home_away": "Home",
         "time": "Noon",
@@ -1101,7 +1101,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "13",
         "week": "Week 13",
-        "date": "Fri, Nov 28",
+        "date": "Fri, Nov 28, 2025",
         "opponent": "Philadelphia Eagles",
         "home_away": "Away",
         "time": "2PM",
@@ -1109,7 +1109,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "14",
         "week": "Week 14",
-        "date": "Sun, Dec 7",
+        "date": "Sun, Dec 7, 2025",
         "opponent": "Green Bay Packers",
         "home_away": "Away",
         "time": "3:25PM",
@@ -1117,7 +1117,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "15",
         "week": "Week 15",
-        "date": "Sun, Dec 14",
+        "date": "Sun, Dec 14, 2025",
         "opponent": "Cleveland Browns",
         "home_away": "Home",
         "time": "Noon",
@@ -1125,7 +1125,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "16",
         "week": "Week 16",
-        "date": "Sat, Dec 20",
+        "date": "Sat, Dec 20, 2025",
         "opponent": "Green Bay Packers",
         "home_away": "Home",
         "time": "7:20PM",
@@ -1133,7 +1133,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "17",
         "week": "Week 17",
-        "date": "Sun, Dec 28",
+        "date": "Sun, Dec 28, 2025",
         "opponent": "San Francisco 49ers",
         "home_away": "Away",
         "time": "7:20PM",
@@ -1141,7 +1141,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "18",
         "week": "Week 18",
-        "date": "Sun, Jan 4",
+        "date": "Sun, Jan 4, 2026",
         "opponent": "Detroit Lions",
         "home_away": "Home",
         "time": "3:25PM",
@@ -1149,7 +1149,7 @@ BEARS_SCHEDULE = [
     {
         "game_no": "19",
         "week": "Wild Card ",
-        "date": "Sat, Jan 10",
+        "date": "Sat, Jan 10, 2026",
         "opponent": "Green Bay Packers",
         "home_away": "Home",
         "time": "7PM",
