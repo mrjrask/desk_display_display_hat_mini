@@ -1373,6 +1373,11 @@ MLB_LOGO_OVERRIDES = {
     "CHC": "CUBS",
     "CWS": "SOX",
     "OAK": "ATH",
+    "ATHLETICS": "ATH",
+    "RED SOX": "BOS",
+    "REDSOX": "BOS",
+    "WHITE SOX": "SOX",
+    "WHITESOX": "SOX",
 }
 
 
