@@ -178,6 +178,25 @@ Run `python tools/validate_required_files.py` to confirm that every tracked
 non-image Python module stays reachable from the main entry points and helper
 scripts.
 
+### Render all screens
+
+Use `tools/maintenance/render_all_screens.py` to render every screen to PNG
+and optionally archive the results:
+
+```bash
+python tools/maintenance/render_all_screens.py [flags]
+```
+
+Available flags:
+
+- `-a`, `--all`: ignore `screens_config.json` and render every available screen.
+- `--sync-screenshots`: write PNG files for each rendered screen to the
+  screenshots directory (default mirrors `ENABLE_SCREENSHOTS` from `config.py`).
+- `--no-sync-screenshots`: disable screenshot syncing even if
+  `ENABLE_SCREENSHOTS` is true.
+- `--no-archive`: skip creating the ZIP archive of rendered screens.
+- `--no-images`: render with placeholder frames instead of loading images.
+
 ---
 
 ## Configuration
