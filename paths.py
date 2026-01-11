@@ -3,6 +3,7 @@ from __future__ import annotations
 """Shared helpers for locating writable storage directories."""
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -23,17 +24,31 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parent
 
 
+def _resolve_env_path(name: str, base_dir: Path) -> Optional[Path]:
+    raw = os.environ.get(name)
+    if not raw:
+        return None
+    resolved = Path(raw).expanduser()
+    if not resolved.is_absolute():
+        resolved = base_dir / resolved
+    return resolved
+
+
 def resolve_storage_paths(*, logger: Optional[object] = None) -> StoragePaths:
     """Return filesystem paths for screenshots and archives.
 
-    Screenshots always write to ``<project_root>/screenshots`` and archives live
-    in ``<project_root>/screenshot_archive``. A ``current`` folder mirrors the
-    latest capture for each screen.
+    Screenshots write to ``<project_root>/screenshots`` and archives live in
+    ``<project_root>/screenshot_archive`` by default. Set ``SCREENSHOT_DIR`` or
+    ``SCREENSHOT_ARCHIVE_BASE`` in the environment (including via ``.env``) to
+    override the output locations. A ``current`` folder mirrors the latest
+    capture for each screen.
     """
 
     base_dir = _project_root()
-    screenshot_dir = base_dir / "screenshots"
-    archive_base = base_dir / "screenshot_archive"
+    screenshot_dir = _resolve_env_path("SCREENSHOT_DIR", base_dir) or (base_dir / "screenshots")
+    archive_base = _resolve_env_path("SCREENSHOT_ARCHIVE_BASE", base_dir) or (
+        base_dir / "screenshot_archive"
+    )
 
     current_screenshot_dir = screenshot_dir / "current"
 

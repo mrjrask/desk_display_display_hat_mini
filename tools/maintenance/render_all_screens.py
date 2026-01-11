@@ -493,11 +493,13 @@ def render_all_screens(
     sync_screenshots: bool = ENABLE_SCREENSHOTS,
     create_archive: bool = True,
     ignore_schedule: bool = False,
+    suppress_images: bool = False,
 ) -> int:
     return _render_all_screens_impl(
         sync_screenshots=sync_screenshots,
         create_archive=create_archive,
         ignore_schedule=ignore_schedule,
+        suppress_images=suppress_images,
     )
 
 
@@ -507,7 +509,7 @@ def render_all_screens_without_images(
     create_archive: bool = True,
     ignore_schedule: bool = False,
 ) -> int:
-    return _render_all_screens_impl(
+    return render_all_screens(
         sync_screenshots=sync_screenshots,
         create_archive=create_archive,
         ignore_schedule=ignore_schedule,
