@@ -24,7 +24,6 @@ from config import (
     LONGITUDE,
     TRAVEL_TITLE,
     WIDTH,
-    is_within_dark_hours,
 )
 from screens.draw_travel_time import (
     TRAVEL_ICON_294,
@@ -43,21 +42,10 @@ MAP_MARGIN = 6
 LEGEND_GAP = 6
 BACKGROUND_COLOR = (18, 18, 18)
 MAP_COLOR = (36, 36, 36)
-MAP_DAY_BRIGHTNESS = 1.0
 MAP_NIGHT_BRIGHTNESS = 0.9
 STATIC_MAP_TIMEOUT = 6
 STATIC_MAP_USER_AGENT = "desk-display/traffic-map"
 MAP_ZOOM_LEVELS = range(18, 6, -1)
-MAP_DAY_STYLES = (
-    "style=element:geometry|color:0xeaeaea",
-    "style=element:labels.text.fill|color:0x444444",
-    "style=element:labels.text.stroke|color:0xffffff|lightness:80",
-    "style=feature:road|element:geometry|color:0xf5f5f5",
-    "style=feature:road.highway|element:geometry|color:0xe9dfd1",
-    "style=feature:poi|visibility:off",
-    "style=feature:transit|visibility:off",
-    "style=feature:water|element:geometry|color:0xd7e7f3",
-)
 MAP_NIGHT_STYLES = (
     "style=element:geometry|color:0x121212",
     "style=element:labels.text.fill|color:0xe6e6e6",
@@ -311,7 +299,7 @@ def _fetch_base_map(
 ) -> Optional[Image.Image]:
     lat, lng = center
     width, height = size
-    style_set = MAP_NIGHT_STYLES if is_within_dark_hours() else MAP_DAY_STYLES
+    style_set = MAP_NIGHT_STYLES
     if not GOOGLE_MAPS_API_KEY:
         logging.warning("Traffic map: GOOGLE_MAPS_API_KEY not set; skipping base map fetch")
         return None
@@ -393,8 +381,7 @@ def _compose_legend_entry(
 def _compose_travel_map(routes: Dict[str, Optional[dict]]) -> Image.Image:
     route_order = ["lake_shore", "kennedy_edens", "kennedy_294"]
     route_segments = _extract_route_segments(routes)
-    night_mode = is_within_dark_hours()
-    brightness = MAP_NIGHT_BRIGHTNESS if night_mode else MAP_DAY_BRIGHTNESS
+    brightness = MAP_NIGHT_BRIGHTNESS
 
     base_width = WIDTH // 3
     map_widths = [base_width, base_width, WIDTH - 2 * base_width]
