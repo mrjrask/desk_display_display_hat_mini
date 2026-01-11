@@ -761,6 +761,27 @@ def _game_sort_value(entry: Dict[str, Any]) -> float:
     return _week_sort_value(str(entry.get("week", "")))
 
 
+def _parse_game_date(
+    date_text: str, *, default_year: int
+) -> Optional[datetime.date]:
+    if not date_text:
+        return None
+    date_text = str(date_text).strip()
+    if not date_text or date_text.upper() in {"TBD", "BYE"}:
+        return None
+    for fmt in ("%a, %b %d %Y", "%a, %b %d, %Y"):
+        try:
+            parsed = datetime.datetime.strptime(date_text, fmt)
+            return parsed.date()
+        except Exception:
+            continue
+    try:
+        parsed = datetime.datetime.strptime(date_text, "%a, %b %d")
+        return datetime.date(default_year, parsed.month, parsed.day)
+    except Exception:
+        return None
+
+
 def next_game_from_schedule(
     schedule: List[Dict[str, Any]], today: Optional[datetime.date] = None
 ) -> Optional[Dict[str, Any]]:
@@ -769,15 +790,10 @@ def next_game_from_schedule(
 
     candidates: List[tuple[Optional[datetime.date], float, int, Dict[str, Any]]] = []
     for idx, entry in enumerate(schedule):
-        if entry.get("opponent") == "—" or str(entry.get("time", "")).upper() == "TBD":
+        if entry.get("opponent") == "—":
             continue
 
-        parsed_date: Optional[datetime.date] = None
-        try:
-            parsed = datetime.datetime.strptime(entry.get("date", ""), "%a, %b %d")
-            parsed_date = datetime.date(year, parsed.month, parsed.day)
-        except Exception:
-            parsed_date = None
+        parsed_date = _parse_game_date(entry.get("date", ""), default_year=year)
 
         sort_value = _game_sort_value(entry)
         candidates.append((parsed_date, sort_value, idx, entry))
@@ -797,7 +813,28 @@ def next_game_from_schedule(
         )
         return entry
 
-    parsed_date, _, _, entry = min(
+    dated_past = [
+        (parsed_date, sort_value, idx, entry)
+        for parsed_date, sort_value, idx, entry in candidates
+        if parsed_date is not None and parsed_date <= today
+    ]
+    if dated_past:
+        _, last_sort_value, _, _ = max(
+            dated_past, key=lambda item: (item[0], item[1], item[2])
+        )
+        higher_games = [
+            (parsed_date, sort_value, idx, entry)
+            for parsed_date, sort_value, idx, entry in candidates
+            if sort_value > last_sort_value
+        ]
+        if higher_games:
+            _, _, _, entry = min(
+                higher_games,
+                key=lambda item: (item[1], item[0] or datetime.date.max, item[2]),
+            )
+            return entry
+
+    _, _, _, entry = min(
         candidates, key=lambda item: (item[1], item[0] or datetime.date.max, item[2])
     )
     return entry
