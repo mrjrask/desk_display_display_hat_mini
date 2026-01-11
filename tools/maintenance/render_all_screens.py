@@ -364,16 +364,27 @@ def _suppress_animation_delay():
 def _suppress_image_loading() -> Callable[[], None]:
     original_open = Image.open
 
-    def placeholder_open(*_args, **_kwargs) -> Image.Image:
-        size = (max(1, WIDTH // 2), max(1, HEIGHT // 2))
-        img = Image.new("RGBA", size, (0, 0, 0, 0))
+    def _build_placeholder(size: tuple[int, int]) -> Image.Image:
+        width, height = max(1, size[0]), max(1, size[1])
+        img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         for inset in range(0, 6, 2):
             draw.rectangle(
-                [inset, inset, size[0] - 1 - inset, size[1] - 1 - inset],
+                [inset, inset, width - 1 - inset, height - 1 - inset],
                 outline=(255, 255, 255, 255),
             )
+        draw.line((0, 0, width - 1, height - 1), fill=(255, 255, 255, 255), width=1)
+        draw.line((0, height - 1, width - 1, 0), fill=(255, 255, 255, 255), width=1)
         return img
+
+    def placeholder_open(*args, **kwargs) -> Image.Image:
+        size = (max(1, WIDTH // 2), max(1, HEIGHT // 2))
+        try:
+            with original_open(*args, **kwargs) as opened:
+                size = opened.size
+        except Exception:
+            pass
+        return _build_placeholder(size)
 
     def restore() -> None:
         Image.open = original_open
