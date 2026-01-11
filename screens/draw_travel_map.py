@@ -381,30 +381,30 @@ def _compose_travel_map(routes: Dict[str, Optional[dict]]) -> Image.Image:
     route_order = ["lake_shore", "kennedy_edens", "kennedy_294"]
     route_segments = _extract_route_segments(routes)
 
-    base_height = HEIGHT // 3
-    map_heights = [base_height, base_height, HEIGHT - 2 * base_height]
+    base_width = WIDTH // 3
+    map_widths = [base_width, base_width, WIDTH - 2 * base_width]
     map_images: List[Image.Image] = []
 
-    for key, map_height in zip(route_order, map_heights):
+    for key, map_width in zip(route_order, map_widths):
         segments = route_segments.get(key, [])
         polylines = [points for points, _ in segments]
-        map_view = _select_map_view(polylines, (WIDTH, map_height), (LATITUDE, LONGITUDE))
+        map_view = _select_map_view(polylines, (map_width, HEIGHT), (LATITUDE, LONGITUDE))
 
-        base_map = _fetch_base_map(map_view[0], map_view[1], (WIDTH, map_height))
+        base_map = _fetch_base_map(map_view[0], map_view[1], (map_width, HEIGHT))
         if base_map is None:
-            map_canvas = Image.new("RGB", (WIDTH, map_height), MAP_COLOR)
+            map_canvas = Image.new("RGB", (map_width, HEIGHT), MAP_COLOR)
         else:
             map_canvas = ImageEnhance.Brightness(base_map).enhance(MAP_BRIGHTNESS)
 
         draw = ImageDraw.Draw(map_canvas)
-        _draw_routes(draw, {key: segments}, (WIDTH, map_height), map_view=map_view)
+        _draw_routes(draw, {key: segments}, (map_width, HEIGHT), map_view=map_view)
         map_images.append(map_canvas)
 
     canvas = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
-    y_offset = 0
+    x_offset = 0
     for map_image in map_images:
-        canvas.paste(map_image, (0, y_offset))
-        y_offset += map_image.height
+        canvas.paste(map_image, (x_offset, 0))
+        x_offset += map_image.width
 
     return canvas
 
