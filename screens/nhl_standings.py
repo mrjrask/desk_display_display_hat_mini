@@ -445,9 +445,9 @@ def _normalize_conference_name(name: object) -> str:
     if text.lower().endswith("conference"):
         text = text[: -len("conference")].strip()
     lowered = text.lower()
-    if lowered == "western":
+    if lowered in {"western", "west", "w"}:
         return CONFERENCE_WEST_KEY
-    if lowered == "eastern":
+    if lowered in {"eastern", "east", "e"}:
         return CONFERENCE_EAST_KEY
     return text.title()
 
