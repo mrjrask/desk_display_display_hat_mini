@@ -490,7 +490,7 @@ def _fetch_standings_data() -> dict[str, dict[str, list[dict]]]:
     if _statsapi_available():
         standings = _fetch_standings_statsapi()
     else:
-        logging.info("Using api-web NHL standings endpoint (statsapi DNS failure)")
+        logging.debug("Using api-web NHL standings endpoint (statsapi DNS failure)")
 
     if not standings:
         standings = _fetch_standings_api_web()
