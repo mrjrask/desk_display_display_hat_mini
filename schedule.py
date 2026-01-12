@@ -180,11 +180,14 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
                     raise ValueError(
                         f"Alternate frequency for '{screen_id}' must be an integer"
                     ) from exc
-                if alt_frequency_int <= 0:
+                if alt_frequency_int < 0:
                     raise ValueError(
-                        f"Alternate frequency for '{screen_id}' must be greater than zero"
+                        f"Alternate frequency for '{screen_id}' cannot be negative"
                     )
-                alternate = _AlternateSchedule(tuple(alt_screen_ids), alt_frequency_int)
+                if alt_frequency_int > 0:
+                    alternate = _AlternateSchedule(
+                        tuple(alt_screen_ids), alt_frequency_int
+                    )
         else:
             try:
                 frequency = int(raw)
