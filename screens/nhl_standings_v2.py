@@ -46,6 +46,7 @@ from screens.nhl_standings import (
 WILDCARD_SECTION_NAME = "Wild Card"
 OVERVIEW_TITLE_WEST_V3 = "NHL West Wild Card"
 OVERVIEW_TITLE_EAST_V3 = "NHL East Wild Card"
+TITLE_SUBTITLE_WILDCARD = "Wild Card Standings"
 
 
 @contextmanager
@@ -391,13 +392,18 @@ def draw_nhl_standings_west_v2(display, transition: bool = False) -> ScreenImage
             divisions.append(WILDCARD_SECTION_NAME)
         if not divisions:
             clear_display(display)
-            img = _render_empty(TITLE_WEST)
+            img = _render_empty(TITLE_WEST, TITLE_SUBTITLE_WILDCARD)
             if transition:
                 return ScreenImage(img, displayed=False)
             display.image(img)
             return ScreenImage(img, displayed=True)
 
-        full_img = _render_conference(TITLE_WEST, divisions, conference)
+        full_img = _render_conference(
+            TITLE_WEST,
+            divisions,
+            conference,
+            subtitle=TITLE_SUBTITLE_WILDCARD,
+        )
         clear_display(display)
         _scroll_vertical(display, full_img)
     return ScreenImage(full_img, displayed=True)
@@ -416,13 +422,18 @@ def draw_nhl_standings_east_v2(display, transition: bool = False) -> ScreenImage
             divisions.append(WILDCARD_SECTION_NAME)
         if not divisions:
             clear_display(display)
-            img = _render_empty(TITLE_EAST)
+            img = _render_empty(TITLE_EAST, TITLE_SUBTITLE_WILDCARD)
             if transition:
                 return ScreenImage(img, displayed=False)
             display.image(img)
             return ScreenImage(img, displayed=True)
 
-        full_img = _render_conference(TITLE_EAST, divisions, conference)
+        full_img = _render_conference(
+            TITLE_EAST,
+            divisions,
+            conference,
+            subtitle=TITLE_SUBTITLE_WILDCARD,
+        )
         clear_display(display)
         _scroll_vertical(display, full_img)
     return ScreenImage(full_img, displayed=True)
