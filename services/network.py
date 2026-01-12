@@ -60,9 +60,20 @@ class ConnectivityMonitor:
                     elif new == "no_internet":
                         logging.warning(f"❌ Wi-Fi ({ssid}) but no Internet.")
                         # cycle radio
-                        subprocess.call(["nmcli","radio","wifi","off"])
-                        time.sleep(WIFI_OFF_DURATION)
-                        subprocess.call(["nmcli","radio","wifi","on"])
+                        try:
+                            subprocess.run(
+                                ["nmcli", "radio", "wifi", "off"],
+                                check=False,
+                                timeout=10,
+                            )
+                            time.sleep(WIFI_OFF_DURATION)
+                            subprocess.run(
+                                ["nmcli", "radio", "wifi", "on"],
+                                check=False,
+                                timeout=10,
+                            )
+                        except subprocess.TimeoutExpired:
+                            logging.warning("Wi-Fi radio toggle timed out; will retry later.")
                         logging.info("🔌 Wi-Fi re-enabled; retrying…")
                     else:
                         logging.info(f"✅ Wi-Fi ({ssid}) and Internet OK.")

@@ -175,7 +175,12 @@ VRNO_CACHE_TTL       = 1800
 
 def get_current_ssid():
     try:
-        return subprocess.check_output(["iwgetid", "-r"]).decode("utf-8").strip()
+        return subprocess.check_output(
+            ["iwgetid", "-r"],
+            timeout=3,
+        ).decode("utf-8").strip()
+    except subprocess.TimeoutExpired:
+        return None
     except Exception:
         return None
 
