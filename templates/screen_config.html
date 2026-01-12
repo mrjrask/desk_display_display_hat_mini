@@ -312,6 +312,43 @@
       });
     }
 
+    function getCurrentScreens() {
+      const rows = [...screenTable.querySelectorAll(".screen-row")];
+      return rows.map((row) => {
+        const inputs = row.querySelectorAll("input");
+        return {
+          id: row.dataset.screenId,
+          frequency: inputs[0].value,
+          alt_screen: inputs[1].value,
+          alt_frequency: inputs[2].value,
+        };
+      });
+    }
+
+    function saveDraft() {
+      const payload = {
+        updatedAt: new Date().toISOString(),
+        screens: getCurrentScreens(),
+      };
+      sessionStorage.setItem(draftStorageKey, JSON.stringify(payload));
+    }
+
+    function clearDraft() {
+      sessionStorage.removeItem(draftStorageKey);
+    }
+
+    function markDirty() {
+      if (!isDirty) {
+        isDirty = true;
+      }
+      saveDraft();
+    }
+
+    function markClean() {
+      isDirty = false;
+      clearDraft();
+    }
+
     function buildRow(screen) {
       const row = document.createElement("div");
       row.className = "row screen-row";
@@ -364,16 +401,7 @@
     async function saveConfiguration() {
       clearError();
       setButtonsDisabled(true);
-      const rows = [...screenTable.querySelectorAll(".screen-row")];
-      const screens = rows.map((row) => {
-        const inputs = row.querySelectorAll("input");
-        return {
-          id: row.dataset.screenId,
-          frequency: inputs[0].value,
-          alt_screen: inputs[1].value,
-          alt_frequency: inputs[2].value,
-        };
-      });
+      const screens = getCurrentScreens();
 
       try {
         const response = await fetch("/api/screens", {
@@ -385,6 +413,7 @@
         if (!response.ok) {
           throw new Error(data.error || "Unable to save configuration");
         }
+        markClean();
       } catch (err) {
         showError(err.message);
       } finally {
@@ -402,6 +431,7 @@
           throw new Error(data.error || "Unable to load defaults");
         }
         renderScreens(data.screens || []);
+        markDirty();
       } catch (err) {
         showError(err.message);
       } finally {
@@ -439,9 +469,39 @@
     loadDefaultsBtnBottom.addEventListener("click", loadDefaults);
     exportBtn.addEventListener("click", exportConfiguration);
     exportBtnBottom.addEventListener("click", exportConfiguration);
-    if (hideZeroFreqToggle) {
-      hideZeroFreqToggle.addEventListener("change", updateZeroFrequencyVisibility);
-      updateZeroFrequencyVisibility();
+
+    screenTable.addEventListener("input", (event) => {
+      if (event.target.matches("input")) {
+        markDirty();
+      }
+    });
+
+    screenTable.addEventListener("dragend", () => {
+      markDirty();
+    });
+
+    window.addEventListener("beforeunload", (event) => {
+      if (!isDirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    });
+
+    const savedDraft = sessionStorage.getItem(draftStorageKey);
+    if (savedDraft) {
+      try {
+        const draft = JSON.parse(savedDraft);
+        if (draft?.screens?.length) {
+          const shouldRestore = window.confirm("Restore unsaved screen rotation edits from your last visit?");
+          if (shouldRestore) {
+            renderScreens(draft.screens);
+            isDirty = true;
+          } else {
+            clearDraft();
+          }
+        }
+      } catch (error) {
+        clearDraft();
+      }
     }
   </script>
 </body>
