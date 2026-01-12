@@ -124,7 +124,9 @@ def _wildcard_sort_key(team: dict) -> Tuple[int, int, int, int, int, str]:
 
 
 def _conference_wildcard_standings(
-    conference: dict[str, list[dict]], division_order: Sequence[str]
+    conference: dict[str, list[dict]],
+    division_order: Sequence[str],
+    wildcard_order: Sequence[str] | None = None,
 ) -> dict[str, list[dict]]:
     wildcard_conf: dict[str, list[dict]] = {}
     remaining: list[dict] = []
@@ -135,7 +137,16 @@ def _conference_wildcard_standings(
         wildcard_conf[division] = teams[:3]
         remaining.extend(teams[3:])
 
-    remaining.sort(key=_wildcard_sort_key)
+    if wildcard_order:
+        order_map = {abbr.upper(): idx for idx, abbr in enumerate(wildcard_order)}
+
+        def _order_key(team: dict) -> tuple[int, Tuple[int, int, int, int, int, str]]:
+            abbr = str(team.get("abbr", "")).upper()
+            return (order_map.get(abbr, 999), _wildcard_sort_key(team))
+
+        remaining.sort(key=_order_key)
+    else:
+        remaining.sort(key=_wildcard_sort_key)
     if len(remaining) >= 3:
         remaining[2]["_wildcard_cutoff_before"] = True
     if remaining:
@@ -145,7 +156,8 @@ def _conference_wildcard_standings(
 
 
 def _build_wildcard_standings(
-    standings_by_conf: dict[str, dict[str, list[dict]]]
+    standings_by_conf: dict[str, dict[str, list[dict]]],
+    wildcard_order_by_conf: dict[str, list[str]] | None = None,
 ) -> dict[str, dict[str, list[dict]]]:
     wildcard: dict[str, dict[str, list[dict]]] = {}
     conference_orders = {
@@ -156,7 +168,11 @@ def _build_wildcard_standings(
     for conf_key, order in conference_orders.items():
         conference = standings_by_conf.get(conf_key, {})
         if conference:
-            wildcard[conf_key] = _conference_wildcard_standings(conference, order)
+            wildcard[conf_key] = _conference_wildcard_standings(
+                conference,
+                order,
+                (wildcard_order_by_conf or {}).get(conf_key),
+            )
 
     return wildcard
 
@@ -264,7 +280,8 @@ def _prepare_overview_horizontal(
 def draw_nhl_standings_overview_v2_west(display, transition: bool = False) -> ScreenImage:
     with _wildcard_columns():
         standings_by_conf = _fetch_standings_data()
-        wildcard_standings = _build_wildcard_standings(standings_by_conf)
+        wildcard_order = nhl_standings._fetch_wildcard_order_api_web()
+        wildcard_standings = _build_wildcard_standings(standings_by_conf, wildcard_order)
         _apply_style_overrides("NHL Standings Overview v2 West")
         _update_column_metrics()
 
@@ -298,7 +315,8 @@ def draw_nhl_standings_overview_v2_west(display, transition: bool = False) -> Sc
 def draw_nhl_overview_west_v3(display, transition: bool = False) -> ScreenImage:
     with _wildcard_columns():
         standings_by_conf = _fetch_standings_data()
-        wildcard_standings = _build_wildcard_standings(standings_by_conf)
+        wildcard_order = nhl_standings._fetch_wildcard_order_api_web()
+        wildcard_standings = _build_wildcard_standings(standings_by_conf, wildcard_order)
         _apply_style_overrides("NHL Overview West v3")
         _update_column_metrics()
 
@@ -332,7 +350,8 @@ def draw_nhl_overview_west_v3(display, transition: bool = False) -> ScreenImage:
 def draw_nhl_standings_overview_v2_east(display, transition: bool = False) -> ScreenImage:
     with _wildcard_columns():
         standings_by_conf = _fetch_standings_data()
-        wildcard_standings = _build_wildcard_standings(standings_by_conf)
+        wildcard_order = nhl_standings._fetch_wildcard_order_api_web()
+        wildcard_standings = _build_wildcard_standings(standings_by_conf, wildcard_order)
         _apply_style_overrides("NHL Standings Overview v2 East")
         _update_column_metrics()
 
@@ -366,7 +385,8 @@ def draw_nhl_standings_overview_v2_east(display, transition: bool = False) -> Sc
 def draw_nhl_overview_east_v3(display, transition: bool = False) -> ScreenImage:
     with _wildcard_columns():
         standings_by_conf = _fetch_standings_data()
-        wildcard_standings = _build_wildcard_standings(standings_by_conf)
+        wildcard_order = nhl_standings._fetch_wildcard_order_api_web()
+        wildcard_standings = _build_wildcard_standings(standings_by_conf, wildcard_order)
         _apply_style_overrides("NHL Overview East v3")
         _update_column_metrics()
 
@@ -400,7 +420,8 @@ def draw_nhl_overview_east_v3(display, transition: bool = False) -> ScreenImage:
 def draw_nhl_standings_west_v2(display, transition: bool = False) -> ScreenImage:
     with _wildcard_columns():
         standings_by_conf = _fetch_standings_data()
-        wildcard_standings = _build_wildcard_standings(standings_by_conf)
+        wildcard_order = nhl_standings._fetch_wildcard_order_api_web()
+        wildcard_standings = _build_wildcard_standings(standings_by_conf, wildcard_order)
         _apply_style_overrides("NHL Standings West v2")
         _update_column_metrics()
         conference = wildcard_standings.get(CONFERENCE_WEST_KEY, {})
@@ -431,7 +452,8 @@ def draw_nhl_standings_west_v2(display, transition: bool = False) -> ScreenImage
 def draw_nhl_standings_east_v2(display, transition: bool = False) -> ScreenImage:
     with _wildcard_columns():
         standings_by_conf = _fetch_standings_data()
-        wildcard_standings = _build_wildcard_standings(standings_by_conf)
+        wildcard_order = nhl_standings._fetch_wildcard_order_api_web()
+        wildcard_standings = _build_wildcard_standings(standings_by_conf, wildcard_order)
         _apply_style_overrides("NHL Standings East v2")
         _update_column_metrics()
         conference = wildcard_standings.get(CONFERENCE_EAST_KEY, {})
