@@ -949,7 +949,7 @@ def dns_diagnostics() -> dict:
 
 def _fetch_games_for_date(day: datetime.date) -> list[dict]:
     if not _statsapi_available():
-        logging.info("Using api-web NHL scoreboard endpoint for %s (statsapi DNS failure)", day)
+        logging.debug("Using api-web NHL scoreboard endpoint for %s (statsapi DNS failure)", day)
         return _fetch_games_api_web(day)
 
     stats_url = (
@@ -1127,4 +1127,3 @@ if __name__ == "__main__":  # pragma: no cover
         draw_nhl_scoreboard(disp)
     finally:
         clear_display(disp)
-
