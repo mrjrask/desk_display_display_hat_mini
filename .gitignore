@@ -126,10 +126,10 @@ logs/
 
 # Local configuration
 local_settings.py
+screens_config.local.json
 
 # Databases
 *.sqlite3
 
 # Temporary files
 *.tmp
-
