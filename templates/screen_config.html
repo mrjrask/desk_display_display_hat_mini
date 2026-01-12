@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Screen Rotation Config</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+    }
+    body {
+      margin: 0;
+      padding: 1.5rem;
+      min-height: 100vh;
+      background: radial-gradient(circle at 15% 20%, rgba(56, 189, 248, 0.1), transparent 35%), #0f172a;
+    }
+    h1 {
+      text-align: center;
+      margin: 0 0 0.5rem;
+      font-size: clamp(1.8rem, 3vw, 2.6rem);
+    }
+    .subtitle {
+      text-align: center;
+      color: #94a3b8;
+      margin-bottom: 1.5rem;
+      font-size: 0.95rem;
+    }
+    .panel {
+      max-width: 1100px;
+      margin: 0 auto;
+      background: rgba(15, 23, 42, 0.9);
+      border-radius: 20px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      box-shadow: 0 20px 40px rgba(15, 23, 42, 0.5);
+      padding: 1.5rem;
+    }
+    .toolbar,
+    .footer-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+    .actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .toolbar .status {
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+    .btn {
+      border: none;
+      border-radius: 999px;
+      padding: 0.6rem 1.4rem;
+      font-weight: 700;
+      cursor: pointer;
+      background: #38bdf8;
+      color: #0f172a;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: 0 12px 30px rgba(56, 189, 248, 0.3);
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+    }
+    .btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+      box-shadow: none;
+    }
+    .error {
+      display: none;
+      margin-bottom: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      border: 1px solid rgba(248, 113, 113, 0.6);
+      background: rgba(248, 113, 113, 0.15);
+      color: #fecaca;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .table-header {
+      display: grid;
+      grid-template-columns: 48px 1.6fr 0.7fr 1.3fr 0.7fr;
+      gap: 0.75rem;
+      padding: 0 0.5rem 0.25rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.75rem;
+      color: #94a3b8;
+      font-weight: 700;
+    }
+    .table {
+      display: grid;
+      gap: 0.75rem;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 48px 1.6fr 0.7fr 1.3fr 0.7fr;
+      gap: 0.75rem;
+      align-items: center;
+      padding: 0.85rem 0.75rem;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(15, 23, 42, 0.8);
+    }
+    .row input {
+      width: 100%;
+      padding: 0.5rem 0.6rem;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      background: rgba(15, 23, 42, 0.6);
+      color: #e2e8f0;
+      font-size: 0.95rem;
+    }
+    .handle {
+      cursor: grab;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 1.2rem;
+      color: #7dd3fc;
+      user-select: none;
+    }
+    .row.dragging {
+      opacity: 0.5;
+      border-style: dashed;
+    }
+    .row .screen-id {
+      font-weight: 700;
+      font-size: 1rem;
+    }
+    .row .hint {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      margin-top: 0.25rem;
+    }
+    @media (max-width: 900px) {
+      .table-header {
+        display: none;
+      }
+      .row {
+        grid-template-columns: 40px 1fr;
+        grid-auto-rows: auto;
+      }
+      .row > div {
+        grid-column: span 2;
+      }
+      .row .handle {
+        grid-column: span 2;
+        justify-content: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Screen Rotation Configuration</h1>
+  <div class="subtitle">Drag to reorder screens, then set frequency and alternates.</div>
+
+  <div class="panel">
+    <div class="toolbar">
+      <div class="status">Editing: {{ config_path }}</div>
+      <div class="actions">
+        <button class="btn" id="saveBtn">Save changes</button>
+        <button class="btn" id="loadDefaultsBtn" type="button">Load defaults</button>
+        <button class="btn" id="exportBtn" type="button">Export configuration</button>
+      </div>
+    </div>
+    <div class="error" id="errorBox"></div>
+    <div class="table-header">
+      <div></div>
+      <div>Screen</div>
+      <div>Freq</div>
+      <div>Alt screen(s)</div>
+      <div>Alt freq</div>
+    </div>
+    <div class="table" id="screenTable">
+      {% for screen in screens %}
+      <div class="row screen-row" draggable="true" data-screen-id="{{ screen.id }}">
+        <div class="handle">☰</div>
+        <div>
+          <div class="screen-id">{{ screen.id }}</div>
+        </div>
+        <div>
+          <input type="number" min="0" step="1" value="{{ screen.frequency }}">
+          <div class="hint">0 disables this screen.</div>
+        </div>
+        <div>
+          <input type="text" list="screenIds" placeholder="Optional alternate screen(s)" value="{{ screen.alt_screen }}">
+          <div class="hint">Comma-separated list if needed.</div>
+        </div>
+        <div>
+          <input type="number" min="0" step="1" placeholder="1" value="{{ screen.alt_frequency }}">
+          <div class="hint">Frequency for alternate.</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="footer-actions">
+      <div class="actions">
+        <button class="btn" id="saveBtnBottom">Save changes</button>
+        <button class="btn" id="loadDefaultsBtnBottom" type="button">Load defaults</button>
+        <button class="btn" id="exportBtnBottom" type="button">Export configuration</button>
+      </div>
+    </div>
+  </div>
+
+  <datalist id="screenIds">
+    {% for screen_id in screen_ids %}
+    <option value="{{ screen_id }}"></option>
+    {% endfor %}
+  </datalist>
+
+  <script>
+    const screenTable = document.getElementById("screenTable");
+    const saveBtn = document.getElementById("saveBtn");
+    const loadDefaultsBtn = document.getElementById("loadDefaultsBtn");
+    const exportBtn = document.getElementById("exportBtn");
+    const saveBtnBottom = document.getElementById("saveBtnBottom");
+    const loadDefaultsBtnBottom = document.getElementById("loadDefaultsBtnBottom");
+    const exportBtnBottom = document.getElementById("exportBtnBottom");
+    const errorBox = document.getElementById("errorBox");
+
+    function getDragAfterElement(container, y) {
+      const draggableElements = [...container.querySelectorAll(".screen-row:not(.dragging)")];
+      return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) {
+          return { offset, element: child };
+        }
+        return closest;
+      }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
+    screenTable.addEventListener("dragstart", (event) => {
+      const row = event.target.closest(".screen-row");
+      if (!row) return;
+      row.classList.add("dragging");
+    });
+
+    screenTable.addEventListener("dragend", (event) => {
+      const row = event.target.closest(".screen-row");
+      if (!row) return;
+      row.classList.remove("dragging");
+    });
+
+    screenTable.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      const dragging = document.querySelector(".screen-row.dragging");
+      if (!dragging) return;
+      const afterElement = getDragAfterElement(screenTable, event.clientY);
+      if (!afterElement) {
+        screenTable.appendChild(dragging);
+      } else {
+        screenTable.insertBefore(dragging, afterElement);
+      }
+    });
+
+    function showError(message) {
+      errorBox.textContent = message;
+      errorBox.style.display = "block";
+    }
+
+    function clearError() {
+      errorBox.textContent = "";
+      errorBox.style.display = "none";
+    }
+
+    function setButtonsDisabled(disabled) {
+      [saveBtn, loadDefaultsBtn, exportBtn, saveBtnBottom, loadDefaultsBtnBottom, exportBtnBottom].forEach((btn) => {
+        if (btn) btn.disabled = disabled;
+      });
+    }
+
+    function buildRow(screen) {
+      const row = document.createElement("div");
+      row.className = "row screen-row";
+      row.draggable = true;
+      row.dataset.screenId = screen.id;
+      row.innerHTML = `
+        <div class="handle">☰</div>
+        <div>
+          <div class="screen-id">${screen.id}</div>
+        </div>
+        <div>
+          <input type="number" min="0" step="1" value="${screen.frequency ?? 0}">
+          <div class="hint">0 disables this screen.</div>
+        </div>
+        <div>
+          <input type="text" list="screenIds" placeholder="Optional alternate screen(s)" value="${screen.alt_screen ?? ""}">
+          <div class="hint">Comma-separated list if needed.</div>
+        </div>
+        <div>
+          <input type="number" min="0" step="1" placeholder="1" value="${screen.alt_frequency ?? ""}">
+          <div class="hint">Frequency for alternate.</div>
+        </div>
+      `;
+      return row;
+    }
+
+    function renderScreens(screens) {
+      screenTable.innerHTML = "";
+      screens.forEach((screen) => {
+        screenTable.appendChild(buildRow(screen));
+      });
+    }
+
+    async function saveConfiguration() {
+      clearError();
+      setButtonsDisabled(true);
+      const rows = [...screenTable.querySelectorAll(".screen-row")];
+      const screens = rows.map((row) => {
+        const inputs = row.querySelectorAll("input");
+        return {
+          id: row.dataset.screenId,
+          frequency: inputs[0].value,
+          alt_screen: inputs[1].value,
+          alt_frequency: inputs[2].value,
+        };
+      });
+
+      try {
+        const response = await fetch("/api/screens", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ screens }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Unable to save configuration");
+        }
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        setButtonsDisabled(false);
+      }
+    }
+
+    async function loadDefaults() {
+      clearError();
+      setButtonsDisabled(true);
+      try {
+        const response = await fetch("/api/screens/defaults");
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Unable to load defaults");
+        }
+        renderScreens(data.screens || []);
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        setButtonsDisabled(false);
+      }
+    }
+
+    async function exportConfiguration() {
+      clearError();
+      setButtonsDisabled(true);
+      try {
+        const response = await fetch("/api/screens/export");
+        if (!response.ok) {
+          throw new Error("Unable to export configuration");
+        }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "screens_config.export.json";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        setButtonsDisabled(false);
+      }
+    }
+
+    saveBtn.addEventListener("click", saveConfiguration);
+    saveBtnBottom.addEventListener("click", saveConfiguration);
+    loadDefaultsBtn.addEventListener("click", loadDefaults);
+    loadDefaultsBtnBottom.addEventListener("click", loadDefaults);
+    exportBtn.addEventListener("click", exportConfiguration);
+    exportBtnBottom.addEventListener("click", exportConfiguration);
+  </script>
+</body>
+</html>

@@ -27,6 +27,7 @@ import datetime
 import signal
 import shutil
 import subprocess
+import sys
 from contextlib import nullcontext
 from typing import Callable, Dict, Optional, Set, Tuple
 
@@ -102,7 +103,11 @@ from schedule import ScreenScheduler, build_scheduler, load_schedule_config
 
 # ─── Paths ───────────────────────────────────────────────────────────────────
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(SCRIPT_DIR, "screens_config.json")
+DEFAULT_CONFIG_PATH = os.path.join(SCRIPT_DIR, "screens_config.json")
+LOCAL_CONFIG_PATH = os.environ.get(
+    "SCREENS_CONFIG_LOCAL_PATH", os.path.join(SCRIPT_DIR, "screens_config.local.json")
+)
+CONFIG_PATH = LOCAL_CONFIG_PATH if os.path.exists(LOCAL_CONFIG_PATH) else DEFAULT_CONFIG_PATH
 
 # ─── Screenshot archiving (batch) ────────────────────────────────────────────
 ARCHIVE_THRESHOLD = 500  # archive when we reach this many images
@@ -289,6 +294,7 @@ def refresh_schedule_if_needed(force: bool = False) -> None:
 
 display: Optional[Display] = None
 _background_refresh_thread: Optional[threading.Thread] = None
+_config_ui_process: Optional[subprocess.Popen] = None
 _runtime_initialized = False
 
 
@@ -341,6 +347,29 @@ def _restart_desk_display_service() -> None:
         )
     except Exception as exc:
         logging.error("Failed to restart desk_display.service: %s", exc)
+
+
+def _start_config_ui() -> None:
+    global _config_ui_process
+
+    if os.environ.get("SCREEN_CONFIG_AUTOSTART", "1").strip().lower() in {"0", "false", "no"}:
+        logging.info("⚙️  Screen configuration UI autostart disabled.")
+        return
+
+    if _config_ui_process is not None and _config_ui_process.poll() is None:
+        return
+
+    config_ui_path = os.path.join(SCRIPT_DIR, "config_ui.py")
+    if not os.path.exists(config_ui_path):
+        logging.warning("Screen configuration UI entrypoint missing at %s.", config_ui_path)
+        return
+
+    logging.info("🧭 Launching screen configuration UI…")
+    _config_ui_process = subprocess.Popen(
+        [sys.executable, config_ui_path],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 def _check_control_buttons() -> bool:
@@ -554,6 +583,16 @@ def _finalize_shutdown() -> None:
     if _button_monitor_thread and _button_monitor_thread.is_alive():
         _button_monitor_thread.join(timeout=1.0)
         _button_monitor_thread = None
+
+    global _config_ui_process
+    if _config_ui_process and _config_ui_process.poll() is None:
+        logging.info("🛑 Stopping screen configuration UI…")
+        _config_ui_process.terminate()
+        try:
+            _config_ui_process.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            _config_ui_process.kill()
+        _config_ui_process = None
 
     clear_update_indicator(display)
     _shutdown_complete.set()
@@ -1028,6 +1067,8 @@ def init_runtime() -> None:
     )
     logging.getLogger("requests").setLevel(logging.WARNING)
     logging.info("🖥️  Starting display service…")
+
+    _start_config_ui()
 
     _storage_paths = resolve_storage_paths(logger=logging.getLogger(__name__))
     SCREENSHOT_DIR = str(_storage_paths.screenshot_dir)

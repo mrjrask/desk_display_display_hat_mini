@@ -105,15 +105,20 @@ Override `PROJECT_DIR` when you want the installer to target a different checkou
 PROJECT_DIR=/home/pi/desk_display bash ./scripts/install_bookworm.sh
 ```
 
-### Admin service helpers
+### Screen configuration UI
 
-Manage the Flask-based admin UI (`admin.py`) as its own systemd service with the helper scripts in `scripts/`:
+The screen configuration UI launches automatically with the main service. To edit the screen order, frequencies, and alternates via a drag-and-drop UI, you can also run the configuration app directly:
 
-- Install/start the admin service: `bash ./scripts/install_admin.sh`
-- Update the code + dependencies and restart the service: `bash ./scripts/update_admin.sh`
-- Disable and remove the service: `bash ./scripts/uninstall_admin.sh`
+```bash
+python config_ui.py
+```
 
-The installer shares the primary virtual environment at `venv/` and installs the same apt/pip dependencies as the main display service. Customize where the service runs by exporting `PROJECT_DIR`, `ADMIN_HOST`, or `ADMIN_PORT` before invoking the installer. Additional environment overrides (for example `ADMIN_API_TOKEN` or `SCREENS_STYLE_PATH`) can be placed in an optional `.env.admin` file alongside the scripts; it is loaded automatically by the systemd unit.
+By default it listens on `http://localhost:5002`. Override the binding with:
+
+- `SCREEN_CONFIG_HOST` (default `0.0.0.0`)
+- `SCREEN_CONFIG_PORT` (default `5002`)
+- `SCREENS_CONFIG_PATH` (path to the `screens_config.json` file)
+- `SCREEN_CONFIG_AUTOSTART` (set to `0`, `false`, or `no` to disable autostart)
 
 ---
 
@@ -121,7 +126,7 @@ The installer shares the primary virtual environment at `venv/` and installs the
 
 ```
 desk_display/
-├─ main.py / admin.py / utils.py / config.py
+├─ main.py / config_ui.py / utils.py / config.py
 ├─ config_store.py / data_fetch.py / paths.py / schedule.py / schedule_migrations.py / screens_catalog.py
 ├─ screens_config.json / screens_style.json
 ├─ services/
@@ -152,15 +157,14 @@ desk_display/
 ├─ scripts/
 │  ├─ check_api_statuses.py
 │  ├─ install_common.sh
-│  ├─ install_bookworm.sh / install_trixie.sh
-│  └─ install_admin.sh / update_admin.sh / uninstall_admin.sh
+│  └─ install_bookworm.sh / install_trixie.sh
 ├─ tools/
 │  ├─ test_screens.py             # interactive screen renderer harness
 │  └─ maintenance/
 │     ├─ cleanup.sh               # clears display + archives leftover assets on shutdown
 │     ├─ render_all_screens.py    # renders every screen to PNG and zips them
 │     └─ reset_screenshots.sh     # purges screenshots/ and screenshot_archive/
-├─ templates/                     # Flask admin templates
+├─ templates/                     # Flask configuration templates
 ├─ tests/
 ├─ images/
 │  ├─ mlb/<ABBR>.png              # MLB team logos (e.g., CHC.png)
@@ -223,9 +227,6 @@ The scheduler now uses a **playlist-centric schema (v2)** that supports reusable
 {
   "version": 2,
   "catalog": {"presets": {}},
-  "metadata": {
-    "ui": {"playlist_admin_enabled": true}
-  },
   "playlists": {
     "weather": {
       "label": "Weather",
@@ -252,7 +253,7 @@ The scheduler now uses a **playlist-centric schema (v2)** that supports reusable
 
 Key points:
 
-- **`catalog`** holds reusable building blocks (e.g., preset playlists exposed in the admin UI sidebar).
+- **`catalog`** holds reusable building blocks (for example, preset playlists).
 - **`playlists`** is a dictionary of playlist IDs → definitions. Each playlist contains an ordered `steps` list. Steps may be screen descriptors, nested playlist references, or rule descriptors (`variants`, `cycle`, `every`).
 - **`sequence`** is the top-level playlist order for the display loop. Entries can reference playlists or inline descriptors.
 - Optional **conditions** may be attached to playlists or individual steps:
@@ -310,20 +311,9 @@ python schedule_migrations.py migrate --input screens_config.json --output scree
 
 This writes a playlist-aware config and validates it using the scheduler parser. The original file is left untouched when `--output` is provided.
 
-#### Admin workflow
-
-- The refreshed admin UI (enabled when `metadata.ui.playlist_admin_enabled` is `true`) provides:
-  - Drag-and-drop sequence editing with playlist cards.
-  - Rule wizards for **frequency**, **cycle**, and **variants** patterns.
-  - Condition editors for days-of-week and time-of-day windows.
-  - A preview drawer that simulates the next N screens via the live scheduler.
-  - Version history with rollback, backed by `config_versions/` plus an SQLite ledger.
-- Set `metadata.ui.playlist_admin_enabled` to `false` (or append `?legacy=1` to the URL) to fall back to the JSON editor.
-- Every save records an audit entry (actor, summary, diff summary) and prunes historical versions beyond the configured retention window.
-
 ### Default playlist reference
 
-The repository ships with a ready-to-run `screens_config.json` that exposes the **Default loop** playlist shown in the admin UI. The playlist executes the following steps in order (rules are evaluated on each pass through the loop):
+The repository ships with a ready-to-run `screens_config.json` that exposes the **Default loop** playlist. The playlist executes the following steps in order (rules are evaluated on each pass through the loop):
 
 1. `date`
 2. `weather1`
@@ -344,7 +334,7 @@ The repository ships with a ready-to-run `screens_config.json` that exposes the 
 17. Every seventh pass, show `NBA Scoreboard`.
 18. Every third pass, show `MLB Scoreboard`.
 
-Each step above maps directly to the JSON structure under `playlists.default.steps`, so any edits made through the admin UI will keep the document and the on-device rotation in sync.
+Each step above maps directly to the JSON structure under `playlists.default.steps`.
 
 ---
 
@@ -508,7 +498,7 @@ trigger a fresh boot after cleanup completes.
 ## Screenshots & archiving
 
 - Screenshots land in `./screenshots/` when `ENABLE_SCREENSHOTS=True`.
-- `./screenshots/current/` always mirrors the latest capture per screen (flat files, no subfolders) so the admin UI can
+- `./screenshots/current/` always mirrors the latest capture per screen (flat files, no subfolders) so other tools can
   serve a stable, up-to-date view.
 - **Batch archiving:** once the live folder reaches **500** images, the program moves the **entire batch** into `./screenshot_archive/<screen>/` (images only) so the archive mirrors the folder layout under `./screenshots/`.
 - You will **not** see per‑image pruning logs; instead you’ll see a single archive log like: `🗃️ Archived 500 screenshot(s) → …`
