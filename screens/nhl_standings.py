@@ -575,6 +575,7 @@ def _fetch_standings_statsapi() -> Optional[dict[str, dict[str, list[dict]]]]:
                         team_record.get("regulationPlusOvertimeWins", team_record.get("row"))
                     ),
                     "points": _normalize_int(team_record.get("points")),
+                    "wildcardRank": _extract_wildcard_rank(team_record),
                 }
             )
         parsed.sort(key=_division_sort_key)
@@ -646,6 +647,7 @@ def _parse_grouped_standings(groups: Iterable[dict]) -> dict[str, dict[str, list
                 "regulationPlusOvertimeWins": regulation_plus_overtime_wins,
                 "points": points,
                 "_rank": _extract_rank(row),
+                "wildcardRank": _extract_wildcard_rank(row),
             }
 
             divisions = conferences.setdefault(conference_name, {})
@@ -679,6 +681,13 @@ def _wildcard_sort_key(team: dict) -> tuple[int, int, int, int, str]:
     return (-points, -regulation_wins, -regulation_plus_overtime_wins, -wins, games_played, abbr)
 
 
+def _wildcard_order_sort_key(team: dict) -> tuple:
+    wildcard_rank = _normalize_int(team.get("wildcardRank") or team.get("wildCardRank"))
+    if wildcard_rank > 0:
+        return (0, wildcard_rank) + _wildcard_sort_key(team)
+    return (1,) + _wildcard_sort_key(team)
+
+
 def _conference_wildcard_standings(
     conference: dict[str, list[dict]], division_order: Sequence[str]
 ) -> dict[str, list[dict]]:
@@ -691,7 +700,7 @@ def _conference_wildcard_standings(
         wildcard_conf[division] = teams[:3]
         remaining.extend(teams[3:])
 
-    remaining.sort(key=_wildcard_sort_key)
+    remaining.sort(key=_wildcard_order_sort_key)
     wildcards = remaining[:2]
     if wildcards:
         wildcard_conf[WILDCARD_SECTION_NAME] = wildcards
@@ -777,6 +786,7 @@ def _parse_generic_standings(payload: object) -> dict[str, dict[str, list[dict]]
             "regulationPlusOvertimeWins": regulation_plus_overtime_wins,
             "points": points,
             "_rank": _extract_rank(node),
+            "wildcardRank": _extract_wildcard_rank(node),
         }
 
         conference = conferences.setdefault(conference_name, {})
