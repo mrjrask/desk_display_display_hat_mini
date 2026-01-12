@@ -95,18 +95,32 @@ def _normalize_wildcard_team(team: dict) -> dict:
     ot = _normalize_int(normalized.get("ot"))
     normalized.setdefault("gamesPlayed", wins + losses + ot)
     normalized.setdefault("regulationWins", 0)
+    normalized.setdefault(
+        "regulationPlusOvertimeWins",
+        _normalize_int(normalized.get("row", wins)),
+    )
     return normalized
 
 
-def _wildcard_sort_key(team: dict) -> Tuple[int, int, int, int, str]:
+def _wildcard_sort_key(team: dict) -> Tuple[int, int, int, int, int, str]:
     points = _normalize_int(team.get("points"))
     regulation_wins = _normalize_int(team.get("regulationWins"))
+    regulation_plus_overtime_wins = _normalize_int(
+        team.get("regulationPlusOvertimeWins", team.get("row", team.get("wins")))
+    )
     wins = _normalize_int(team.get("wins"))
     games_played = _normalize_int(team.get("gamesPlayed"))
     abbr = str(team.get("abbr", ""))
-    # Sort by points (desc), regulation wins (desc), overall wins (desc),
-    # games played (asc), then abbreviation for determinism.
-    return (-points, -regulation_wins, -wins, games_played, abbr)
+    # Sort by points (desc), regulation wins (desc), regulation+OT wins (desc),
+    # overall wins (desc), games played (asc), then abbreviation for determinism.
+    return (
+        -points,
+        -regulation_wins,
+        -regulation_plus_overtime_wins,
+        -wins,
+        games_played,
+        abbr,
+    )
 
 
 def _conference_wildcard_standings(
@@ -148,10 +162,7 @@ def _build_wildcard_standings(
 
 
 def _sort_by_points(teams: list[dict]) -> list[dict]:
-    return sorted(
-        teams,
-        key=lambda team: (-_normalize_int(team.get("points")), str(team.get("abbr", ""))),
-    )
+    return sorted(teams, key=_wildcard_sort_key)
 
 
 def _conference_overview_divisions(
