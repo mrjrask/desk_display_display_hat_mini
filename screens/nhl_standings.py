@@ -693,12 +693,24 @@ def _conference_wildcard_standings(
 ) -> dict[str, list[dict]]:
     wildcard_conf: dict[str, list[dict]] = {}
     remaining: list[dict] = []
+    all_teams: list[dict] = []
 
     for division in division_order:
         teams = [_normalize_wildcard_team(team) for team in conference.get(division, [])]
         teams.sort(key=_wildcard_sort_key)
         wildcard_conf[division] = teams[:3]
         remaining.extend(teams[3:])
+        all_teams.extend(teams)
+
+    wildcard_ranked = [
+        team
+        for team in all_teams
+        if _normalize_int(team.get("wildcardRank") or team.get("wildCardRank")) > 0
+    ]
+    if wildcard_ranked:
+        wildcard_ranked.sort(key=_wildcard_order_sort_key)
+        wildcard_conf[WILDCARD_SECTION_NAME] = wildcard_ranked[:2]
+        return wildcard_conf
 
     remaining.sort(key=_wildcard_order_sort_key)
     wildcards = remaining[:2]
