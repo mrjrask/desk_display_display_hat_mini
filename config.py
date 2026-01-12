@@ -1008,7 +1008,7 @@ NFL_TEAM_ABBREVIATIONS = {
     "raiders": "lv",     "commanders": "was","saints": "no",
     "ravens": "bal",     "bengals": "cin",  "giants": "nyg",
     "steelers": "pit",   "eagles": "phi",   "packers": "gb",
-    "browns": "cle",     "49ers": "sf",
+    "browns": "cle",     "49ers": "sf",     "rams": "lar",
 }
 
 # VRNO screen
