@@ -2,7 +2,7 @@
 """Validate that tracked, non-image files are accounted for by the project.
 
 The script focuses on Python reachability: starting from known entry points
-(main, admin, scripts/, tools/), it builds an import graph and flags any
+(main, config UI, scripts/, tools/), it builds an import graph and flags any
 tracked Python modules that are not reachable from those roots. Images are
 explicitly excluded from the scan.
 """
@@ -109,7 +109,7 @@ def determine_seeds(graph: Dict[str, ModuleNode]) -> Set[str]:
     seeds: Set[str] = set()
     for name, node in graph.items():
         top_level = node.path.parts[0]
-        if node.path.name in {"main.py", "admin.py", "schedule_migrations.py", "storage_overrides.py"}:
+        if node.path.name in {"main.py", "config_ui.py", "schedule_migrations.py", "storage_overrides.py"}:
             seeds.add(name)
         elif top_level in {"scripts", "tools"}:
             seeds.add(name)

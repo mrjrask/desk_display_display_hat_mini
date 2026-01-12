@@ -115,6 +115,10 @@ def _save_config(config: Dict[str, Any]) -> None:
     os.replace(tmp_path, LOCAL_CONFIG_PATH)
 
 
+def run_config_ui(host: str = SCREEN_CONFIG_HOST, port: int = SCREEN_CONFIG_PORT) -> None:
+    app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)
+
+
 @app.route("/", methods=["GET"])
 def screen_config() -> str:
     config = _load_active_config()
@@ -178,4 +182,4 @@ def save_screens() -> Any:
 
 
 if __name__ == "__main__":
-    app.run(host=SCREEN_CONFIG_HOST, port=SCREEN_CONFIG_PORT, debug=False)
+    run_config_ui()
