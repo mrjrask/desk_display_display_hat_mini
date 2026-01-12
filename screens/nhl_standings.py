@@ -420,13 +420,16 @@ def _normalize_int(value) -> int:
 def _division_sort_key(team: dict) -> tuple[int, int, int, int, str]:
     points = _normalize_int(team.get("points"))
     regulation_wins = _normalize_int(team.get("regulationWins"))
+    regulation_plus_overtime_wins = _normalize_int(
+        team.get("regulationPlusOvertimeWins", team.get("row", team.get("wins")))
+    )
     wins = _normalize_int(team.get("wins"))
     ot = _normalize_int(team.get("ot"))
     rank = _normalize_int(team.get("_rank", 99)) or 99
     abbr = str(team.get("abbr", ""))
-    # Sort by points (desc), regulation wins (desc), overall wins (desc),
-    # overtime losses (asc), then fallback rank and abbr.
-    return (-points, -regulation_wins, -wins, ot, rank, abbr)
+    # Sort by points (desc), regulation wins (desc), regulation+OT wins (desc),
+    # overall wins (desc), overtime losses (asc), then fallback rank and abbr.
+    return (-points, -regulation_wins, -regulation_plus_overtime_wins, -wins, ot, rank, abbr)
 
 
 def _normalize_conference_name(name: object) -> str:
@@ -549,7 +552,7 @@ def _fetch_standings_statsapi() -> Optional[dict[str, dict[str, list[dict]]]]:
             continue
         teams = record.get("teamRecords", []) or []
         parsed: list[dict] = []
-        for team_record in sorted(teams, key=lambda t: _normalize_int(t.get("divisionRank", 99))):
+        for team_record in teams:
             if not isinstance(team_record, dict):
                 continue
             team_info = team_record.get("team", {}) or {}
@@ -564,9 +567,13 @@ def _fetch_standings_statsapi() -> Optional[dict[str, dict[str, list[dict]]]]:
                     "ot": _normalize_int(record_info.get("ot")),
                     "gamesPlayed": _normalize_int(team_record.get("gamesPlayed")),
                     "regulationWins": _normalize_int(team_record.get("regulationWins")),
+                    "regulationPlusOvertimeWins": _normalize_int(
+                        team_record.get("regulationPlusOvertimeWins", team_record.get("row"))
+                    ),
                     "points": _normalize_int(team_record.get("points")),
                 }
             )
+        parsed.sort(key=_division_sort_key)
         if parsed:
             conferences.setdefault(conf_name, {})[div_name] = parsed
 
@@ -619,6 +626,9 @@ def _parse_grouped_standings(groups: Iterable[dict]) -> dict[str, dict[str, list
             ot = _extract_stat(row, ("ot", "otLosses", "otl"))
             games_played = _extract_stat(row, ("gamesPlayed", "gp"))
             regulation_wins = _extract_stat(row, ("regulationWins", "rw"))
+            regulation_plus_overtime_wins = _extract_stat(
+                row, ("regulationPlusOvertimeWins", "row")
+            )
             points = _extract_stat(row, ("points", "pts"))
 
             team_entry = {
@@ -629,6 +639,7 @@ def _parse_grouped_standings(groups: Iterable[dict]) -> dict[str, dict[str, list
                 "ot": ot,
                 "gamesPlayed": games_played or wins + losses + ot,
                 "regulationWins": regulation_wins,
+                "regulationPlusOvertimeWins": regulation_plus_overtime_wins,
                 "points": points,
                 "_rank": _extract_rank(row),
             }
@@ -646,18 +657,22 @@ def _normalize_wildcard_team(team: dict) -> dict:
     ot = _normalize_int(normalized.get("ot"))
     normalized.setdefault("gamesPlayed", wins + losses + ot)
     normalized.setdefault("regulationWins", 0)
+    normalized.setdefault("regulationPlusOvertimeWins", _normalize_int(normalized.get("row", wins)))
     return normalized
 
 
 def _wildcard_sort_key(team: dict) -> tuple[int, int, int, int, str]:
     points = _normalize_int(team.get("points"))
     regulation_wins = _normalize_int(team.get("regulationWins"))
+    regulation_plus_overtime_wins = _normalize_int(
+        team.get("regulationPlusOvertimeWins", team.get("row", team.get("wins")))
+    )
     wins = _normalize_int(team.get("wins"))
     games_played = _normalize_int(team.get("gamesPlayed"))
     abbr = str(team.get("abbr", ""))
-    # Sort by points (desc), regulation wins (desc), overall wins (desc),
-    # games played (asc), then abbreviation for determinism.
-    return (-points, -regulation_wins, -wins, games_played, abbr)
+    # Sort by points (desc), regulation wins (desc), regulation+OT wins (desc),
+    # overall wins (desc), games played (asc), then abbreviation for determinism.
+    return (-points, -regulation_wins, -regulation_plus_overtime_wins, -wins, games_played, abbr)
 
 
 def _conference_wildcard_standings(
@@ -737,6 +752,9 @@ def _parse_generic_standings(payload: object) -> dict[str, dict[str, list[dict]]
         ot = _extract_stat(node, ("ot", "otLosses", "otl"))
         games_played = _extract_stat(node, ("gamesPlayed", "gp"))
         regulation_wins = _extract_stat(node, ("regulationWins", "rw"))
+        regulation_plus_overtime_wins = _extract_stat(
+            node, ("regulationPlusOvertimeWins", "row")
+        )
         points = _extract_stat(node, ("points", "pts"))
 
         key = (conference_name, division_name, abbr)
@@ -752,6 +770,7 @@ def _parse_generic_standings(payload: object) -> dict[str, dict[str, list[dict]]
             "ot": ot,
             "gamesPlayed": games_played or wins + losses + ot,
             "regulationWins": regulation_wins,
+            "regulationPlusOvertimeWins": regulation_plus_overtime_wins,
             "points": points,
             "_rank": _extract_rank(node),
         }
