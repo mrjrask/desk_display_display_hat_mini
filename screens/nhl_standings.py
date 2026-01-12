@@ -1022,6 +1022,7 @@ def _render_conference(
     division_order: List[str],
     standings: Dict[str, List[dict]],
     subtitle: str | None = None,
+    division_labels: Dict[str, str] | None = None,
 ) -> Image.Image:
     divisions = [division for division in division_order if standings.get(division)]
     if not divisions:
@@ -1054,9 +1055,13 @@ def _render_conference(
         teams = standings.get(division, [])
         if not teams:
             continue
-        division_title = (
-            division if division == WILDCARD_SECTION_NAME else f"{division} Division"
-        )
+        division_title = division
+        if division != WILDCARD_SECTION_NAME:
+            division_title = (
+                division_labels.get(division)
+                if division_labels and division_labels.get(division)
+                else f"{division} Division"
+            )
         y = _draw_division(
             img,
             draw,
