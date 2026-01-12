@@ -115,6 +115,20 @@ Manage the Flask-based admin UI (`admin.py`) as its own systemd service with the
 
 The installer shares the primary virtual environment at `venv/` and installs the same apt/pip dependencies as the main display service. Customize where the service runs by exporting `PROJECT_DIR`, `ADMIN_HOST`, or `ADMIN_PORT` before invoking the installer. Additional environment overrides (for example `ADMIN_API_TOKEN` or `SCREENS_STYLE_PATH`) can be placed in an optional `.env.admin` file alongside the scripts; it is loaded automatically by the systemd unit.
 
+### Screen configuration UI
+
+To edit the screen order, frequencies, and alternates via a drag-and-drop UI, run the dedicated configuration app:
+
+```bash
+python config_ui.py
+```
+
+By default it listens on `http://localhost:5002` so it does not conflict with the admin UI port. Override the binding with:
+
+- `SCREEN_CONFIG_HOST` (default `0.0.0.0`)
+- `SCREEN_CONFIG_PORT` (default `5002`)
+- `SCREENS_CONFIG_PATH` (path to the `screens_config.json` file)
+
 ---
 
 ## Project layout

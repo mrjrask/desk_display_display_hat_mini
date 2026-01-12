@@ -19,7 +19,11 @@ from paths import resolve_storage_paths
 _logger = logging.getLogger(__name__)
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(SCRIPT_DIR, "screens_config.json")
+DEFAULT_CONFIG_PATH = os.path.join(SCRIPT_DIR, "screens_config.json")
+LOCAL_CONFIG_PATH = os.environ.get(
+    "SCREENS_CONFIG_LOCAL_PATH", os.path.join(SCRIPT_DIR, "screens_config.local.json")
+)
+CONFIG_PATH = LOCAL_CONFIG_PATH if os.path.exists(LOCAL_CONFIG_PATH) else DEFAULT_CONFIG_PATH
 STYLE_CONFIG_PATH = os.environ.get(
     "SCREENS_STYLE_PATH", os.path.join(SCRIPT_DIR, "screens_style.json")
 )

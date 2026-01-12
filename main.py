@@ -102,7 +102,11 @@ from schedule import ScreenScheduler, build_scheduler, load_schedule_config
 
 # ─── Paths ───────────────────────────────────────────────────────────────────
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(SCRIPT_DIR, "screens_config.json")
+DEFAULT_CONFIG_PATH = os.path.join(SCRIPT_DIR, "screens_config.json")
+LOCAL_CONFIG_PATH = os.environ.get(
+    "SCREENS_CONFIG_LOCAL_PATH", os.path.join(SCRIPT_DIR, "screens_config.local.json")
+)
+CONFIG_PATH = LOCAL_CONFIG_PATH if os.path.exists(LOCAL_CONFIG_PATH) else DEFAULT_CONFIG_PATH
 
 # ─── Screenshot archiving (batch) ────────────────────────────────────────────
 ARCHIVE_THRESHOLD = 500  # archive when we reach this many images
