@@ -1000,7 +1000,7 @@ BEARS_SCHEDULE = [
     {"game_no": "17","week":"Week 17", "date":"Sun, Dec 28, 2025","opponent":"San Francisco 49ers",   "home_away":"Away","time":"7:20PM"},
     {"game_no": "18","week":"Week 18", "date":"Sun, Jan 4, 2026","opponent":"Detroit Lions",         "home_away":"Home","time":"3:25PM"},
     {"game_no": "19","week":"Wild Card", "date":"Sat, Jan 10, 2026","opponent":"Green Bay Packers",   "home_away":"Home","time":"7PM"},
-    {"game_no": "20","week":"Division Playoff ", "date":"TBD","Los Angeles Rams":"TBD",         "home_away":"Home","time":"TBD"},
+    {"game_no": "20","week":"Division Playoff ", "date":"TBD","opponent":"Los Angeles Rams",         "home_away":"Home","time":"TBD"},
 ]
 NFL_TEAM_ABBREVIATIONS = {
     "dolphins": "mia",   "bills": "buf",   "chiefs": "kc",
