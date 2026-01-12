@@ -36,6 +36,7 @@ TITLE_SUBTITLE_DIVISION = "Division Standings"
 STANDINGS_URL = "https://statsapi.web.nhl.com/api/v1/standings"
 API_WEB_STANDINGS_URL = "https://api-web.nhle.com/v1/standings/now"
 API_WEB_STANDINGS_PARAMS = {"site": "en_nhl"}
+API_WEB_WILDCARD_URL = "https://api-web.nhle.com/v1/standings/{date}/wildcard"
 REQUEST_TIMEOUT = 10
 CACHE_TTL = 15 * 60  # seconds
 
@@ -417,7 +418,7 @@ def _normalize_int(value) -> int:
         return 0
 
 
-def _division_sort_key(team: dict) -> tuple[int, int, int, int, str]:
+def _division_sort_key(team: dict) -> tuple[int, int, int, int, int, int, str]:
     points = _normalize_int(team.get("points"))
     regulation_wins = _normalize_int(team.get("regulationWins"))
     regulation_plus_overtime_wins = _normalize_int(
@@ -427,6 +428,9 @@ def _division_sort_key(team: dict) -> tuple[int, int, int, int, str]:
     ot = _normalize_int(team.get("ot"))
     rank = _normalize_int(team.get("_rank", 99)) or 99
     abbr = str(team.get("abbr", ""))
+    if 0 < rank < 99:
+        # If the API provides an explicit rank, honor it first.
+        return (rank, -points, -regulation_wins, -regulation_plus_overtime_wins, -wins, ot, abbr)
     # Sort by points (desc), regulation wins (desc), regulation+OT wins (desc),
     # overall wins (desc), overtime losses (asc), then fallback rank and abbr.
     return (-points, -regulation_wins, -regulation_plus_overtime_wins, -wins, ot, rank, abbr)
@@ -863,6 +867,11 @@ def _extract_stat(row: dict, names: Iterable[str]) -> int:
 def _extract_rank(row: dict) -> int:
     for key in (
         "divisionRank",
+        "wildCardRank",
+        "wildcardRank",
+        "wildCardSequence",
+        "wildcardSequence",
+        "wildCardPosition",
         "conferenceRank",
         "leagueRank",
         "rank",
@@ -874,6 +883,67 @@ def _extract_rank(row: dict) -> int:
         if value is not None and value > 0:
             return value
     return 99
+
+
+def _extract_wildcard_rank(row: dict) -> int:
+    for key in (
+        "wildCardRank",
+        "wildcardRank",
+        "wildCardSequence",
+        "wildcardSequence",
+        "wildCardPosition",
+        "wildCardSeed",
+        "wildcardSeed",
+    ):
+        value = _coerce_int(row.get(key))
+        if value is not None and value > 0:
+            return value
+    return 0
+
+
+def _fetch_wildcard_order_api_web(target_date: str = "now") -> dict[str, list[str]]:
+    try:
+        response = _SESSION.get(
+            API_WEB_WILDCARD_URL.format(date=target_date),
+            timeout=REQUEST_TIMEOUT,
+            headers=NHL_HEADERS,
+            params=API_WEB_STANDINGS_PARAMS,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:
+        logging.error("Failed to fetch NHL wildcard standings: %s", exc)
+        return {}
+
+    ranked: dict[str, list[tuple[int, str]]] = {}
+    for node in _walk_nodes(payload):
+        if not isinstance(node, dict):
+            continue
+        rank = _extract_wildcard_rank(node)
+        if rank <= 0:
+            continue
+        conference_name = _normalize_conference_name(
+            _extract_from_candidates(
+                node,
+                ("conferenceName", "conference", "conferenceAbbrev", "conferenceId"),
+            )
+        )
+        if not conference_name:
+            continue
+        team_info = node.get("team") if isinstance(node.get("team"), dict) else node
+        abbr = (
+            _extract_from_candidates(team_info, ("teamAbbrev", "abbrev", "triCode", "teamTricode"))
+            or _team_abbreviation(team_info)
+        )
+        if not abbr:
+            continue
+        ranked.setdefault(conference_name, []).append((rank, abbr.upper()))
+
+    ordered: dict[str, list[str]] = {}
+    for conf, entries in ranked.items():
+        ordered[conf] = [abbr for _, abbr in sorted(entries, key=lambda item: item[0])]
+
+    return ordered
 
 
 def _fetch_standings_api_web() -> Optional[dict[str, dict[str, list[dict]]]]:
