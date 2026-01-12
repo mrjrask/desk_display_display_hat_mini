@@ -635,6 +635,17 @@ def _parse_grouped_standings(groups: Iterable[dict]) -> dict[str, dict[str, list
                 row, ("regulationPlusOvertimeWins", "row")
             )
             points = _extract_stat(row, ("points", "pts"))
+            division_sequence = _coerce_int(
+                row.get("divisionSequence")
+                or row.get("divisionSeq")
+                or row.get("divisionSequenceNumber")
+            )
+            wildcard_sequence = _coerce_int(
+                row.get("wildcardSequence")
+                or row.get("wildCardSequence")
+                or row.get("wildcardSequenceNumber")
+                or row.get("wildCardSequenceNumber")
+            )
 
             team_entry = {
                 "abbr": abbr,
@@ -648,6 +659,8 @@ def _parse_grouped_standings(groups: Iterable[dict]) -> dict[str, dict[str, list
                 "points": points,
                 "_rank": _extract_rank(row),
                 "wildcardRank": _extract_wildcard_rank(row),
+                "divisionSequence": division_sequence,
+                "wildcardSequence": wildcard_sequence,
             }
 
             divisions = conferences.setdefault(conference_name, {})
@@ -681,6 +694,32 @@ def _wildcard_sort_key(team: dict) -> tuple[int, int, int, int, str]:
     return (-points, -regulation_wins, -regulation_plus_overtime_wins, -wins, games_played, abbr)
 
 
+def _division_sequence_sort_key(team: dict) -> tuple:
+    sequence = _normalize_int(
+        team.get("divisionSequence")
+        or team.get("divisionSeq")
+        or team.get("divisionSequenceNumber")
+        or team.get("_rank")
+    )
+    if sequence > 0:
+        return (0, sequence, _division_sort_key(team))
+    return (1,) + _division_sort_key(team)
+
+
+def _wildcard_sequence_sort_key(team: dict) -> tuple:
+    sequence = _normalize_int(
+        team.get("wildcardSequence")
+        or team.get("wildCardSequence")
+        or team.get("wildcardSequenceNumber")
+        or team.get("wildCardSequenceNumber")
+        or team.get("wildcardRank")
+        or team.get("wildCardRank")
+    )
+    if sequence > 0:
+        return (0, sequence, _wildcard_sort_key(team))
+    return (1,) + _wildcard_sort_key(team)
+
+
 def _wildcard_order_sort_key(team: dict) -> tuple:
     wildcard_rank = _normalize_int(team.get("wildcardRank") or team.get("wildCardRank"))
     if wildcard_rank > 0:
@@ -697,7 +736,7 @@ def _conference_wildcard_standings(
 
     for division in division_order:
         teams = [_normalize_wildcard_team(team) for team in conference.get(division, [])]
-        teams.sort(key=_wildcard_sort_key)
+        teams.sort(key=_division_sequence_sort_key)
         wildcard_conf[division] = teams[:3]
         remaining.extend(teams[3:])
         all_teams.extend(teams)
@@ -718,6 +757,37 @@ def _conference_wildcard_standings(
         wildcard_conf[WILDCARD_SECTION_NAME] = wildcards
 
     return wildcard_conf
+
+
+def _conference_overview_rows(
+    conference: dict[str, list[dict]],
+    division_order: Sequence[str],
+    label: str,
+) -> list[tuple[str, list[dict]]]:
+    rows: list[tuple[str, list[dict]]] = []
+    leader_abbrs: set[str] = set()
+    all_teams: list[dict] = []
+
+    for division in division_order:
+        teams = [_normalize_wildcard_team(team) for team in conference.get(division, [])]
+        teams.sort(key=_division_sequence_sort_key)
+        leaders = teams[:3]
+        rows.append((f"{division} Leaders", leaders))
+        for team in leaders:
+            abbr = (team.get("abbr") or "").upper()
+            if abbr:
+                leader_abbrs.add(abbr)
+        all_teams.extend(teams)
+
+    remaining = [
+        team
+        for team in all_teams
+        if (team.get("abbr") or "").upper() not in leader_abbrs
+    ]
+    remaining.sort(key=_wildcard_sequence_sort_key)
+    rows.append((f"{label} Wild Card", remaining[:2]))
+    rows.append((f"{label} Wild Card Rest", remaining[2:]))
+    return rows
 
 
 def _build_wildcard_standings(
@@ -781,6 +851,17 @@ def _parse_generic_standings(payload: object) -> dict[str, dict[str, list[dict]]
             node, ("regulationPlusOvertimeWins", "row")
         )
         points = _extract_stat(node, ("points", "pts"))
+        division_sequence = _coerce_int(
+            node.get("divisionSequence")
+            or node.get("divisionSeq")
+            or node.get("divisionSequenceNumber")
+        )
+        wildcard_sequence = _coerce_int(
+            node.get("wildcardSequence")
+            or node.get("wildCardSequence")
+            or node.get("wildcardSequenceNumber")
+            or node.get("wildCardSequenceNumber")
+        )
 
         key = (conference_name, division_name, abbr)
         if key in seen:
@@ -799,6 +880,8 @@ def _parse_generic_standings(payload: object) -> dict[str, dict[str, list[dict]]
             "points": points,
             "_rank": _extract_rank(node),
             "wildcardRank": _extract_wildcard_rank(node),
+            "divisionSequence": division_sequence,
+            "wildcardSequence": wildcard_sequence,
         }
 
         conference = conferences.setdefault(conference_name, {})
@@ -888,6 +971,9 @@ def _extract_stat(row: dict, names: Iterable[str]) -> int:
 
 def _extract_rank(row: dict) -> int:
     for key in (
+        "divisionSequence",
+        "divisionSeq",
+        "divisionSequenceNumber",
         "divisionRank",
         "wildCardRank",
         "wildcardRank",
@@ -913,6 +999,8 @@ def _extract_wildcard_rank(row: dict) -> int:
         "wildcardRank",
         "wildCardSequence",
         "wildcardSequence",
+        "wildcardSequenceNumber",
+        "wildCardSequenceNumber",
         "wildCardPosition",
         "wildCardSeed",
         "wildcardSeed",
@@ -1394,13 +1482,83 @@ def _prepare_overview(
     return base, row_positions
 
 
-def _wildcard_overview_divisions(
-    wildcard_standings: dict[str, dict[str, list[dict]]],
-    conference_key: str,
-    division_order: Sequence[str],
-) -> list[tuple[str, list[dict]]]:
-    conference = wildcard_standings.get(conference_key, {})
-    return [(division, conference.get(division, [])) for division in division_order]
+def _overview_layout_horizontal(
+    rows: Sequence[tuple[str, List[dict]]],
+    title: str,
+) -> tuple[Image.Image, float, float]:
+    base = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
+    draw = ImageDraw.Draw(base)
+
+    y = TITLE_MARGIN_TOP
+    y += _draw_centered_text(draw, title, TITLE_FONT, y)
+    y += OVERVIEW_TITLE_MARGIN_BOTTOM
+
+    logos_top = y
+    available_height = max(1.0, HEIGHT - logos_top - OVERVIEW_BOTTOM_MARGIN)
+    row_count = max(1, len(rows))
+    row_height = available_height / row_count
+    return base, logos_top, row_height
+
+
+def _row_logo_height(row_height: float, team_count: int) -> int:
+    if team_count <= 0:
+        return OVERVIEW_MIN_LOGO_HEIGHT
+    available_width = max(1.0, WIDTH - 2 * OVERVIEW_MARGIN_X)
+    col_width = available_width / team_count
+    logo_width_limit = max(6, int(col_width - OVERVIEW_LOGO_PADDING))
+    logo_base_height = row_height + OVERVIEW_LOGO_OVERLAP
+    logo_target_height = int(
+        min(
+            OVERVIEW_MAX_LOGO_HEIGHT,
+            max(OVERVIEW_MIN_LOGO_HEIGHT, logo_base_height),
+            logo_width_limit,
+        )
+    )
+    return max(6, logo_target_height)
+
+
+def _build_overview_rows_horizontal(
+    rows: Sequence[tuple[str, List[dict]]],
+    logos_top: float,
+    row_height: float,
+) -> List[List[Placement]]:
+    placements: List[List[Placement]] = []
+    available_width = max(1.0, WIDTH - 2 * OVERVIEW_MARGIN_X)
+
+    for row_idx, (_, teams) in enumerate(rows):
+        row: List[Placement] = []
+        if not teams:
+            placements.append(row)
+            continue
+
+        team_count = len(teams)
+        col_width = available_width / team_count
+        col_centers = [OVERVIEW_MARGIN_X + col_width * (idx + 0.5) for idx in range(team_count)]
+        logo_height = _row_logo_height(row_height, team_count)
+
+        for col_idx, team in enumerate(teams):
+            abbr = (team.get("abbr") or "").upper()
+            if not abbr:
+                continue
+            logo = _load_overview_logo(abbr, logo_height)
+            if not logo:
+                continue
+            x0 = int(col_centers[col_idx] - logo.width / 2)
+            y_center = logos_top + row_height * (row_idx + 0.5)
+            y0 = int(y_center - logo.height / 2)
+            row.append((abbr, logo, x0, y0))
+        placements.append(row)
+
+    return placements
+
+
+def _prepare_overview_horizontal(
+    rows: Sequence[tuple[str, List[dict]]],
+    title: str,
+) -> tuple[Image.Image, List[List[Placement]]]:
+    base, logos_top, row_height = _overview_layout_horizontal(rows, title=title)
+    row_positions = _build_overview_rows_horizontal(rows, logos_top, row_height)
+    return base, row_positions
 
 
 def _render_empty(title: str, subtitle: str | None = None) -> Image.Image:
@@ -1447,16 +1605,12 @@ def _scroll_vertical(display, image: Image.Image) -> None:
 @log_call
 def draw_nhl_standings_overview_west(display, transition: bool = False) -> ScreenImage:
     standings_by_conf = _fetch_standings_data()
-    wildcard_standings = _build_wildcard_standings(standings_by_conf)
     _apply_style_overrides("NHL Standings Overview West")
 
-    divisions: List[tuple[str, List[dict]]] = _wildcard_overview_divisions(
-        wildcard_standings,
-        CONFERENCE_WEST_KEY,
-        DIVISION_ORDER_WEST,
-    )
+    conference = standings_by_conf.get(CONFERENCE_WEST_KEY, {})
+    rows = _conference_overview_rows(conference, DIVISION_ORDER_WEST, "West")
 
-    if not any(teams for _, teams in divisions):
+    if not any(teams for _, teams in rows):
         clear_display(display)
         img = _render_empty(OVERVIEW_TITLE_WEST)
         if transition:
@@ -1464,7 +1618,7 @@ def draw_nhl_standings_overview_west(display, transition: bool = False) -> Scree
         display.image(img)
         return ScreenImage(img, displayed=True)
 
-    base, row_positions = _prepare_overview(divisions, title=OVERVIEW_TITLE_WEST)
+    base, row_positions = _prepare_overview_horizontal(rows, title=OVERVIEW_TITLE_WEST)
     final_img, _ = _compose_overview_image(base, row_positions)
 
     clear_display(display)
@@ -1479,16 +1633,12 @@ def draw_nhl_standings_overview_west(display, transition: bool = False) -> Scree
 @log_call
 def draw_nhl_standings_overview_east(display, transition: bool = False) -> ScreenImage:
     standings_by_conf = _fetch_standings_data()
-    wildcard_standings = _build_wildcard_standings(standings_by_conf)
     _apply_style_overrides("NHL Standings Overview East")
 
-    divisions: List[tuple[str, List[dict]]] = _wildcard_overview_divisions(
-        wildcard_standings,
-        CONFERENCE_EAST_KEY,
-        DIVISION_ORDER_EAST,
-    )
+    conference = standings_by_conf.get(CONFERENCE_EAST_KEY, {})
+    rows = _conference_overview_rows(conference, DIVISION_ORDER_EAST, "East")
 
-    if not any(teams for _, teams in divisions):
+    if not any(teams for _, teams in rows):
         clear_display(display)
         img = _render_empty(OVERVIEW_TITLE_EAST)
         if transition:
@@ -1496,7 +1646,7 @@ def draw_nhl_standings_overview_east(display, transition: bool = False) -> Scree
         display.image(img)
         return ScreenImage(img, displayed=True)
 
-    base, row_positions = _prepare_overview(divisions, title=OVERVIEW_TITLE_EAST)
+    base, row_positions = _prepare_overview_horizontal(rows, title=OVERVIEW_TITLE_EAST)
     final_img, _ = _compose_overview_image(base, row_positions)
 
     clear_display(display)
