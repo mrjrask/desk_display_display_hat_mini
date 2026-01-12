@@ -47,6 +47,12 @@ WILDCARD_SECTION_NAME = "Wild Card"
 OVERVIEW_TITLE_WEST_V3 = "NHL West Wild Card"
 OVERVIEW_TITLE_EAST_V3 = "NHL East Wild Card"
 TITLE_SUBTITLE_WILDCARD = "Wild Card Standings"
+DIVISION_LEADERS_LABELS = {
+    "Central": "Central Leaders",
+    "Pacific": "Pacific Leaders",
+    "Metropolitan": "Metropolitan Leaders",
+    "Atlantic": "Atlantic Leaders",
+}
 
 
 @contextmanager
@@ -403,6 +409,7 @@ def draw_nhl_standings_west_v2(display, transition: bool = False) -> ScreenImage
             divisions,
             conference,
             subtitle=TITLE_SUBTITLE_WILDCARD,
+            division_labels=DIVISION_LEADERS_LABELS,
         )
         clear_display(display)
         _scroll_vertical(display, full_img)
@@ -433,6 +440,7 @@ def draw_nhl_standings_east_v2(display, transition: bool = False) -> ScreenImage
             divisions,
             conference,
             subtitle=TITLE_SUBTITLE_WILDCARD,
+            division_labels=DIVISION_LEADERS_LABELS,
         )
         clear_display(display)
         _scroll_vertical(display, full_img)
