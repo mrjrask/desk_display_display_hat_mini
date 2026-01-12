@@ -32,6 +32,7 @@ from utils import ScreenImage, clear_display, log_call
 # ─── Constants ────────────────────────────────────────────────────────────────
 TITLE_WEST = "Western Conference"
 TITLE_EAST = "Eastern Conference"
+TITLE_SUBTITLE_DIVISION = "Division Standings"
 STANDINGS_URL = "https://statsapi.web.nhl.com/api/v1/standings"
 API_WEB_STANDINGS_URL = "https://api-web.nhle.com/v1/standings/now"
 API_WEB_STANDINGS_PARAMS = {"site": "en_nhl"}
@@ -54,6 +55,7 @@ ROW_SPACING = 2
 SECTION_GAP = 10
 TITLE_MARGIN_TOP = 4
 TITLE_MARGIN_BOTTOM = 6
+TITLE_SUBTITLE_GAP = 2
 DIVISION_MARGIN_TOP = 4
 DIVISION_MARGIN_BOTTOM = 4
 COLUMN_GAP_BELOW = 3
@@ -1016,7 +1018,10 @@ def _draw_division(
 
 
 def _render_conference(
-    title: str, division_order: List[str], standings: Dict[str, List[dict]]
+    title: str,
+    division_order: List[str],
+    standings: Dict[str, List[dict]],
+    subtitle: str | None = None,
 ) -> Image.Image:
     divisions = [division for division in division_order if standings.get(division)]
     if not divisions:
@@ -1024,7 +1029,10 @@ def _render_conference(
 
     column_layout, team_name_max_width = _conference_column_layout(standings, divisions)
 
-    total_height = TITLE_MARGIN_TOP + _text_size(title, TITLE_FONT)[1] + TITLE_MARGIN_BOTTOM
+    total_height = TITLE_MARGIN_TOP + _text_size(title, TITLE_FONT)[1]
+    if subtitle:
+        total_height += TITLE_SUBTITLE_GAP + _text_size(subtitle, TITLE_FONT)[1]
+    total_height += TITLE_MARGIN_BOTTOM
     for idx, division in enumerate(divisions):
         team_count = len(standings.get(division, []))
         total_height += _division_section_height(team_count)
@@ -1037,6 +1045,9 @@ def _render_conference(
 
     y = TITLE_MARGIN_TOP
     y += _draw_centered_text(draw, title, TITLE_FONT, y)
+    if subtitle:
+        y += TITLE_SUBTITLE_GAP
+        y += _draw_centered_text(draw, subtitle, TITLE_FONT, y)
     y += TITLE_MARGIN_BOTTOM
 
     for idx, division in enumerate(divisions):
@@ -1276,10 +1287,14 @@ def _wildcard_overview_divisions(
     return [(division, conference.get(division, [])) for division in division_order]
 
 
-def _render_empty(title: str) -> Image.Image:
+def _render_empty(title: str, subtitle: str | None = None) -> Image.Image:
     img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
-    _draw_centered_text(draw, title, TITLE_FONT, 10)
+    y = TITLE_MARGIN_TOP
+    y += _draw_centered_text(draw, title, TITLE_FONT, y)
+    if subtitle:
+        y += TITLE_SUBTITLE_GAP
+        _draw_centered_text(draw, subtitle, TITLE_FONT, y)
     _draw_centered_text(draw, "No standings", ROW_FONT, HEIGHT // 2 - ROW_TEXT_HEIGHT // 2)
     return img
 
@@ -1385,13 +1400,18 @@ def draw_nhl_standings_west(display, transition: bool = False) -> ScreenImage:
     divisions = [d for d in DIVISION_ORDER_WEST if conference.get(d)]
     if not divisions:
         clear_display(display)
-        img = _render_empty(TITLE_WEST)
+        img = _render_empty(TITLE_WEST, TITLE_SUBTITLE_DIVISION)
         if transition:
             return ScreenImage(img, displayed=False)
         display.image(img)
         return ScreenImage(img, displayed=True)
 
-    full_img = _render_conference(TITLE_WEST, divisions, conference)
+    full_img = _render_conference(
+        TITLE_WEST,
+        divisions,
+        conference,
+        subtitle=TITLE_SUBTITLE_DIVISION,
+    )
     clear_display(display)
     _scroll_vertical(display, full_img)
     return ScreenImage(full_img, displayed=True)
@@ -1405,13 +1425,18 @@ def draw_nhl_standings_east(display, transition: bool = False) -> ScreenImage:
     divisions = [d for d in DIVISION_ORDER_EAST if conference.get(d)]
     if not divisions:
         clear_display(display)
-        img = _render_empty(TITLE_EAST)
+        img = _render_empty(TITLE_EAST, TITLE_SUBTITLE_DIVISION)
         if transition:
             return ScreenImage(img, displayed=False)
         display.image(img)
         return ScreenImage(img, displayed=True)
 
-    full_img = _render_conference(TITLE_EAST, divisions, conference)
+    full_img = _render_conference(
+        TITLE_EAST,
+        divisions,
+        conference,
+        subtitle=TITLE_SUBTITLE_DIVISION,
+    )
     clear_display(display)
     _scroll_vertical(display, full_img)
     return ScreenImage(full_img, displayed=True)
