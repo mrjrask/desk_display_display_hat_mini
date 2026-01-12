@@ -34,6 +34,7 @@ current_ssid: Optional[str] = None
 _STATE_LOCK = threading.Lock()
 _STOP_EVENT = threading.Event()
 _MONITOR_THREAD: Optional[threading.Thread] = None
+_COMMAND_TIMEOUT = 10
 _IFACE: Optional[str] = None
 _USER_LOG_PATH: Optional[Path] = None
 _RECOVERY_ENABLED = True
@@ -100,7 +101,13 @@ def _resolve_user_log() -> Optional[Path]:
 # ─── Helpers: interface/state detection ────────────────────────────────────────
 
 def _run_command(args: Sequence[str], *, check: bool = False) -> subprocess.CompletedProcess:
-    return subprocess.run(args, capture_output=True, text=True, check=check)
+    return subprocess.run(
+        args,
+        capture_output=True,
+        text=True,
+        check=check,
+        timeout=_COMMAND_TIMEOUT,
+    )
 
 
 def _get_wireless_interfaces() -> Sequence[str]:

@@ -1134,6 +1134,10 @@ def temporary_display_led(r: float, g: float, b: float):
             except Exception as exc:
                 logging.debug("Failed to reset LED after override: %s", exc)
 
+_GIT_COMMAND_TIMEOUT = 10
+_APT_COMMAND_TIMEOUT = 20
+
+
 def check_github_updates() -> bool:
     """
     Return True if the local branch differs from its upstream tracking branch.
@@ -1153,7 +1157,11 @@ def check_github_updates() -> bool:
             cwd=repo_dir,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            timeout=_GIT_COMMAND_TIMEOUT,
         )
+    except subprocess.TimeoutExpired:
+        logging.warning("check_github_updates: git probe timed out")
+        return False
     except Exception:
         logging.info("check_github_updates: not a git repository, skipping check")
         return False
@@ -1164,7 +1172,11 @@ def check_github_updates() -> bool:
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
             cwd=repo_dir,
             stderr=subprocess.DEVNULL,
+            timeout=_GIT_COMMAND_TIMEOUT,
         ).decode().strip()
+    except subprocess.TimeoutExpired:
+        logging.warning("check_github_updates: git branch lookup timed out")
+        return False
     except Exception:
         logging.exception("check_github_updates: failed to determine local branch")
         return False
@@ -1179,7 +1191,11 @@ def check_github_updates() -> bool:
             ["git", "rev-parse", "HEAD"],
             cwd=repo_dir,
             stderr=subprocess.DEVNULL,
+            timeout=_GIT_COMMAND_TIMEOUT,
         ).decode().strip()
+    except subprocess.TimeoutExpired:
+        logging.warning("check_github_updates: git HEAD lookup timed out")
+        return False
     except Exception:
         logging.exception("check_github_updates: failed to read local HEAD")
         return False
@@ -1190,7 +1206,11 @@ def check_github_updates() -> bool:
             ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
             cwd=repo_dir,
             stderr=subprocess.DEVNULL,
+            timeout=_GIT_COMMAND_TIMEOUT,
         ).decode().strip()
+    except subprocess.TimeoutExpired:
+        logging.warning("check_github_updates: git upstream lookup timed out")
+        return False
     except Exception:
         logging.info(
             "check_github_updates: no upstream tracking branch for %s, skipping check",
@@ -1205,7 +1225,11 @@ def check_github_updates() -> bool:
             cwd=repo_dir,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            timeout=_GIT_COMMAND_TIMEOUT,
         )
+    except subprocess.TimeoutExpired:
+        logging.warning("check_github_updates: git fetch timed out")
+        return False
     except Exception:
         logging.warning("check_github_updates: failed to fetch from origin")
         return False
@@ -1216,7 +1240,11 @@ def check_github_updates() -> bool:
             ["git", "rev-parse", upstream_ref],
             cwd=repo_dir,
             stderr=subprocess.DEVNULL,
+            timeout=_GIT_COMMAND_TIMEOUT,
         ).decode().strip()
+    except subprocess.TimeoutExpired:
+        logging.warning("check_github_updates: git upstream SHA lookup timed out")
+        return False
     except Exception:
         logging.warning(
             "check_github_updates: failed to resolve upstream %s for %s",
@@ -1235,8 +1263,14 @@ def check_github_updates() -> bool:
             changed = subprocess.check_output(
                 ["git", "diff", "--name-only", f"{local_sha}..{remote_sha}"],
                 cwd=repo_dir,
+                timeout=_GIT_COMMAND_TIMEOUT,
             ).decode().splitlines()
-
+        except subprocess.TimeoutExpired:
+            logging.warning("check_github_updates: git diff timed out")
+            return updated
+        except Exception:
+            logging.exception("check_github_updates: failed to list changed files")
+        else:
             if not changed:
                 logging.info("check_github_updates: no file list available (empty diff?)")
             else:
@@ -1250,8 +1284,6 @@ def check_github_updates() -> bool:
                     logging.info(f"  • {p}")
                 if len(changed) > MAX_LIST:
                     logging.info(f"  …and {len(changed) - MAX_LIST} more")
-        except Exception:
-            logging.exception("check_github_updates: failed to list changed files")
 
     return updated
 
@@ -1281,7 +1313,12 @@ def check_apt_updates() -> bool:
             capture_output=True,
             text=True,
             check=False,
+            timeout=_APT_COMMAND_TIMEOUT,
         )
+    except subprocess.TimeoutExpired:
+        logging.warning("check_apt_updates: apt-get simulation timed out")
+        _set_update_status(apt=False)
+        return False
     except Exception:
         logging.exception("check_apt_updates: failed to run apt-get simulation")
         _set_update_status(apt=False)
