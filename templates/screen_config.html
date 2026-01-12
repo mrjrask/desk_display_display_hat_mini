@@ -96,6 +96,26 @@
       color: #94a3b8;
       font-weight: 700;
     }
+    .freq-header {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.25rem;
+    }
+    .zero-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: none;
+      color: #cbd5f5;
+      letter-spacing: 0.02em;
+    }
+    .zero-toggle input {
+      margin: 0;
+      accent-color: #38bdf8;
+    }
     .table {
       display: grid;
       gap: 0.75rem;
@@ -176,7 +196,13 @@
     <div class="table-header">
       <div></div>
       <div>Screen</div>
-      <div>Freq</div>
+      <div class="freq-header">
+        <label class="zero-toggle">
+          <input type="checkbox" id="hideZeroFreq">
+          Hide 0
+        </label>
+        <div>Freq</div>
+      </div>
       <div>Alt screen(s)</div>
       <div>Alt freq</div>
     </div>
@@ -188,7 +214,7 @@
           <div class="screen-id">{{ screen.id }}</div>
         </div>
         <div>
-          <input type="number" min="0" step="1" value="{{ screen.frequency }}">
+          <input type="number" min="0" step="1" value="{{ screen.frequency }}" class="freq-input">
           <div class="hint">0 disables this screen.</div>
         </div>
         <div>
@@ -226,6 +252,7 @@
     const loadDefaultsBtnBottom = document.getElementById("loadDefaultsBtnBottom");
     const exportBtnBottom = document.getElementById("exportBtnBottom");
     const errorBox = document.getElementById("errorBox");
+    const hideZeroFreqToggle = document.getElementById("hideZeroFreq");
 
     function getDragAfterElement(container, y) {
       const draggableElements = [...container.querySelectorAll(".screen-row:not(.dragging)")];
@@ -263,6 +290,12 @@
       }
     });
 
+    screenTable.addEventListener("input", (event) => {
+      if (event.target.matches(".freq-input")) {
+        updateZeroFrequencyVisibility();
+      }
+    });
+
     function showError(message) {
       errorBox.textContent = message;
       errorBox.style.display = "block";
@@ -290,7 +323,7 @@
           <div class="screen-id">${screen.id}</div>
         </div>
         <div>
-          <input type="number" min="0" step="1" value="${screen.frequency ?? 0}">
+          <input type="number" min="0" step="1" value="${screen.frequency ?? 0}" class="freq-input">
           <div class="hint">0 disables this screen.</div>
         </div>
         <div>
@@ -305,11 +338,27 @@
       return row;
     }
 
+    function updateZeroFrequencyVisibility() {
+      if (!hideZeroFreqToggle) return;
+      const hideZero = hideZeroFreqToggle.checked;
+      const rows = [...screenTable.querySelectorAll(".screen-row")];
+      rows.forEach((row) => {
+        if (!hideZero) {
+          row.style.display = "";
+          return;
+        }
+        const freqInput = row.querySelector(".freq-input");
+        const freqValue = Number(freqInput?.value ?? 0);
+        row.style.display = Number.isNaN(freqValue) || freqValue !== 0 ? "" : "none";
+      });
+    }
+
     function renderScreens(screens) {
       screenTable.innerHTML = "";
       screens.forEach((screen) => {
         screenTable.appendChild(buildRow(screen));
       });
+      updateZeroFrequencyVisibility();
     }
 
     async function saveConfiguration() {
@@ -390,6 +439,10 @@
     loadDefaultsBtnBottom.addEventListener("click", loadDefaults);
     exportBtn.addEventListener("click", exportConfiguration);
     exportBtnBottom.addEventListener("click", exportConfiguration);
+    if (hideZeroFreqToggle) {
+      hideZeroFreqToggle.addEventListener("change", updateZeroFrequencyVisibility);
+      updateZeroFrequencyVisibility();
+    }
   </script>
 </body>
 </html>
