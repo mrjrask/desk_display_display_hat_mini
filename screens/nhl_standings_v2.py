@@ -123,6 +123,13 @@ def _wildcard_sort_key(team: dict) -> Tuple[int, int, int, int, int, str]:
     )
 
 
+def _wildcard_order_sort_key(team: dict) -> Tuple:
+    wildcard_rank = _normalize_int(team.get("wildcardRank") or team.get("wildCardRank"))
+    if wildcard_rank > 0:
+        return (0, wildcard_rank) + _wildcard_sort_key(team)
+    return (1,) + _wildcard_sort_key(team)
+
+
 def _conference_wildcard_standings(
     conference: dict[str, list[dict]],
     division_order: Sequence[str],
@@ -142,11 +149,11 @@ def _conference_wildcard_standings(
 
         def _order_key(team: dict) -> tuple[int, Tuple[int, int, int, int, int, str]]:
             abbr = str(team.get("abbr", "")).upper()
-            return (order_map.get(abbr, 999), _wildcard_sort_key(team))
+            return (order_map.get(abbr, 999), _wildcard_order_sort_key(team))
 
         remaining.sort(key=_order_key)
     else:
-        remaining.sort(key=_wildcard_sort_key)
+        remaining.sort(key=_wildcard_order_sort_key)
     if len(remaining) >= 3:
         remaining[2]["_wildcard_cutoff_before"] = True
     if remaining:
