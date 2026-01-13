@@ -35,7 +35,7 @@ os.environ.setdefault("CONFIG_LOAD_DOTENV", "1")
 
 gc = __import__('gc')
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 from config import (
     WIDTH,
@@ -63,7 +63,6 @@ from utils import (
     clear_update_indicator,
     defer_clear_display,
     display_updates_enabled,
-    draw_text_centered,
     resume_display_updates,
     suspend_display_updates,
     temporary_display_led,
@@ -93,7 +92,6 @@ except Exception as exc:
     wifi_utils = _WifiUtilsFallback()
 from paths import resolve_storage_paths
 
-from screens.draw_date_time import draw_date, draw_time
 from screens.draw_travel_time import (
     get_travel_active_window,
     is_travel_screen_active,
@@ -146,6 +144,9 @@ _screen_history_lock = threading.Lock()
 _dark_hours_active = False
 _manual_display_off = False
 _manual_backlight_level: Optional[float] = None
+_wifi_outage_active = False
+_wifi_outage_started_at: Optional[datetime.datetime] = None
+_wifi_outage_live_games = False
 
 
 def _request_next_screen() -> bool:
@@ -233,6 +234,37 @@ def _toggle_display_updates() -> bool:
         pass
     suspend_display_updates()
     return True
+
+
+def _cache_has_live_games(data_cache: Dict[str, object]) -> bool:
+    for team in ("hawks", "wolves", "bulls", "cubs", "sox"):
+        entry = data_cache.get(team)
+        if isinstance(entry, dict) and entry.get("live"):
+            return True
+    return False
+
+
+def _update_wifi_outage_state(wifi_state: str) -> None:
+    global _wifi_outage_active, _wifi_outage_started_at, _wifi_outage_live_games
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    if wifi_state != "ok":
+        if not _wifi_outage_active:
+            _wifi_outage_active = True
+            _wifi_outage_started_at = now
+            _wifi_outage_live_games = _cache_has_live_games(cache)
+            logging.warning(
+                "⚠️  Wi-Fi outage detected; caching enabled (%s).",
+                "live games active" if _wifi_outage_live_games else "no live games",
+            )
+        return
+
+    if _wifi_outage_active:
+        logging.info("✅ Wi-Fi restored; resuming live refreshes.")
+        _wifi_outage_active = False
+        _wifi_outage_started_at = None
+        _wifi_outage_live_games = False
 
 
 def _button_event_callback(name: str) -> None:
@@ -1004,6 +1036,10 @@ _FEED_REFRESHERS: Dict[str, Callable[[], None]] = {
 
 
 def refresh_all(force: bool = False) -> None:
+    if _wifi_outage_active and not force:
+        logging.info("⏸️  Skipping refresh during Wi-Fi outage.")
+        return
+
     required_feeds = _requested_data_feeds()
     if not required_feeds:
         logging.info("⏭️  No scheduled data-dependent screens; skipping refresh.")
@@ -1187,32 +1223,8 @@ def main_loop():
             else:
                 wifi_state, wifi_ssid = ("ok", None)
 
-            if ENABLE_WIFI_MONITOR and wifi_state != "ok":
-                img = Image.new("RGB", (WIDTH, HEIGHT), "black")
-                d   = ImageDraw.Draw(img)
-                if wifi_state == "no_wifi":
-                    draw_text_centered(d, "No Wi-Fi.", FONT_DATE_SPORTS, fill=(255,0,0))
-                else:
-                    draw_text_centered(d, "Wi-Fi ok.",     FONT_DATE_SPORTS, y_offset=-12, fill=(255,255,0))
-                    draw_text_centered(d, wifi_ssid or "", FONT_DATE_SPORTS, fill=(255,255,0))
-                    draw_text_centered(d, "No internet.",  FONT_DATE_SPORTS, y_offset=12,  fill=(255,0,0))
-                display.image(img)
-                display.show()
-
-                if _shutdown_event.is_set():
-                    break
-
-                if not _wait_with_button_checks(SCREEN_DELAY):
-                    for fn in (draw_date, draw_time):
-                        img2 = fn(display, transition=True)
-                        animate_fade_in(display, img2, steps=8, delay=0.015)
-                        if _shutdown_event.is_set():
-                            break
-                        if _wait_with_button_checks(SCREEN_DELAY):
-                            break
-
-                gc.collect()
-                continue
+            if ENABLE_WIFI_MONITOR:
+                _update_wifi_outage_state(wifi_state)
 
             if screen_scheduler is None:
                 logging.warning(
@@ -1226,6 +1238,9 @@ def main_loop():
                 continue
 
             travel_requested = "travel" in _requested_screen_ids
+            offline = _wifi_outage_active if ENABLE_WIFI_MONITOR else False
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            weather_fetched_at = data_fetch.get_weather_cache_timestamp()
             context = ScreenContext(
                 display=display,
                 cache=cache,
@@ -1235,7 +1250,11 @@ def main_loop():
                 travel_active=is_travel_screen_active(),
                 travel_window=get_travel_active_window(),
                 previous_travel_state=_travel_schedule_state,
-                now=datetime.datetime.now(CENTRAL_TIME),
+                now=current_time,
+                now_utc=now_utc,
+                offline=offline,
+                weather_fetched_at=weather_fetched_at,
+                skip_scoreboards=offline and _wifi_outage_live_games,
             )
             registry, metadata = build_screen_registry(context)
             _travel_schedule_state = metadata.get("travel_state", _travel_schedule_state)
