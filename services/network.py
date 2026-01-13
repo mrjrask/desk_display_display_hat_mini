@@ -6,11 +6,13 @@ import time
 import subprocess
 import socket
 import logging
+from typing import Optional
 
 from config import (
     WIFI_CHECK_INTERVAL,
     WIFI_OFF_DURATION,
     FONT_DATE_SPORTS,
+    FONT_DATE,
     FONT_TIME,
     FONT_TITLE_SPORTS,
 )
@@ -30,6 +32,7 @@ class ConnectivityMonitor:
         self.display = display
         self.state   = None
         self.lock    = threading.Lock()
+        self.last_connected_at: Optional[datetime.datetime] = None
         logging.info("🔌 Starting Wi-Fi monitor…")
         threading.Thread(target=self._loop, daemon=True).start()
 
@@ -53,6 +56,8 @@ class ConnectivityMonitor:
                 new = "online"
 
             with self.lock:
+                if new == "online":
+                    self.last_connected_at = datetime.datetime.now()
                 if new != self.state:
                     self.state = new
                     if new == "no_wifi":
@@ -83,8 +88,20 @@ class ConnectivityMonitor:
         with self.lock:
             return self.state
 
+    def get_last_connected_at(self) -> Optional[datetime.datetime]:
+        with self.lock:
+            return self.last_connected_at
 
-def show_no_wifi_screen(display):
+
+def _format_last_connected(last_connected_at: Optional[datetime.datetime]) -> Optional[str]:
+    if not last_connected_at:
+        return None
+    date_str = last_connected_at.strftime("%a %-m/%-d")
+    time_str, ampm = split_time_period(last_connected_at.time())
+    return f"Last connected: {date_str} {time_str} {ampm}"
+
+
+def show_no_wifi_screen(display, last_connected_at: Optional[datetime.datetime] = None):
     """
     Display a static 'No Wi-Fi' + date/time status.
     """
@@ -93,22 +110,35 @@ def show_no_wifi_screen(display):
     draw = ImageDraw.Draw(img)
 
     # Status line
-    draw_text_centered(draw, "No Wi-Fi.", FONT_TITLE_SPORTS, y_offset=-16)
+    last_connected_text = _format_last_connected(last_connected_at)
+    draw_text_centered(
+        draw,
+        "No Wi-Fi.",
+        FONT_TITLE_SPORTS,
+        y_offset=-28 if last_connected_text else -16,
+    )
 
     # Date line
     now = time.localtime()
     date_str = time.strftime("%a %-m/%-d", now)
-    draw_text_centered(draw, date_str, FONT_DATE_SPORTS, y_offset=0)
+    draw_text_centered(draw, date_str, FONT_DATE_SPORTS, y_offset=-6 if last_connected_text else 0)
 
     # Time line
     t, ampm = split_time_period(datetime.datetime.now().time())
-    draw_text_centered(draw, f"{t} {ampm}", FONT_TIME, y_offset=24)
+    draw_text_centered(draw, f"{t} {ampm}", FONT_TIME, y_offset=18 if last_connected_text else 24)
+
+    if last_connected_text:
+        draw_text_centered(draw, last_connected_text, FONT_DATE, y_offset=48)
 
     display.image(img)
     display.show()
 
 
-def show_wifi_no_internet_screen(display, ssid):
+def show_wifi_no_internet_screen(
+    display,
+    ssid,
+    last_connected_at: Optional[datetime.datetime] = None,
+):
     """
     Display 'Wi-Fi connected.' / SSID / 'No Internet.'
     """
@@ -116,9 +146,22 @@ def show_wifi_no_internet_screen(display, ssid):
     img = Image.new("RGB", (display.width, display.height), (0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    draw_text_centered(draw, "Wi-Fi connected.", FONT_TITLE_SPORTS, y_offset=-24)
-    draw_text_centered(draw, ssid,                FONT_DATE_SPORTS,  y_offset=0)
-    draw_text_centered(draw, "No Internet.",      FONT_DATE_SPORTS,  y_offset=24)
+    last_connected_text = _format_last_connected(last_connected_at)
+    draw_text_centered(
+        draw,
+        "Wi-Fi connected.",
+        FONT_TITLE_SPORTS,
+        y_offset=-30 if last_connected_text else -24,
+    )
+    draw_text_centered(draw, ssid, FONT_DATE_SPORTS, y_offset=-8 if last_connected_text else 0)
+    draw_text_centered(
+        draw,
+        "No Internet.",
+        FONT_DATE_SPORTS,
+        y_offset=14 if last_connected_text else 24,
+    )
+    if last_connected_text:
+        draw_text_centered(draw, last_connected_text, FONT_DATE, y_offset=40)
 
     display.image(img)
     display.show()
