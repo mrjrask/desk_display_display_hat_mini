@@ -8,7 +8,7 @@ Shows the next Chicago Bears game with:
     or 'vs.' if the Bears are home.
   - Between those and the bottom line, a row of logos: AWAY @ HOME, each logo
     auto-sized similarly to the Hawks schedule screen.
-  - Bottom line with week/date/time (no spaces around the dash).
+  - Bottom lines with week above date/time.
 """
 
 import datetime
@@ -25,20 +25,12 @@ from utils import (
 )
 
 
-def _center_bottom_text(draw, text, *, font, margin):
-    if not text:
-        return 0
+def _text_size(draw, text, *, font):
     try:
         l, t, r, b = draw.textbbox((0, 0), text, font=font)
-        tw, th = r - l, b - t
-        tx = (config.WIDTH - tw) // 2 - l
-        ty = config.HEIGHT - th - margin - t
+        return (r - l, b - t)
     except Exception:
-        tw, th = draw.textsize(text, font=font)
-        tx = (config.WIDTH - tw) // 2
-        ty = config.HEIGHT - th - margin
-    draw.text((tx, ty), text, font=font, fill=(255, 255, 255))
-    return ty
+        return draw.textsize(text, font=font)
 
 
 def _format_game_date(date_text: str) -> str:
@@ -99,20 +91,22 @@ def show_bears_next_game(display, transition=False):
         else:
             away_ab, home_ab = opp_ab, bears_ab
 
-        # Bottom line text — **no spaces around the dash**
+        # Bottom lines text — week above date/time
         wk = (game.get("week") or "").strip()
         if not wk:
             game_no = str(game.get("game_no", "")).strip()
             wk = f"Game {game_no}" if game_no else ""
         date_txt = _format_game_date(game.get("date", ""))
         t_txt = game["time"].strip()
-        bottom = f"{wk}-{date_txt} {t_txt}" if wk else f"{date_txt} {t_txt}"
-        if bottom:
-            try:
-                _, t, _, b = draw.textbbox((0, 0), bottom, font=config.FONT_DATE_SPORTS)
-                bottom_h = b - t
-            except Exception:
-                bottom_h = draw.textsize(bottom, font=config.FONT_DATE_SPORTS)[1]
+        date_time = " ".join(part for part in (date_txt, t_txt) if part).strip()
+        bottom_lines = [line for line in (wk, date_time) if line]
+        line_gap = 2
+        if bottom_lines:
+            heights = [
+                _text_size(draw, line, font=config.FONT_DATE_SPORTS)[1]
+                for line in bottom_lines
+            ]
+            bottom_h = sum(heights) + (line_gap * (len(bottom_lines) - 1))
         else:
             bottom_h = 0
         bottom_y = config.HEIGHT - bottom_h - BEARS_BOTTOM_MARGIN  # keep on-screen
@@ -184,13 +178,17 @@ def show_bears_next_game(display, transition=False):
         _paste_logo(logo_home, right_x)
 
         # Draw bottom text
-        if bottom:
-            _center_bottom_text(
-                draw,
-                bottom,
-                font=config.FONT_DATE_SPORTS,
-                margin=BEARS_BOTTOM_MARGIN,
-            )
+        if bottom_lines:
+            y_bottom_text = bottom_y
+            for line in bottom_lines:
+                w_line, h_line = _text_size(draw, line, font=config.FONT_DATE_SPORTS)
+                draw.text(
+                    ((config.WIDTH - w_line) // 2, y_bottom_text),
+                    line,
+                    font=config.FONT_DATE_SPORTS,
+                    fill=(255, 255, 255),
+                )
+                y_bottom_text += h_line + line_gap
 
     if transition:
         return img
