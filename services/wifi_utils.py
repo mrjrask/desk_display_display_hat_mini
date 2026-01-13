@@ -430,18 +430,43 @@ def _cycle_wifi(iface: str) -> None:
         _run_command(["ip", "link", "set", iface, "down"])
     except Exception as exc:
         _LOGGER.debug("Failed to bring %s down: %s", iface, exc)
-    time.sleep(2)
+
+    time.sleep(20)
+
     _system_log(f"Action: cycle_wifi iface={iface} step=up")
     try:
         _run_command(["ip", "link", "set", iface, "up"])
     except Exception as exc:
         _LOGGER.debug("Failed to bring %s up: %s", iface, exc)
+
+    if shutil.which("rfkill"):
+        try:
+            _run_command(["rfkill", "unblock", "wifi"])
+            _system_log("Action: rfkill_unblock_wifi")
+        except Exception as exc:
+            _LOGGER.debug("rfkill unblock failed: %s", exc)
+
     if shutil.which("wpa_cli"):
         try:
             _run_command(["wpa_cli", "-i", iface, "reconfigure"])
             _system_log(f"Action: wpa_supplicant_reconfigure iface={iface}")
         except Exception as exc:
             _LOGGER.debug("wpa_cli reconfigure failed: %s", exc)
+
+    if shutil.which("nmcli"):
+        try:
+            _run_command(["nmcli", "radio", "wifi", "off"])
+            _system_log("Action: nmcli_radio_off")
+            time.sleep(2)
+            _run_command(["nmcli", "radio", "wifi", "on"])
+            _system_log("Action: nmcli_radio_on")
+            _run_command(["nmcli", "device", "disconnect", iface])
+            _system_log(f"Action: nmcli_disconnect iface={iface}")
+            time.sleep(2)
+            _run_command(["nmcli", "device", "connect", iface])
+            _system_log(f"Action: nmcli_connect iface={iface}")
+        except Exception as exc:
+            _LOGGER.debug("nmcli recovery steps failed: %s", exc)
 
 
 def _update_state(state: str, ssid: Optional[str]) -> None:
