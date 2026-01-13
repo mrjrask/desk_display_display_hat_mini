@@ -750,6 +750,12 @@ def fetch_weather(force_refresh: bool = False):
     return None
 
 
+def get_weather_cache_timestamp() -> Optional[datetime.datetime]:
+    """Return the UTC timestamp for the most recent successful weather fetch."""
+
+    return _weather_cache_fetched_at
+
+
 # -----------------------------------------------------------------------------
 # NHL — Blackhawks
 # -----------------------------------------------------------------------------

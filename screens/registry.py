@@ -108,6 +108,8 @@ from screens.nhl_standings_v2 import (
 RenderCallable = Callable[[], Optional[Image.Image | ScreenImage]]
 
 RADAR_LOOKAHEAD_HOURS = 8
+WEATHER_CURRENT_TTL = _dt.timedelta(minutes=20)
+WEATHER_HOURLY_TTL = _dt.timedelta(hours=1)
 
 
 @dataclass
@@ -133,6 +135,10 @@ class ScreenContext:
     travel_window: Optional[Tuple[Optional[_dt.time], Optional[_dt.time]]]
     previous_travel_state: Optional[str]
     now: _dt.datetime
+    now_utc: _dt.datetime
+    offline: bool
+    weather_fetched_at: Optional[_dt.datetime]
+    skip_scoreboards: bool
 
 
 def _show_logo(display, image: Image.Image) -> Image.Image:
@@ -192,6 +198,20 @@ def _normalise_reference_time(now: Optional[_dt.datetime]) -> _dt.datetime:
             return CENTRAL_TIME.localize(current)  # type: ignore[arg-type]
         return current.replace(tzinfo=CENTRAL_TIME)
     return current.astimezone(CENTRAL_TIME)
+
+
+def _is_weather_fresh(
+    fetched_at: Optional[_dt.datetime],
+    now: _dt.datetime,
+    max_age: _dt.timedelta,
+) -> bool:
+    if fetched_at is None:
+        return False
+    if fetched_at.tzinfo is None:
+        fetched_at = fetched_at.replace(tzinfo=_dt.timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=_dt.timezone.utc)
+    return (now - fetched_at) <= max_age
 
 
 def _has_precipitation_amount(hour: dict) -> bool:
@@ -261,6 +281,19 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
 
     weather_data = context.cache.get("weather")
     weather_logo = context.logos.get("weather logo")
+    weather_current_available = bool(weather_data)
+    weather_hourly_available = bool(weather_data)
+    if context.offline:
+        weather_current_available = bool(weather_data) and _is_weather_fresh(
+            context.weather_fetched_at,
+            context.now_utc,
+            WEATHER_CURRENT_TTL,
+        )
+        weather_hourly_available = bool(weather_data) and _is_weather_fresh(
+            context.weather_fetched_at,
+            context.now_utc,
+            WEATHER_HOURLY_TTL,
+        )
     if weather_logo is not None:
         register(
             "weather logo",
@@ -270,19 +303,21 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
     register(
         "weather1",
         lambda data=weather_data: draw_weather_screen_1(context.display, data, transition=True),
-        available=bool(weather_data),
+        available=weather_current_available,
     )
     register(
         "weather2",
         lambda data=weather_data: draw_weather_screen_2(context.display, data, transition=True),
-        available=bool(weather_data),
+        available=weather_current_available,
     )
     register(
         "weather hourly",
         lambda data=weather_data: draw_weather_hourly(context.display, data, transition=True),
-        available=bool(weather_data),
+        available=weather_hourly_available,
     )
-    radar_available = _precip_within_hours(weather_data, RADAR_LOOKAHEAD_HOURS, now=context.now)
+    radar_available = weather_hourly_available and _precip_within_hours(
+        weather_data, RADAR_LOOKAHEAD_HOURS, now=context.now
+    )
     register(
         "weather radar",
         lambda: draw_weather_radar(context.display, weather_data, transition=True),
@@ -342,6 +377,8 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         else:
             travel_state = "inactive"
     metadata["travel_state"] = travel_state
+
+    scoreboards_available = not (context.offline and context.skip_scoreboards)
 
     def _is_live_game_today(game: Any) -> bool:
         """Return True when *game* appears to be in progress today."""
@@ -502,8 +539,16 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         )
 
     register("bears next", lambda: show_bears_next_game(context.display, transition=True))
-    register("NFL Scoreboard", lambda: draw_nfl_scoreboard(context.display, transition=True))
-    register("NFL Scoreboard v2", lambda: draw_nfl_scoreboard_v2(context.display, transition=True))
+    register(
+        "NFL Scoreboard",
+        lambda: draw_nfl_scoreboard(context.display, transition=True),
+        available=scoreboards_available,
+    )
+    register(
+        "NFL Scoreboard v2",
+        lambda: draw_nfl_scoreboard_v2(context.display, transition=True),
+        available=scoreboards_available,
+    )
     register("NFL Overview NFC", lambda: draw_nfl_overview_nfc(context.display, transition=True))
     register("NFL Overview AFC", lambda: draw_nfl_overview_afc(context.display, transition=True))
     register("NFL Standings NFC", lambda: draw_nfl_standings_nfc(context.display, transition=True))
@@ -569,8 +614,16 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
             )
 
         register_logo("nhl logo")
-        register("NHL Scoreboard", lambda: draw_nhl_scoreboard(context.display, transition=True))
-        register("NHL Scoreboard v2", lambda: draw_nhl_scoreboard_v2(context.display, transition=True))
+        register(
+            "NHL Scoreboard",
+            lambda: draw_nhl_scoreboard(context.display, transition=True),
+            available=scoreboards_available,
+        )
+        register(
+            "NHL Scoreboard v2",
+            lambda: draw_nhl_scoreboard_v2(context.display, transition=True),
+            available=scoreboards_available,
+        )
         register(
             "NHL Standings Overview West",
             lambda: draw_nhl_standings_overview_west(context.display, transition=True),
@@ -796,10 +849,26 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
                 available=True,
             )
 
-    register("MLB Scoreboard", lambda: draw_mlb_scoreboard(context.display, transition=True))
-    register("MLB Scoreboard v2", lambda: draw_mlb_scoreboard_v2(context.display, transition=True))
-    register("NBA Scoreboard", lambda: draw_nba_scoreboard(context.display, transition=True))
-    register("NBA Scoreboard v2", lambda: draw_nba_scoreboard_v2(context.display, transition=True))
+    register(
+        "MLB Scoreboard",
+        lambda: draw_mlb_scoreboard(context.display, transition=True),
+        available=scoreboards_available,
+    )
+    register(
+        "MLB Scoreboard v2",
+        lambda: draw_mlb_scoreboard_v2(context.display, transition=True),
+        available=scoreboards_available,
+    )
+    register(
+        "NBA Scoreboard",
+        lambda: draw_nba_scoreboard(context.display, transition=True),
+        available=scoreboards_available,
+    )
+    register(
+        "NBA Scoreboard v2",
+        lambda: draw_nba_scoreboard_v2(context.display, transition=True),
+        available=scoreboards_available,
+    )
 
     register("NL Overview", lambda: draw_NL_Overview(context.display, transition=True))
     register("NL East", lambda: draw_NL_East(context.display, transition=True))
