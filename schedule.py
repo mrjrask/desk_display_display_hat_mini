@@ -37,7 +37,6 @@ class _AlternateSchedule:
 class _ScheduleEntry:
     screen_id: str
     frequency: int
-    cooldown: int = 0
     play_count: int = 0
     alternate: Optional[_AlternateSchedule] = None
 
@@ -71,21 +70,10 @@ class ScreenScheduler:
             entry = self._entries[self._cursor]
             self._cursor = (self._cursor + 1) % len(self._entries)
 
-            if entry.cooldown > 0:
-                entry.cooldown -= 1
-                if entry.cooldown > 0:
-                    continue
-
-            # A frequency of ``n`` means the screen should appear once every
-            # ``n`` iterations of the playlist.  The previous implementation
-            # used the raw frequency value as the cooldown which effectively
-            # produced a cycle of ``n + 1`` iterations, making the screens
-            # appear less often than configured (e.g. a frequency of 3 would
-            # yield one appearance every 4 loops).  By resetting the cooldown
-            # to the raw frequency and letting the current iteration proceed
-            # when it hits zero we align the output with the configured
-            # interval while keeping ``0`` as an "always show" value.
-            entry.cooldown = max(entry.frequency, 0)
+            # A frequency of ``n`` means the screen should appear ``n`` times
+            # per full rotation. The build step expands the schedule in a
+            # round-robin fashion so each entry can be visited sequentially
+            # without additional cooldown tracking.
             entry.play_count += 1
 
             candidate_id = entry.screen_id
@@ -180,14 +168,13 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
                     raise ValueError(
                         f"Alternate frequency for '{screen_id}' must be an integer"
                     ) from exc
-                if alt_frequency_int < 0:
+                if alt_frequency_int <= 0:
                     raise ValueError(
-                        f"Alternate frequency for '{screen_id}' cannot be negative"
+                        f"Alternate frequency for '{screen_id}' must be greater than zero"
                     )
-                if alt_frequency_int > 0:
-                    alternate = _AlternateSchedule(
-                        tuple(alt_screen_ids), alt_frequency_int
-                    )
+                alternate = _AlternateSchedule(
+                    tuple(alt_screen_ids), alt_frequency_int
+                )
         else:
             try:
                 frequency = int(raw)
@@ -209,4 +196,12 @@ def build_scheduler(config: Dict[str, Any]) -> ScreenScheduler:
     if not entries:
         raise ValueError("Configuration must contain at least one enabled screen")
 
-    return ScreenScheduler(entries)
+    expanded_entries: List[_ScheduleEntry] = []
+    remaining = [entry.frequency for entry in entries]
+    while any(count > 0 for count in remaining):
+        for idx, entry in enumerate(entries):
+            if remaining[idx] > 0:
+                expanded_entries.append(entry)
+                remaining[idx] -= 1
+
+    return ScreenScheduler(expanded_entries)
