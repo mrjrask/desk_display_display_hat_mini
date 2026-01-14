@@ -44,6 +44,7 @@ _cache = {
 
 LOGO_HEIGHT = 65
 LOGO_GAP = 4
+BOTTOM_TEXT_MARGIN = 6
 LOGO_PATH = os.path.join(IMAGES_DIR, "verano.jpg")
 _LOGO = None
 
@@ -143,7 +144,12 @@ def _build_image(symbol: str = "VRNO") -> Image.Image:
         draw.text(((WIDTH - w_m)//2, HEIGHT//2 - h_m//2), msg, font=FONT_STOCK_TEXT, fill=(200,200,200))
         retry = "Try again shortly"
         w_r, h_r = draw.textsize(retry, font=FONT_STOCK_TEXT)
-        draw.text(((WIDTH - w_r)//2, HEIGHT - h_r - 2), retry, font=FONT_STOCK_TEXT, fill=(200,200,200))
+        draw.text(
+            ((WIDTH - w_r)//2, HEIGHT - h_r - BOTTOM_TEXT_MARGIN),
+            retry,
+            font=FONT_STOCK_TEXT,
+            fill=(200,200,200),
+        )
         return img
 
     price = _cache["price"]
@@ -169,7 +175,12 @@ def _build_image(symbol: str = "VRNO") -> Image.Image:
     # All-time percentage fixed at bottom
     if all_time:
         w_all, h_all = draw.textsize(all_time, font=FONT_STOCK_TEXT)
-        draw.text(((WIDTH - w_all)//2, HEIGHT - h_all - 2), all_time, font=FONT_STOCK_TEXT, fill=(255,255,255))
+        draw.text(
+            ((WIDTH - w_all)//2, HEIGHT - h_all - BOTTOM_TEXT_MARGIN),
+            all_time,
+            font=FONT_STOCK_TEXT,
+            fill=(255,255,255),
+        )
 
     # Price and change vertically centered on entire screen
     price_str = f"${price:.3f}"

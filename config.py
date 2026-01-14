@@ -981,7 +981,7 @@ TRAVEL_ACTIVE_WINDOW = _travel_profile["active_window"]
 TRAVEL_DIRECTIONS_URL = "https://maps.googleapis.com/maps/api/directions/json"
 
 # Bears schedule screen
-BEARS_BOTTOM_MARGIN = 4
+BEARS_BOTTOM_MARGIN = 6
 BEARS_SCHEDULE = [
     {"game_no": "0.1","week":"Preseason 1","date":"Sat, Aug 9, 2025",  "opponent":"Miami Dolphins",       "home_away":"Home","time":"Noon"},
     {"game_no": "0.2","week":"Preseason 2","date":"Sun, Aug 17, 2025", "opponent":"Buffalo Bills",        "home_away":"Home","time":"7PM"},
