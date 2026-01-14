@@ -46,6 +46,9 @@ CONFERENCE_EAST_KEY = "Eastern"
 LOGO_DIR = NHL_IMAGES_DIR
 _LOGO_BASE_HEIGHT = 41
 LOGO_HEIGHT = _LOGO_BASE_HEIGHT  # ~10% larger logos for standings rows
+_CONFERENCE_LOGO_BASE_HEIGHT = 30
+CONFERENCE_LOGO_HEIGHT = _CONFERENCE_LOGO_BASE_HEIGHT
+CONFERENCE_LOGO_GAP = 2
 LEFT_MARGIN = 4
 RIGHT_MARGIN = 6
 TEAM_COLUMN_GAP = 6
@@ -115,6 +118,7 @@ DIVISION_FONT, COLUMN_FONT, COLUMN_FONT_POINTS, ROW_FONT, TEAM_NAME_FONT = _buil
 def _apply_style_overrides(screen_id: str) -> None:
     global DIVISION_FONT, COLUMN_FONT, COLUMN_FONT_POINTS, ROW_FONT, TEAM_NAME_FONT
     global LOGO_HEIGHT, OVERVIEW_MIN_LOGO_HEIGHT, OVERVIEW_MAX_LOGO_HEIGHT
+    global CONFERENCE_LOGO_HEIGHT
 
     (
         DIVISION_FONT,
@@ -129,6 +133,8 @@ def _apply_style_overrides(screen_id: str) -> None:
     overview_scale = get_screen_image_scale(screen_id, "overview_logo", team_scale)
     OVERVIEW_MIN_LOGO_HEIGHT = max(1, int(round(_OVERVIEW_MIN_LOGO_BASE * overview_scale)))
     OVERVIEW_MAX_LOGO_HEIGHT = max(1, int(round(_OVERVIEW_MAX_LOGO_BASE * overview_scale)))
+    conference_scale = get_screen_image_scale(screen_id, "conference_logo", team_scale)
+    CONFERENCE_LOGO_HEIGHT = max(1, int(round(_CONFERENCE_LOGO_BASE_HEIGHT * conference_scale)))
 
 OVERVIEW_TITLE = "NHL Overview"
 OVERVIEW_TITLE_WEST = "NHL West Wild Card"
@@ -164,6 +170,7 @@ _MEASURE_DRAW = ImageDraw.Draw(_MEASURE_IMG)
 _STANDINGS_CACHE: dict[str, object] = {"timestamp": 0.0, "data": None}
 _LOGO_CACHE: dict[str, Optional[Image.Image]] = {}
 _OVERVIEW_LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
+_CONFERENCE_LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 
 STATSAPI_HOST = "statsapi.web.nhl.com"
 _DNS_RETRY_INTERVAL = 600  # seconds
@@ -175,6 +182,11 @@ VALID_DIVISIONS = set(DIVISION_ORDER_WEST + DIVISION_ORDER_EAST)
 WILDCARD_SECTION_NAME = "Wild Card"
 
 STATS_COLUMNS = ("wins", "losses", "ot", "points")
+
+CONFERENCE_LOGO_FILES = {
+    CONFERENCE_WEST_KEY: "WC.png",
+    CONFERENCE_EAST_KEY: "EC.png",
+}
 
 
 TEAM_NICKNAMES = {
@@ -320,6 +332,39 @@ def _load_logo_cached(abbr: str) -> Optional[Image.Image]:
 
     _LOGO_CACHE[cache_token] = None
     return None
+
+
+def _load_conference_logo(conference_key: str) -> Optional[Image.Image]:
+    key = (conference_key or "").strip()
+    if not key or key not in CONFERENCE_LOGO_FILES:
+        return None
+    height = CONFERENCE_LOGO_HEIGHT
+    cache_key = (key, height)
+    if cache_key in _CONFERENCE_LOGO_CACHE:
+        return _CONFERENCE_LOGO_CACHE[cache_key]
+
+    filename = CONFERENCE_LOGO_FILES.get(key)
+    if not filename:
+        _CONFERENCE_LOGO_CACHE[cache_key] = None
+        return None
+
+    path = os.path.join(LOGO_DIR, filename)
+    if not os.path.exists(path):
+        _CONFERENCE_LOGO_CACHE[cache_key] = None
+        return None
+
+    try:
+        logo = Image.open(path).convert("RGBA")
+        if logo.height > 0 and height > 0:
+            scale = height / float(logo.height)
+            new_width = max(1, int(round(logo.width * scale)))
+            logo = logo.resize((new_width, height), Image.LANCZOS)
+    except Exception as exc:  # pragma: no cover - defensive guard
+        logging.debug("NHL conference logo load failed for %s: %s", key, exc)
+        logo = None
+
+    _CONFERENCE_LOGO_CACHE[cache_key] = logo
+    return logo
 
 
 def _load_overview_logo(abbr: str, height: int) -> Optional[Image.Image]:
@@ -1120,6 +1165,24 @@ def _draw_centered_text(draw: ImageDraw.ImageDraw, text: str, font, top: int) ->
     return th
 
 
+def _conference_logo_height(conference_key: str | None) -> int:
+    if not conference_key:
+        return 0
+    logo = _load_conference_logo(conference_key)
+    return logo.height if logo else 0
+
+
+def _paste_conference_logo(img: Image.Image, conference_key: str | None, top: int) -> int:
+    if not conference_key:
+        return 0
+    logo = _load_conference_logo(conference_key)
+    if not logo:
+        return 0
+    x = (WIDTH - logo.width) // 2
+    img.paste(logo, (x, top), logo)
+    return logo.height
+
+
 def _draw_text(draw: ImageDraw.ImageDraw, text: str, font, x: int, top: int, height: int, align: str) -> None:
     if not text:
         return
@@ -1222,6 +1285,7 @@ def _render_conference(
     standings: Dict[str, List[dict]],
     subtitle: str | None = None,
     division_labels: Dict[str, str] | None = None,
+    conference_key: str | None = None,
 ) -> Image.Image:
     divisions = [division for division in division_order if standings.get(division)]
     if not divisions:
@@ -1229,7 +1293,11 @@ def _render_conference(
 
     column_layout, team_name_max_width = _conference_column_layout(standings, divisions)
 
-    total_height = TITLE_MARGIN_TOP + _text_size(title, TITLE_FONT)[1]
+    total_height = TITLE_MARGIN_TOP
+    logo_height = _conference_logo_height(conference_key)
+    if logo_height:
+        total_height += logo_height + CONFERENCE_LOGO_GAP
+    total_height += _text_size(title, TITLE_FONT)[1]
     if subtitle:
         total_height += TITLE_SUBTITLE_GAP + _text_size(subtitle, TITLE_FONT)[1]
     total_height += TITLE_MARGIN_BOTTOM
@@ -1244,6 +1312,9 @@ def _render_conference(
     draw = ImageDraw.Draw(img)
 
     y = TITLE_MARGIN_TOP
+    if logo_height:
+        y += _paste_conference_logo(img, conference_key, y)
+        y += CONFERENCE_LOGO_GAP
     y += _draw_centered_text(draw, title, TITLE_FONT, y)
     if subtitle:
         y += TITLE_SUBTITLE_GAP
@@ -1282,11 +1353,16 @@ Placement = Tuple[str, Image.Image, int, int]
 def _overview_layout(
     divisions: Sequence[tuple[str, List[dict]]],
     title: str = OVERVIEW_TITLE,
+    conference_key: str | None = None,
 ) -> tuple[Image.Image, List[float], float, float, int, int]:
     base = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(base)
 
     y = TITLE_MARGIN_TOP
+    logo_height = _conference_logo_height(conference_key)
+    if logo_height:
+        y += _paste_conference_logo(base, conference_key, y)
+        y += CONFERENCE_LOGO_GAP
     y += _draw_centered_text(draw, title, TITLE_FONT, y)
     y += OVERVIEW_TITLE_MARGIN_BOTTOM
 
@@ -1473,10 +1549,12 @@ def _animate_overview_drop(
 def _prepare_overview(
     divisions: List[tuple[str, List[dict]]],
     title: str = OVERVIEW_TITLE,
+    conference_key: str | None = None,
 ) -> tuple[Image.Image, List[List[Placement]]]:
     base, col_centers, logos_top, cell_height, logo_height, max_rows = _overview_layout(
         divisions,
         title=title,
+        conference_key=conference_key,
     )
     row_positions = _build_overview_rows(divisions, col_centers, logos_top, cell_height, logo_height, max_rows)
     return base, row_positions
@@ -1485,11 +1563,16 @@ def _prepare_overview(
 def _overview_layout_horizontal(
     rows: Sequence[tuple[str, List[dict]]],
     title: str,
+    conference_key: str | None = None,
 ) -> tuple[Image.Image, float, float]:
     base = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(base)
 
     y = TITLE_MARGIN_TOP
+    logo_height = _conference_logo_height(conference_key)
+    if logo_height:
+        y += _paste_conference_logo(base, conference_key, y)
+        y += CONFERENCE_LOGO_GAP
     y += _draw_centered_text(draw, title, TITLE_FONT, y)
     y += OVERVIEW_TITLE_MARGIN_BOTTOM
 
@@ -1555,16 +1638,29 @@ def _build_overview_rows_horizontal(
 def _prepare_overview_horizontal(
     rows: Sequence[tuple[str, List[dict]]],
     title: str,
+    conference_key: str | None = None,
 ) -> tuple[Image.Image, List[List[Placement]]]:
-    base, logos_top, row_height = _overview_layout_horizontal(rows, title=title)
+    base, logos_top, row_height = _overview_layout_horizontal(
+        rows,
+        title=title,
+        conference_key=conference_key,
+    )
     row_positions = _build_overview_rows_horizontal(rows, logos_top, row_height)
     return base, row_positions
 
 
-def _render_empty(title: str, subtitle: str | None = None) -> Image.Image:
+def _render_empty(
+    title: str,
+    subtitle: str | None = None,
+    conference_key: str | None = None,
+) -> Image.Image:
     img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
     y = TITLE_MARGIN_TOP
+    logo_height = _conference_logo_height(conference_key)
+    if logo_height:
+        y += _paste_conference_logo(img, conference_key, y)
+        y += CONFERENCE_LOGO_GAP
     y += _draw_centered_text(draw, title, TITLE_FONT, y)
     if subtitle:
         y += TITLE_SUBTITLE_GAP
@@ -1612,13 +1708,17 @@ def draw_nhl_standings_overview_west(display, transition: bool = False) -> Scree
 
     if not any(teams for _, teams in rows):
         clear_display(display)
-        img = _render_empty(OVERVIEW_TITLE_WEST)
+        img = _render_empty(OVERVIEW_TITLE_WEST, conference_key=CONFERENCE_WEST_KEY)
         if transition:
             return ScreenImage(img, displayed=False)
         display.image(img)
         return ScreenImage(img, displayed=True)
 
-    base, row_positions = _prepare_overview_horizontal(rows, title=OVERVIEW_TITLE_WEST)
+    base, row_positions = _prepare_overview_horizontal(
+        rows,
+        title=OVERVIEW_TITLE_WEST,
+        conference_key=CONFERENCE_WEST_KEY,
+    )
     final_img, _ = _compose_overview_image(base, row_positions)
 
     clear_display(display)
@@ -1640,13 +1740,17 @@ def draw_nhl_standings_overview_east(display, transition: bool = False) -> Scree
 
     if not any(teams for _, teams in rows):
         clear_display(display)
-        img = _render_empty(OVERVIEW_TITLE_EAST)
+        img = _render_empty(OVERVIEW_TITLE_EAST, conference_key=CONFERENCE_EAST_KEY)
         if transition:
             return ScreenImage(img, displayed=False)
         display.image(img)
         return ScreenImage(img, displayed=True)
 
-    base, row_positions = _prepare_overview_horizontal(rows, title=OVERVIEW_TITLE_EAST)
+    base, row_positions = _prepare_overview_horizontal(
+        rows,
+        title=OVERVIEW_TITLE_EAST,
+        conference_key=CONFERENCE_EAST_KEY,
+    )
     final_img, _ = _compose_overview_image(base, row_positions)
 
     clear_display(display)
@@ -1666,7 +1770,11 @@ def draw_nhl_standings_west(display, transition: bool = False) -> ScreenImage:
     divisions = [d for d in DIVISION_ORDER_WEST if conference.get(d)]
     if not divisions:
         clear_display(display)
-        img = _render_empty(TITLE_WEST, TITLE_SUBTITLE_DIVISION)
+        img = _render_empty(
+            TITLE_WEST,
+            TITLE_SUBTITLE_DIVISION,
+            conference_key=CONFERENCE_WEST_KEY,
+        )
         if transition:
             return ScreenImage(img, displayed=False)
         display.image(img)
@@ -1677,6 +1785,7 @@ def draw_nhl_standings_west(display, transition: bool = False) -> ScreenImage:
         divisions,
         conference,
         subtitle=TITLE_SUBTITLE_DIVISION,
+        conference_key=CONFERENCE_WEST_KEY,
     )
     clear_display(display)
     _scroll_vertical(display, full_img)
@@ -1691,7 +1800,11 @@ def draw_nhl_standings_east(display, transition: bool = False) -> ScreenImage:
     divisions = [d for d in DIVISION_ORDER_EAST if conference.get(d)]
     if not divisions:
         clear_display(display)
-        img = _render_empty(TITLE_EAST, TITLE_SUBTITLE_DIVISION)
+        img = _render_empty(
+            TITLE_EAST,
+            TITLE_SUBTITLE_DIVISION,
+            conference_key=CONFERENCE_EAST_KEY,
+        )
         if transition:
             return ScreenImage(img, displayed=False)
         display.image(img)
@@ -1702,6 +1815,7 @@ def draw_nhl_standings_east(display, transition: bool = False) -> ScreenImage:
         divisions,
         conference,
         subtitle=TITLE_SUBTITLE_DIVISION,
+        conference_key=CONFERENCE_EAST_KEY,
     )
     clear_display(display)
     _scroll_vertical(display, full_img)
