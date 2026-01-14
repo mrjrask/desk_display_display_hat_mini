@@ -125,7 +125,7 @@ FONT_TITLE    = FONT_TITLE_SPORTS                # title strip
 FONT_BOTTOM   = FONT_DATE_SPORTS                 # footer (date/time)
 FONT_NEXT_OPP = FONT_TEAM_SPORTS                 # opponent line in "next" cards
 
-BOTTOM_LINE_MARGIN = 3
+BOTTOM_LINE_MARGIN = 6
 
 # Colors
 BACKGROUND_COLOR = (0, 0, 0)
