@@ -300,14 +300,15 @@ def draw_standings_screen2(
     logo = None
     try:
         logo_img = Image.open(logo_path).convert("RGBA")
-        logo     = logo_img.resize((LOGO_SZ,LOGO_SZ), Image.ANTIALIAS)
+        ratio = LOGO_SZ / logo_img.height
+        logo = logo_img.resize((int(logo_img.width * ratio), LOGO_SZ), Image.ANTIALIAS)
     except:
         pass
     if logo:
-        x0 = (WIDTH-LOGO_SZ)//2
-        img.paste(logo,(x0,0),logo)
+        x0 = (WIDTH - logo.width) // 2
+        img.paste(logo, (x0, 0), logo)
 
-    text_top     = LOGO_SZ + MARGIN
+    text_top     = (logo.height if logo else 0) + MARGIN
     bottom_limit = HEIGHT - MARGIN
 
     # Overall record
