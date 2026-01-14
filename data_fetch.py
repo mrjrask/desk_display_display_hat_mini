@@ -1428,16 +1428,16 @@ def _fetch_nba_team_standings(team_tricode: str):
         try:
             resp = _session.get(endpoints["cdn"], timeout=10, headers=headers)
             if resp.status_code == 403:
-                logging.info(
+                logging.debug(
                     "NBA CDN standings blocked (HTTP 403); using ESPN fallback instead"
                 )
             else:
                 resp.raise_for_status()
                 return resp.json() or {}
         except Exception as exc:
-            logging.info("NBA CDN standings unavailable: %s", exc)
+            logging.debug("NBA CDN standings unavailable: %s", exc)
 
-        logging.info("Using ESPN NBA standings fallback")
+        logging.debug("Using ESPN NBA standings fallback")
         return _fetch_nba_team_standings_espn()
 
     payload = _load_json() or {}
@@ -1536,7 +1536,7 @@ def _fetch_nba_team_standings_espn() -> Optional[dict]:
             except Exception:
                 pass
 
-            logging.info("Using ESPN NBA standings fallback for %s", NBA_TEAM_TRICODE)
+            logging.debug("Using ESPN NBA standings fallback for %s", NBA_TEAM_TRICODE)
 
             division_rank = _stat(stats, "divisionStanding")
             if division_rank in (None, ""):
