@@ -158,11 +158,13 @@ def _route_ratio(route: Optional[dict]) -> Optional[float]:
 def _step_ratio(step: dict, fallback: Optional[float]) -> Optional[float]:
     duration = (step.get("duration") or {}).get("value")
     traffic = (step.get("duration_in_traffic") or {}).get("value")
-    baseline = duration
-    value = traffic or duration
-    if value and baseline:
-        return value / baseline
-    return fallback
+    if traffic and duration:
+        return traffic / duration
+    if fallback is not None:
+        return fallback
+    if duration:
+        return 1
+    return None
 
 
 def _step_points(step: dict) -> List[Tuple[float, float]]:
