@@ -2,8 +2,8 @@
 """
 draw_vrnof.py
 
-Displays VRNO stock price, change, and all-time P/L on the Display HAT Mini,
-with a 10-minute freshness requirement. Title and all-time P/L remain fixed; price/change vertically centered on screen.
+Displays VRNO stock price, change, and all-time percentage on the Display HAT Mini,
+with a 10-minute freshness requirement. Title and all-time percentage remain fixed; price/change vertically centered on screen.
 Exact cost-basis calculation from individual lots.
 """
 import logging
@@ -95,7 +95,7 @@ def _fetch_price(symbol: str):
         except Exception as e:
             logging.warning(f"VRNO: history fetch failed: {e}")
 
-    # calculate all-time P/L exactly per lot
+    # calculate all-time percentage exactly per lot
     all_time_str = None
     if price is not None:
         total_pl = 0.0
@@ -107,7 +107,7 @@ def _fetch_price(symbol: str):
             total_pl += shares * (price - cost_basis)
         # percentage based on total cost
         all_time_pct = (total_pl / total_cost) * 100 if total_cost else 0
-        all_time_str = f"${total_pl:.2f} ({all_time_pct:.2f}%)"
+        all_time_str = f"{all_time_pct:.2f}%"
 
     # update cache
     _cache.update({
@@ -166,7 +166,7 @@ def _build_image(symbol: str = "VRNO") -> Image.Image:
     w_title, h_title = draw.textsize(title, font=FONT_STOCK_TITLE)
     draw.text(((WIDTH - w_title)//2, title_top), title, font=FONT_STOCK_TITLE, fill=(255,255,255))
 
-    # All-time P/L fixed at bottom
+    # All-time percentage fixed at bottom
     if all_time:
         w_all, h_all = draw.textsize(all_time, font=FONT_STOCK_TEXT)
         draw.text(((WIDTH - w_all)//2, HEIGHT - h_all - 2), all_time, font=FONT_STOCK_TEXT, fill=(255,255,255))
