@@ -40,7 +40,7 @@ from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
     standard_next_game_logo_frame_width,
-    standard_next_game_logo_height,
+    standard_next_game_logo_height_for_space,
     temporary_display_led,
 )
 
@@ -661,14 +661,13 @@ def _render_next_game(game: Dict, *, title: str) -> Image.Image:
     footer = _format_footer_next(game)
 
     # Two large logos with '@' between them
-    base_logo_h = standard_next_game_logo_height(HEIGHT)
     bottom_reserved = (
         _text_h(draw, FONT_BOTTOM) + BOTTOM_LINE_MARGIN if footer else 0
     )
     bottom_y = HEIGHT - bottom_reserved
     y2 = y + 6
     available_h = max(10, bottom_y - y2)
-    logo_h = max(1, min(base_logo_h, available_h))
+    logo_h = standard_next_game_logo_height_for_space(HEIGHT, available_h)
     logo_left  = _load_logo_png(away["tri"], logo_h) if away else None
     logo_right = _load_logo_png(home["tri"], logo_h) if home else None
 
