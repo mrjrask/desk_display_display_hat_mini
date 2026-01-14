@@ -662,8 +662,13 @@ def _render_next_game(game: Dict, *, title: str) -> Image.Image:
 
     # Two large logos with '@' between them
     base_logo_h = standard_next_game_logo_height(HEIGHT)
-    max_logo_h = int(HEIGHT * 0.5) if HEIGHT > 0 else base_logo_h
-    logo_h = min(base_logo_h, max(72, max_logo_h))
+    bottom_reserved = (
+        _text_h(draw, FONT_BOTTOM) + BOTTOM_LINE_MARGIN if footer else 0
+    )
+    bottom_y = HEIGHT - bottom_reserved
+    y2 = y + 6
+    available_h = max(10, bottom_y - y2)
+    logo_h = max(1, min(base_logo_h, available_h))
     logo_left  = _load_logo_png(away["tri"], logo_h) if away else None
     logo_right = _load_logo_png(home["tri"], logo_h) if home else None
 
@@ -676,8 +681,38 @@ def _render_next_game(game: Dict, *, title: str) -> Image.Image:
     block_h = logo_h if (logo_left or logo_right) else at_h
     total_w = (frame_w * 2) + (gap * 2) + at_w
 
+    if total_w > WIDTH:
+        gap = max(4, int(round(gap * (WIDTH / max(total_w, 1)))))
+        total_w = (frame_w * 2) + (gap * 2) + at_w
+
+    if total_w > WIDTH:
+        max_frame = max(1, (WIDTH - at_w - (gap * 2)) // 2)
+        if max_frame < frame_w:
+            scale = max_frame / frame_w if frame_w else 1.0
+            logo_h = max(1, int(round(logo_h * scale)))
+            logo_left = _load_logo_png(away["tri"], logo_h) if away else None
+            logo_right = _load_logo_png(home["tri"], logo_h) if home else None
+            frame_w = min(
+                standard_next_game_logo_frame_width(logo_h, (logo_left, logo_right)),
+                max_frame,
+            )
+
+        def _fit_logo(logo):
+            if logo and logo.width > frame_w:
+                ratio = frame_w / logo.width
+                new_h = max(1, int(round(logo.height * ratio)))
+                return logo.resize((frame_w, new_h), Image.ANTIALIAS)
+            return logo
+
+        logo_left = _fit_logo(logo_left)
+        logo_right = _fit_logo(logo_right)
+        block_h = max(
+            (logo.height for logo in (logo_left, logo_right) if logo),
+            default=at_h if not (logo_left or logo_right) else logo_h,
+        )
+        total_w = (frame_w * 2) + (gap * 2) + at_w
+
     x = max(0, (WIDTH - total_w) // 2)
-    y2 = y + 6
     baseline_y = y2 + (block_h - at_h) // 2 - at_t
 
     left_x = x
