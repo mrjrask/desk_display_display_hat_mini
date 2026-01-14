@@ -205,13 +205,17 @@ def draw_nhl_standings_overview_v2_west(display, transition: bool = False) -> Sc
 
         if not any(teams for _, teams in rows):
             clear_display(display)
-            img = _render_empty(OVERVIEW_TITLE_WEST)
+            img = _render_empty(OVERVIEW_TITLE_WEST, conference_key=CONFERENCE_WEST_KEY)
             if transition:
                 return ScreenImage(img, displayed=False)
             display.image(img)
             return ScreenImage(img, displayed=True)
 
-        base, row_positions = _prepare_overview_horizontal(rows, title=OVERVIEW_TITLE_WEST)
+        base, row_positions = _prepare_overview_horizontal(
+            rows,
+            title=OVERVIEW_TITLE_WEST,
+            conference_key=CONFERENCE_WEST_KEY,
+        )
         final_img, _ = _compose_overview_image(base, row_positions)
 
         clear_display(display)
@@ -235,13 +239,17 @@ def draw_nhl_overview_west_v3(display, transition: bool = False) -> ScreenImage:
 
         if not any(teams for _, teams in rows):
             clear_display(display)
-            img = _render_empty(OVERVIEW_TITLE_WEST_V3)
+            img = _render_empty(OVERVIEW_TITLE_WEST_V3, conference_key=CONFERENCE_WEST_KEY)
             if transition:
                 return ScreenImage(img, displayed=False)
             display.image(img)
             return ScreenImage(img, displayed=True)
 
-        base, row_positions = _prepare_overview_horizontal(rows, title=OVERVIEW_TITLE_WEST_V3)
+        base, row_positions = _prepare_overview_horizontal(
+            rows,
+            title=OVERVIEW_TITLE_WEST_V3,
+            conference_key=CONFERENCE_WEST_KEY,
+        )
         final_img, _ = _compose_overview_image(base, row_positions)
 
         clear_display(display)
@@ -265,13 +273,17 @@ def draw_nhl_standings_overview_v2_east(display, transition: bool = False) -> Sc
 
         if not any(teams for _, teams in rows):
             clear_display(display)
-            img = _render_empty(OVERVIEW_TITLE_EAST)
+            img = _render_empty(OVERVIEW_TITLE_EAST, conference_key=CONFERENCE_EAST_KEY)
             if transition:
                 return ScreenImage(img, displayed=False)
             display.image(img)
             return ScreenImage(img, displayed=True)
 
-        base, row_positions = _prepare_overview_horizontal(rows, title=OVERVIEW_TITLE_EAST)
+        base, row_positions = _prepare_overview_horizontal(
+            rows,
+            title=OVERVIEW_TITLE_EAST,
+            conference_key=CONFERENCE_EAST_KEY,
+        )
         final_img, _ = _compose_overview_image(base, row_positions)
 
         clear_display(display)
@@ -295,13 +307,17 @@ def draw_nhl_overview_east_v3(display, transition: bool = False) -> ScreenImage:
 
         if not any(teams for _, teams in rows):
             clear_display(display)
-            img = _render_empty(OVERVIEW_TITLE_EAST_V3)
+            img = _render_empty(OVERVIEW_TITLE_EAST_V3, conference_key=CONFERENCE_EAST_KEY)
             if transition:
                 return ScreenImage(img, displayed=False)
             display.image(img)
             return ScreenImage(img, displayed=True)
 
-        base, row_positions = _prepare_overview_horizontal(rows, title=OVERVIEW_TITLE_EAST_V3)
+        base, row_positions = _prepare_overview_horizontal(
+            rows,
+            title=OVERVIEW_TITLE_EAST_V3,
+            conference_key=CONFERENCE_EAST_KEY,
+        )
         final_img, _ = _compose_overview_image(base, row_positions)
 
         clear_display(display)
@@ -327,7 +343,11 @@ def draw_nhl_standings_west_v2(display, transition: bool = False) -> ScreenImage
             divisions.append(WILDCARD_SECTION_NAME)
         if not divisions:
             clear_display(display)
-            img = _render_empty(TITLE_WEST, TITLE_SUBTITLE_WILDCARD)
+            img = _render_empty(
+                TITLE_WEST,
+                TITLE_SUBTITLE_WILDCARD,
+                conference_key=CONFERENCE_WEST_KEY,
+            )
             if transition:
                 return ScreenImage(img, displayed=False)
             display.image(img)
@@ -339,6 +359,7 @@ def draw_nhl_standings_west_v2(display, transition: bool = False) -> ScreenImage
             conference,
             subtitle=TITLE_SUBTITLE_WILDCARD,
             division_labels=DIVISION_LEADERS_LABELS,
+            conference_key=CONFERENCE_WEST_KEY,
         )
         clear_display(display)
         _scroll_vertical(display, full_img)
@@ -359,7 +380,11 @@ def draw_nhl_standings_east_v2(display, transition: bool = False) -> ScreenImage
             divisions.append(WILDCARD_SECTION_NAME)
         if not divisions:
             clear_display(display)
-            img = _render_empty(TITLE_EAST, TITLE_SUBTITLE_WILDCARD)
+            img = _render_empty(
+                TITLE_EAST,
+                TITLE_SUBTITLE_WILDCARD,
+                conference_key=CONFERENCE_EAST_KEY,
+            )
             if transition:
                 return ScreenImage(img, displayed=False)
             display.image(img)
@@ -371,6 +396,7 @@ def draw_nhl_standings_east_v2(display, transition: bool = False) -> ScreenImage
             conference,
             subtitle=TITLE_SUBTITLE_WILDCARD,
             division_labels=DIVISION_LEADERS_LABELS,
+            conference_key=CONFERENCE_EAST_KEY,
         )
         clear_display(display)
         _scroll_vertical(display, full_img)
