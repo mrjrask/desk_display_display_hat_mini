@@ -45,6 +45,8 @@ from utils import (
     clear_display,
     load_team_logo,
     log_call,
+    standard_scoreboard_league_logo_height,
+    standard_scoreboard_team_logo_height,
 )
 from services.http_client import NHL_HEADERS, get_session
 
@@ -71,8 +73,8 @@ TITLE_FONT = FONT_TITLE_SPORTS
 LOGO_DIR = os.path.join(IMAGES_DIR, "nhl")
 LEAGUE_LOGO_KEYS = ("NHL", "nhl")
 LEAGUE_LOGO_GAP = 4
-TEAM_LOGO_BASE_HEIGHT = 52
-LEAGUE_LOGO_BASE_HEIGHT = int(round(TEAM_LOGO_BASE_HEIGHT * 1.25))
+TEAM_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT)
+LEAGUE_LOGO_BASE_HEIGHT = standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
 LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_HEIGHT = LEAGUE_LOGO_BASE_HEIGHT
 SCORE_FONT = get_screen_font(

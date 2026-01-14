@@ -50,6 +50,8 @@ from utils import (
     get_mlb_tricode,
     load_team_logo,
     log_call,
+    standard_scoreboard_league_logo_height,
+    standard_scoreboard_team_logo_height,
 )
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -72,8 +74,8 @@ TITLE_FONT = FONT_TITLE_SPORTS
 LOGO_DIR = os.path.join(IMAGES_DIR, "mlb")
 LEAGUE_LOGO_KEYS = ("MLB", "mlb")
 LEAGUE_LOGO_GAP = 4
-TEAM_LOGO_BASE_HEIGHT = 52
-LEAGUE_LOGO_BASE_HEIGHT = int(round(TEAM_LOGO_BASE_HEIGHT * 1.25))
+TEAM_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT)
+LEAGUE_LOGO_BASE_HEIGHT = standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
 IN_PROGRESS_SCORE_COLOR = SCOREBOARD_IN_PROGRESS_SCORE_COLOR
 IN_PROGRESS_STATUS_COLOR = IN_PROGRESS_SCORE_COLOR
 FINAL_WINNING_SCORE_COLOR = SCOREBOARD_FINAL_WINNING_SCORE_COLOR

@@ -57,7 +57,7 @@ from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
     standard_next_game_logo_frame_width,
-    standard_next_game_logo_height,
+    standard_next_game_logo_height_for_space,
     temporary_display_led,
 )
 
@@ -1107,13 +1107,13 @@ def _draw_next_card(
     bottom_h = _text_h(d, FONT_BOTTOM) if bottom_text else 0
     bottom_y = HEIGHT - (bottom_h + 2) if bottom_text else HEIGHT
 
-    # Desired logo height (bigger on 128px; adapt if smaller/other displays)
-    clamped_scale = max(0.5, min(float(logo_scale or 1.0), 1.2))
-    desired_logo_h = max(1, int(round(standard_next_game_logo_height(HEIGHT) * clamped_scale)))
-
     # Compute max logo height to fit between the top content and bottom line
     available_h = max(10, bottom_y - (y_top + 2))  # space for logos row
-    logo_h = min(desired_logo_h, available_h)
+    logo_h = standard_next_game_logo_height_for_space(
+        HEIGHT,
+        available_h,
+        scale=logo_scale,
+    )
 
     def _load_logos(height: int) -> Tuple[Optional[Image.Image], Optional[Image.Image]]:
         return (

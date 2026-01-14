@@ -20,7 +20,7 @@ from utils import (
     load_team_logo,
     next_game_from_schedule,
     standard_next_game_logo_frame_width,
-    standard_next_game_logo_height,
+    standard_next_game_logo_height_for_space,
     wrap_text,
 )
 
@@ -111,9 +111,8 @@ def show_bears_next_game(display, transition=False):
             bottom_h = 0
         bottom_y = config.HEIGHT - bottom_h - BEARS_BOTTOM_MARGIN  # keep on-screen
 
-        desired_logo_h = standard_next_game_logo_height(config.HEIGHT)
         available_h = max(10, bottom_y - (y_txt + 2))
-        logo_h = min(desired_logo_h, available_h)
+        logo_h = standard_next_game_logo_height_for_space(config.HEIGHT, available_h)
 
         logo_away = load_team_logo(NFL_LOGO_DIR, away_ab, height=logo_h)
         logo_home = load_team_logo(NFL_LOGO_DIR, home_ab, height=logo_h)

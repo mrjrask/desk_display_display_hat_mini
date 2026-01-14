@@ -40,6 +40,8 @@ from utils import (
     clear_display,
     load_team_logo,
     log_call,
+    standard_scoreboard_league_logo_height,
+    standard_scoreboard_team_logo_height,
 )
 
 # Import shared NFL data fetching logic
@@ -75,8 +77,8 @@ for w in GAME_COL_WIDTHS:
 
 SCREEN_ID = "NFL Scoreboard v2"
 TITLE_FONT = FONT_TITLE_SPORTS
-TEAM_LOGO_BASE_HEIGHT = 26
-LEAGUE_LOGO_BASE_HEIGHT = int(round(TEAM_LOGO_BASE_HEIGHT * 1.25))
+TEAM_LOGO_BASE_HEIGHT = standard_scoreboard_team_logo_height(HEIGHT, compact=True)
+LEAGUE_LOGO_BASE_HEIGHT = standard_scoreboard_league_logo_height(TEAM_LOGO_BASE_HEIGHT)
 LOGO_HEIGHT = TEAM_LOGO_BASE_HEIGHT
 LEAGUE_LOGO_HEIGHT = LEAGUE_LOGO_BASE_HEIGHT
 SCORE_FONT = get_screen_font(
@@ -100,7 +102,7 @@ CENTER_FONT = get_screen_font(
 LOGO_DIR = os.path.join(IMAGES_DIR, "nfl")
 LEAGUE_LOGO_KEYS = ("NFL", "nfl")
 LEAGUE_LOGO_GAP = 4
-LEAGUE_LOGO_HEIGHT = max(1, int(round(LOGO_HEIGHT * 1.25)))
+LEAGUE_LOGO_HEIGHT = LEAGUE_LOGO_BASE_HEIGHT
 
 IN_PROGRESS_SCORE_COLOR = SCOREBOARD_IN_PROGRESS_SCORE_COLOR
 IN_PROGRESS_STATUS_COLOR = IN_PROGRESS_SCORE_COLOR

@@ -869,6 +869,30 @@ def standard_next_game_logo_height(panel_height: int) -> int:
     return 89
 
 
+def standard_next_game_logo_height_for_space(
+    panel_height: int,
+    available_height: int,
+    *,
+    scale: float = 1.0,
+) -> int:
+    """Return a shared next-game logo height constrained by available space."""
+    clamped_scale = max(0.5, min(float(scale or 1.0), 1.2))
+    desired = max(1, int(round(standard_next_game_logo_height(panel_height) * clamped_scale)))
+    return max(1, min(desired, max(1, available_height)))
+
+
+def standard_scoreboard_team_logo_height(panel_height: int, *, compact: bool = False) -> int:
+    """Return the shared scoreboard team logo height for the given panel size."""
+    if compact:
+        return 26
+    return 52
+
+
+def standard_scoreboard_league_logo_height(team_logo_height: int) -> int:
+    """Return the shared scoreboard league logo height for the given team logo height."""
+    return int(round(max(1, team_logo_height) * 1.25))
+
+
 def standard_next_game_logo_frame_width(
     logo_height: int, logos: Iterable[Image.Image | None] = ()
 ) -> int:
