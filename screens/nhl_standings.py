@@ -168,7 +168,7 @@ _MEASURE_DRAW = ImageDraw.Draw(_MEASURE_IMG)
 
 _STANDINGS_CACHE: dict[str, object] = {"timestamp": 0.0, "data": None}
 _LOGO_CACHE: dict[str, Optional[Image.Image]] = {}
-_OVERVIEW_LOGO_CACHE: dict[tuple[str, int, int], Optional[Image.Image]] = {}
+_OVERVIEW_LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 _CONFERENCE_LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 
 STATSAPI_HOST = "statsapi.web.nhl.com"
@@ -366,29 +366,25 @@ def _load_conference_logo(conference_key: str) -> Optional[Image.Image]:
     return logo
 
 
-def _load_overview_logo(abbr: str, width: int, height: int) -> Optional[Image.Image]:
+def _load_overview_logo(abbr: str, box_size: int) -> Optional[Image.Image]:
     abbr_key = (abbr or "").strip().upper()
-    if not abbr_key or height <= 0 or width <= 0:
+    if not abbr_key or box_size <= 0:
         return None
 
-    cache_key = (abbr_key, width, height)
+    cache_key = (abbr_key, box_size)
     if cache_key in _OVERVIEW_LOGO_CACHE:
         return _OVERVIEW_LOGO_CACHE[cache_key]
 
     try:
         from utils import load_team_logo
 
-        logo = load_team_logo(LOGO_DIR, abbr_key, height=height)
-        if logo and logo.width > width:
-            scale = width / float(logo.width)
-            new_height = max(1, int(round(logo.height * scale)))
-            logo = logo.resize((width, new_height), Image.LANCZOS)
+        logo = load_team_logo(LOGO_DIR, abbr_key, height=box_size)
+        logo = _square_logo(logo, box_size)
     except Exception as exc:  # pragma: no cover - defensive guard
         logging.debug(
-            "NHL overview logo load failed for %s@%sx%s: %s",
+            "NHL overview logo load failed for %s@%s: %s",
             abbr_key,
-            width,
-            height,
+            box_size,
             exc,
         )
         logo = None
@@ -401,10 +397,36 @@ def _load_logo(abbr: str) -> Optional[Image.Image]:
     try:
         from utils import load_team_logo
 
-        return load_team_logo(LOGO_DIR, abbr, height=LOGO_HEIGHT)
+        logo = load_team_logo(LOGO_DIR, abbr, height=LOGO_HEIGHT)
+        return _fit_logo_to_box(logo, LOGO_HEIGHT)
     except Exception as exc:  # pragma: no cover - defensive guard
         logging.debug("NHL logo load failed for %s: %s", abbr, exc)
         return None
+
+
+def _fit_logo_to_box(logo: Optional[Image.Image], box_size: int) -> Optional[Image.Image]:
+    if logo is None or box_size <= 0:
+        return logo
+    width, height = logo.size
+    if width <= box_size and height <= box_size:
+        return logo
+    scale = min(box_size / float(width), box_size / float(height))
+    new_width = max(1, int(round(width * scale)))
+    new_height = max(1, int(round(height * scale)))
+    return logo.resize((new_width, new_height), Image.LANCZOS)
+
+
+def _square_logo(logo: Optional[Image.Image], box_size: int) -> Optional[Image.Image]:
+    if logo is None or box_size <= 0:
+        return logo
+    fitted = _fit_logo_to_box(logo, box_size)
+    if fitted is None:
+        return None
+    canvas = Image.new("RGBA", (box_size, box_size), (0, 0, 0, 0))
+    x0 = (box_size - fitted.width) // 2
+    y0 = (box_size - fitted.height) // 2
+    canvas.paste(fitted, (x0, y0), fitted)
+    return canvas
 
 
 def _team_abbreviation(team: dict) -> str:
@@ -1254,8 +1276,10 @@ def _draw_division(
         abbr = team.get("abbr", "")
         logo = _load_logo_cached(abbr)
         if logo:
-            logo_y = row_top + (ROW_HEIGHT - logo.height) // 2
-            img.paste(logo, (LEFT_MARGIN, logo_y), logo)
+            logo_box_y = row_top + (ROW_HEIGHT - LOGO_HEIGHT) // 2
+            logo_x = LEFT_MARGIN + (LOGO_HEIGHT - logo.width) // 2
+            logo_y = logo_box_y + (LOGO_HEIGHT - logo.height) // 2
+            img.paste(logo, (logo_x, logo_y), logo)
         team_label = _coerce_text(team.get("name")) or abbr
         team_label = _truncate_text_to_width(
             team_label, TEAM_NAME_FONT, team_name_max_width
@@ -1363,7 +1387,7 @@ def _overview_layout(
     divisions: Sequence[tuple[str, List[dict]]],
     title: str = OVERVIEW_TITLE,
     conference_key: str | None = None,
-) -> tuple[Image.Image, List[float], float, float, int, int, int]:
+) -> tuple[Image.Image, List[float], float, float, int, int]:
     base = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(base)
 
@@ -1394,8 +1418,9 @@ def _overview_layout(
         )
     )
     logo_target_height = max(6, logo_target_height)
+    logo_box_size = max(6, min(logo_width_limit, logo_target_height))
 
-    return base, col_centers, logos_top, cell_height, logo_width_limit, logo_target_height, max_rows
+    return base, col_centers, logos_top, cell_height, logo_box_size, max_rows
 
 
 def _overview_logo_position(
@@ -1418,8 +1443,7 @@ def _build_overview_rows(
     col_centers: Sequence[float],
     logos_top: float,
     cell_height: float,
-    logo_width: int,
-    logo_height: int,
+    logo_box_size: int,
     max_rows: int,
 ) -> List[List[Placement]]:
     rows: List[List[Placement]] = [[] for _ in range(max_rows)]
@@ -1430,7 +1454,7 @@ def _build_overview_rows(
             abbr = (team.get("abbr") or "").upper()
             if not abbr:
                 continue
-            logo = _load_overview_logo(abbr, logo_width, logo_height)
+            logo = _load_overview_logo(abbr, logo_box_size)
             if not logo:
                 continue
             x0, y0 = _overview_logo_position(col_idx, row_idx, col_centers, logos_top, cell_height, logo)
@@ -1562,8 +1586,7 @@ def _prepare_overview(
         col_centers,
         logos_top,
         cell_height,
-        logo_width,
-        logo_height,
+        logo_box_size,
         max_rows,
     ) = _overview_layout(
         divisions,
@@ -1575,8 +1598,7 @@ def _prepare_overview(
         col_centers,
         logos_top,
         cell_height,
-        logo_width,
-        logo_height,
+        logo_box_size,
         max_rows,
     )
     return base, row_positions
@@ -1601,9 +1623,9 @@ def _overview_layout_horizontal(
     return base, logos_top, row_height
 
 
-def _row_logo_box(row_height: float, team_count: int) -> tuple[int, int]:
+def _row_logo_box(row_height: float, team_count: int) -> int:
     if team_count <= 0:
-        return OVERVIEW_MIN_LOGO_HEIGHT, OVERVIEW_MIN_LOGO_HEIGHT
+        return OVERVIEW_MIN_LOGO_HEIGHT
     available_width = max(1.0, WIDTH - 2 * OVERVIEW_MARGIN_X)
     col_width = available_width / team_count
     logo_width_limit = max(6, int(col_width - OVERVIEW_LOGO_PADDING * 2))
@@ -1615,7 +1637,8 @@ def _row_logo_box(row_height: float, team_count: int) -> tuple[int, int]:
             logo_base_height,
         )
     )
-    return logo_width_limit, max(6, logo_target_height)
+    logo_target_height = max(6, logo_target_height)
+    return max(6, min(logo_width_limit, logo_target_height))
 
 
 def _build_overview_rows_horizontal(
@@ -1625,6 +1648,9 @@ def _build_overview_rows_horizontal(
 ) -> List[List[Placement]]:
     placements: List[List[Placement]] = []
     available_width = max(1.0, WIDTH - 2 * OVERVIEW_MARGIN_X)
+    leader_rows = rows[:3]
+    leader_team_count = max((len(teams) for _, teams in leader_rows), default=0)
+    leader_box_size = _row_logo_box(row_height, leader_team_count)
 
     for row_idx, (_, teams) in enumerate(rows):
         row: List[Placement] = []
@@ -1635,13 +1661,13 @@ def _build_overview_rows_horizontal(
         team_count = len(teams)
         col_width = available_width / team_count
         col_centers = [OVERVIEW_MARGIN_X + col_width * (idx + 0.5) for idx in range(team_count)]
-        logo_width, logo_height = _row_logo_box(row_height, team_count)
+        logo_box_size = leader_box_size if row_idx < 3 else _row_logo_box(row_height, team_count)
 
         for col_idx, team in enumerate(teams):
             abbr = (team.get("abbr") or "").upper()
             if not abbr:
                 continue
-            logo = _load_overview_logo(abbr, logo_width, logo_height)
+            logo = _load_overview_logo(abbr, logo_box_size)
             if not logo:
                 continue
             x0 = int(col_centers[col_idx] - logo.width / 2)
