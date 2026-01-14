@@ -205,7 +205,7 @@ def draw_nhl_standings_overview_v2_west(display, transition: bool = False) -> Sc
 
         if not any(teams for _, teams in rows):
             clear_display(display)
-            img = _render_empty(OVERVIEW_TITLE_WEST, conference_key=CONFERENCE_WEST_KEY)
+            img = _render_empty(OVERVIEW_TITLE_WEST)
             if transition:
                 return ScreenImage(img, displayed=False)
             display.image(img)
@@ -239,7 +239,7 @@ def draw_nhl_overview_west_v3(display, transition: bool = False) -> ScreenImage:
 
         if not any(teams for _, teams in rows):
             clear_display(display)
-            img = _render_empty(OVERVIEW_TITLE_WEST_V3, conference_key=CONFERENCE_WEST_KEY)
+            img = _render_empty(OVERVIEW_TITLE_WEST_V3)
             if transition:
                 return ScreenImage(img, displayed=False)
             display.image(img)
@@ -273,7 +273,7 @@ def draw_nhl_standings_overview_v2_east(display, transition: bool = False) -> Sc
 
         if not any(teams for _, teams in rows):
             clear_display(display)
-            img = _render_empty(OVERVIEW_TITLE_EAST, conference_key=CONFERENCE_EAST_KEY)
+            img = _render_empty(OVERVIEW_TITLE_EAST)
             if transition:
                 return ScreenImage(img, displayed=False)
             display.image(img)
@@ -307,7 +307,7 @@ def draw_nhl_overview_east_v3(display, transition: bool = False) -> ScreenImage:
 
         if not any(teams for _, teams in rows):
             clear_display(display)
-            img = _render_empty(OVERVIEW_TITLE_EAST_V3, conference_key=CONFERENCE_EAST_KEY)
+            img = _render_empty(OVERVIEW_TITLE_EAST_V3)
             if transition:
                 return ScreenImage(img, displayed=False)
             display.image(img)

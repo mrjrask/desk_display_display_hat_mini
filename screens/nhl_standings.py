@@ -148,12 +148,11 @@ OVERVIEW_DIVISIONS = [
 OVERVIEW_MARGIN_X = 4
 OVERVIEW_TITLE_MARGIN_BOTTOM = 6
 OVERVIEW_BOTTOM_MARGIN = 2
-_OVERVIEW_MIN_LOGO_BASE = 33
-_OVERVIEW_MAX_LOGO_BASE = 67
+_OVERVIEW_MIN_LOGO_BASE = 24
+_OVERVIEW_MAX_LOGO_BASE = 54
 OVERVIEW_MIN_LOGO_HEIGHT = _OVERVIEW_MIN_LOGO_BASE
 OVERVIEW_MAX_LOGO_HEIGHT = _OVERVIEW_MAX_LOGO_BASE
 OVERVIEW_LOGO_PADDING = 4
-OVERVIEW_LOGO_OVERLAP = 6
 BACKGROUND_COLOR = SCOREBOARD_BACKGROUND_COLOR
 OVERVIEW_DROP_STEPS = 30
 OVERVIEW_DROP_STAGGER = 0.4  # fraction of steps before next team starts
@@ -1369,10 +1368,6 @@ def _overview_layout(
     draw = ImageDraw.Draw(base)
 
     y = TITLE_MARGIN_TOP
-    logo_height = _conference_logo_height(conference_key)
-    if logo_height:
-        y += _paste_conference_logo(base, conference_key, y)
-        y += CONFERENCE_LOGO_GAP
     y += _draw_centered_text(draw, title, TITLE_FONT, y)
     y += OVERVIEW_TITLE_MARGIN_BOTTOM
 
@@ -1389,13 +1384,13 @@ def _overview_layout(
     col_centers = [OVERVIEW_MARGIN_X + col_width * (idx + 0.5) for idx in range(col_count)]
 
     cell_height = available_height / max_rows if max_rows else available_height
-    logo_width_limit = max(6, int(col_width - OVERVIEW_LOGO_PADDING))
-    logo_base_height = cell_height + OVERVIEW_LOGO_OVERLAP
+    logo_width_limit = max(6, int(col_width - OVERVIEW_LOGO_PADDING * 2))
+    logo_base_height = max(6, int(cell_height - OVERVIEW_LOGO_PADDING * 2))
     logo_target_height = int(
         min(
             OVERVIEW_MAX_LOGO_HEIGHT,
-            max(OVERVIEW_MIN_LOGO_HEIGHT, logo_base_height),
             logo_width_limit,
+            logo_base_height,
         )
     )
     logo_target_height = max(6, logo_target_height)
@@ -1596,10 +1591,6 @@ def _overview_layout_horizontal(
     draw = ImageDraw.Draw(base)
 
     y = TITLE_MARGIN_TOP
-    logo_height = _conference_logo_height(conference_key)
-    if logo_height:
-        y += _paste_conference_logo(base, conference_key, y)
-        y += CONFERENCE_LOGO_GAP
     y += _draw_centered_text(draw, title, TITLE_FONT, y)
     y += OVERVIEW_TITLE_MARGIN_BOTTOM
 
@@ -1615,13 +1606,13 @@ def _row_logo_box(row_height: float, team_count: int) -> tuple[int, int]:
         return OVERVIEW_MIN_LOGO_HEIGHT, OVERVIEW_MIN_LOGO_HEIGHT
     available_width = max(1.0, WIDTH - 2 * OVERVIEW_MARGIN_X)
     col_width = available_width / team_count
-    logo_width_limit = max(6, int(col_width - OVERVIEW_LOGO_PADDING))
-    logo_base_height = row_height + OVERVIEW_LOGO_OVERLAP
+    logo_width_limit = max(6, int(col_width - OVERVIEW_LOGO_PADDING * 2))
+    logo_base_height = max(6, int(row_height - OVERVIEW_LOGO_PADDING * 2))
     logo_target_height = int(
         min(
             OVERVIEW_MAX_LOGO_HEIGHT,
-            max(OVERVIEW_MIN_LOGO_HEIGHT, logo_base_height),
             logo_width_limit,
+            logo_base_height,
         )
     )
     return logo_width_limit, max(6, logo_target_height)
@@ -1735,7 +1726,7 @@ def draw_nhl_standings_overview_west(display, transition: bool = False) -> Scree
 
     if not any(teams for _, teams in rows):
         clear_display(display)
-        img = _render_empty(OVERVIEW_TITLE_WEST, conference_key=CONFERENCE_WEST_KEY)
+        img = _render_empty(OVERVIEW_TITLE_WEST)
         if transition:
             return ScreenImage(img, displayed=False)
         display.image(img)
@@ -1767,7 +1758,7 @@ def draw_nhl_standings_overview_east(display, transition: bool = False) -> Scree
 
     if not any(teams for _, teams in rows):
         clear_display(display)
-        img = _render_empty(OVERVIEW_TITLE_EAST, conference_key=CONFERENCE_EAST_KEY)
+        img = _render_empty(OVERVIEW_TITLE_EAST)
         if transition:
             return ScreenImage(img, displayed=False)
         display.image(img)
