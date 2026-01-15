@@ -380,7 +380,7 @@ def _load_overview_logo(abbr: str, box_size: int) -> Optional[Image.Image]:
     try:
         from utils import load_team_logo
 
-        logo = load_team_logo(LOGO_DIR, abbr_key, height=box_size)
+        logo = load_team_logo(LOGO_DIR, abbr_key, height=box_size, box_size=box_size)
         logo = _square_logo(logo, box_size)
     except Exception as exc:  # pragma: no cover - defensive guard
         logging.debug(
@@ -399,7 +399,7 @@ def _load_logo(abbr: str) -> Optional[Image.Image]:
     try:
         from utils import load_team_logo
 
-        logo = load_team_logo(LOGO_DIR, abbr, height=LOGO_HEIGHT)
+        logo = load_team_logo(LOGO_DIR, abbr, height=LOGO_HEIGHT, box_size=LOGO_HEIGHT)
         return _fit_logo_to_box(logo, LOGO_HEIGHT)
     except Exception as exc:  # pragma: no cover - defensive guard
         logging.debug("NHL logo load failed for %s: %s", abbr, exc)

@@ -908,11 +908,27 @@ def standard_next_game_logo_frame_width(
     return max(min_width, max_logo_width)
 
 
+def fit_logo_to_box(logo: Image.Image | None, box_size: int) -> Image.Image | None:
+    """Resize a logo to fit within a square box, preserving aspect ratio."""
+    if logo is None or box_size <= 0:
+        return logo
+    width, height = logo.size
+    if width <= 0 or height <= 0:
+        return logo
+    scale = min(box_size / float(width), box_size / float(height))
+    new_width = max(1, int(round(width * scale)))
+    new_height = max(1, int(round(height * scale)))
+    if new_width == width and new_height == height:
+        return logo
+    return logo.resize((new_width, new_height), Image.LANCZOS)
+
+
 def load_team_logo(
     base_dir: str,
     abbr: str,
     height: int = 36,
     *,
+    box_size: int | None = None,
     trim: bool = False,
 ) -> Image.Image | None:
     cleaned = (abbr or "").strip()
@@ -936,6 +952,8 @@ def load_team_logo(
                 bbox = alpha.getbbox()
                 if bbox:
                     logo = logo.crop(bbox)
+            if box_size and box_size > 0:
+                return fit_logo_to_box(logo, box_size)
             ratio = height / logo.height
             return logo.resize((int(logo.width * ratio), height), Image.ANTIALIAS)
         except Exception as exc:  # pragma: no cover - rare file corruption

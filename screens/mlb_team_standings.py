@@ -26,7 +26,7 @@ from config import (
     FONT_STAND2_VALUE,
     SCOREBOARD_BACKGROUND_COLOR,
 )
-from utils import clear_display, log_call
+from utils import clear_display, fit_logo_to_box, log_call
 
 # Constants
 LOGO_SZ = 59
@@ -156,8 +156,7 @@ def draw_standings_screen1(
     logo = None
     try:
         logo_img = Image.open(logo_path).convert("RGBA")
-        ratio    = LOGO_SZ / logo_img.height
-        logo     = logo_img.resize((int(logo_img.width*ratio), LOGO_SZ), Image.ANTIALIAS)
+        logo = fit_logo_to_box(logo_img, LOGO_SZ)
     except:
         pass
     if logo:
@@ -300,8 +299,7 @@ def draw_standings_screen2(
     logo = None
     try:
         logo_img = Image.open(logo_path).convert("RGBA")
-        ratio = LOGO_SZ / logo_img.height
-        logo = logo_img.resize((int(logo_img.width * ratio), LOGO_SZ), Image.ANTIALIAS)
+        logo = fit_logo_to_box(logo_img, LOGO_SZ)
     except:
         pass
     if logo:

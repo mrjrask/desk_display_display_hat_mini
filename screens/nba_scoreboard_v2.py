@@ -154,7 +154,7 @@ def _load_logo_cached(abbr: str) -> Optional[Image.Image]:
     cache_token = (cache_key, height)
     if cache_token in _LOGO_CACHE:
         return _LOGO_CACHE[cache_token]
-    logo = load_team_logo(LOGO_DIR, cache_key, height=height)
+    logo = load_team_logo(LOGO_DIR, cache_key, height=height, box_size=height)
     _LOGO_CACHE[cache_token] = logo
     return logo
 

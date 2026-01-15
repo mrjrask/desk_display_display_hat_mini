@@ -120,8 +120,8 @@ def show_bears_next_game(display, transition=False):
         available_h = max(10, bottom_y - (y_txt + 2))
         logo_h = standard_next_game_logo_height_for_space(config.HEIGHT, available_h)
 
-        logo_away = load_team_logo(NFL_LOGO_DIR, away_ab, height=logo_h)
-        logo_home = load_team_logo(NFL_LOGO_DIR, home_ab, height=logo_h)
+        logo_away = load_team_logo(NFL_LOGO_DIR, away_ab, height=logo_h, box_size=logo_h)
+        logo_home = load_team_logo(NFL_LOGO_DIR, home_ab, height=logo_h, box_size=logo_h)
 
         gap = max(6, min(10, config.WIDTH // 30))
         frame_w = standard_next_game_logo_frame_width(logo_h, (logo_away, logo_home))
@@ -145,8 +145,8 @@ def show_bears_next_game(display, transition=False):
             if max_frame < frame_w:
                 scale = max_frame / frame_w if frame_w else 1.0
                 logo_h = max(1, int(round(logo_h * scale)))
-                logo_away = load_team_logo(NFL_LOGO_DIR, away_ab, height=logo_h)
-                logo_home = load_team_logo(NFL_LOGO_DIR, home_ab, height=logo_h)
+                logo_away = load_team_logo(NFL_LOGO_DIR, away_ab, height=logo_h, box_size=logo_h)
+                logo_home = load_team_logo(NFL_LOGO_DIR, home_ab, height=logo_h, box_size=logo_h)
                 frame_w = min(standard_next_game_logo_frame_width(logo_h, (logo_away, logo_home)), max_frame)
 
             def _fit_logo(logo):

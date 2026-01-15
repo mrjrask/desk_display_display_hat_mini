@@ -171,7 +171,7 @@ def _load_logo_cached(abbr: str) -> Optional[Image.Image]:
     cache_token = (cache_key, height)
     if cache_token in _LOGO_CACHE:
         return _LOGO_CACHE[cache_token]
-    logo = load_team_logo(LOGO_DIR, cache_key, height=height)
+    logo = load_team_logo(LOGO_DIR, cache_key, height=height, box_size=height)
     _LOGO_CACHE[cache_token] = logo
     return logo
 
@@ -181,7 +181,7 @@ def _get_league_logo() -> Optional[Image.Image]:
     if height in _LEAGUE_LOGO_CACHE:
         return _LEAGUE_LOGO_CACHE[height]
     for key in LEAGUE_LOGO_KEYS:
-        logo = load_team_logo(LOGO_DIR, key, height=height)
+        logo = load_team_logo(LOGO_DIR, key, height=height, box_size=height)
         if logo is not None:
             _LEAGUE_LOGO_CACHE[height] = logo
             return logo

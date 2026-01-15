@@ -40,6 +40,7 @@ from utils import (
     clear_display,
     LED_INDICATOR_LEVEL,
     ScreenImage,
+    fit_logo_to_box,
     standard_next_game_logo_frame_width,
     standard_next_game_logo_height_for_space,
     temporary_display_led,
@@ -199,9 +200,7 @@ def _load_logo_png(abbr: str, height: int) -> Optional[Image.Image]:
     try:
         if os.path.exists(path):
             img = Image.open(path).convert("RGBA")
-            w0, h0 = img.size
-            r = height / float(h0) if h0 else 1.0
-            return img.resize((max(1, int(w0 * r)), height), Image.LANCZOS)
+            return fit_logo_to_box(img, height)
     except Exception:
         pass
     # fallback
@@ -209,9 +208,7 @@ def _load_logo_png(abbr: str, height: int) -> Optional[Image.Image]:
         generic = os.path.join(NBA_DIR, "NBA.png")
         if os.path.exists(generic):
             img = Image.open(generic).convert("RGBA")
-            w0, h0 = img.size
-            r = height / float(h0) if h0 else 1.0
-            return img.resize((max(1, int(w0 * r)), height), Image.LANCZOS)
+            return fit_logo_to_box(img, height)
     except Exception:
         pass
     return None
