@@ -37,7 +37,6 @@ TITLE_SUBTITLE_DIVISION = "Division Standings"
 STANDINGS_URL = "https://statsapi.web.nhl.com/api/v1/standings"
 API_WEB_STANDINGS_URL = "https://api-web.nhle.com/v1/standings/now"
 API_WEB_STANDINGS_PARAMS = {"site": "en_nhl"}
-API_WEB_WILDCARD_URL = "https://api-web.nhle.com/v1/standings/{date}/wildcard"
 REQUEST_TIMEOUT = 10
 CACHE_TTL = 15 * 60  # seconds
 
@@ -1089,10 +1088,10 @@ def _extract_wildcard_rank(row: dict) -> int:
     return 0
 
 
-def _fetch_wildcard_order_api_web(target_date: str = "now") -> dict[str, list[str]]:
+def _fetch_wildcard_order_api_web() -> dict[str, list[str]]:
     try:
         response = _SESSION.get(
-            API_WEB_WILDCARD_URL.format(date=target_date),
+            API_WEB_STANDINGS_URL,
             timeout=REQUEST_TIMEOUT,
             headers=NHL_HEADERS,
             params=API_WEB_STANDINGS_PARAMS,
@@ -1100,11 +1099,18 @@ def _fetch_wildcard_order_api_web(target_date: str = "now") -> dict[str, list[st
         response.raise_for_status()
         payload = response.json()
     except Exception as exc:
-        logging.error("Failed to fetch NHL wildcard standings: %s", exc)
+        logging.error("Failed to fetch NHL standings for wildcard order: %s", exc)
         return {}
 
+    nodes: Iterable[dict]
+    standings_rows = payload.get("standings") if isinstance(payload, dict) else None
+    if isinstance(standings_rows, list):
+        nodes = (row for row in standings_rows if isinstance(row, dict))
+    else:
+        nodes = _walk_nodes(payload)
+
     ranked: dict[str, list[tuple[int, str]]] = {}
-    for node in _walk_nodes(payload):
+    for node in nodes:
         if not isinstance(node, dict):
             continue
         rank = _extract_wildcard_rank(node)
