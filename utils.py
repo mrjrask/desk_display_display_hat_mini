@@ -908,7 +908,13 @@ def standard_next_game_logo_frame_width(
     return max(min_width, max_logo_width)
 
 
-def load_team_logo(base_dir: str, abbr: str, height: int = 36) -> Image.Image | None:
+def load_team_logo(
+    base_dir: str,
+    abbr: str,
+    height: int = 36,
+    *,
+    trim: bool = False,
+) -> Image.Image | None:
     cleaned = (abbr or "").strip()
     if not cleaned:
         return None
@@ -925,6 +931,11 @@ def load_team_logo(base_dir: str, abbr: str, height: int = 36) -> Image.Image | 
         try:
             logo = Image.open(path).convert("RGBA")
             logo = _adjust_logo_brightness(logo, base_dir, candidate)
+            if trim:
+                alpha = logo.split()[-1]
+                bbox = alpha.getbbox()
+                if bbox:
+                    logo = logo.crop(bbox)
             ratio = height / logo.height
             return logo.resize((int(logo.width * ratio), height), Image.ANTIALIAS)
         except Exception as exc:  # pragma: no cover - rare file corruption
