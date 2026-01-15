@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from flask import Flask, jsonify, render_template, request
 
@@ -93,6 +93,41 @@ def _normalise_hex_color(value: str) -> Optional[str]:
     return cleaned.upper() if cleaned.startswith("#") else f"#{cleaned.upper()}"
 
 
+def _rgb_to_hex(rgb: Iterable[int]) -> str:
+    channels = list(rgb)
+    if len(channels) != 3:
+        raise ValueError("RGB color must have exactly 3 channels")
+    return "#{0:02X}{1:02X}{2:02X}".format(*channels)
+
+
+def _coerce_env_color_component(name: str, default: int) -> int:
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return default
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        return default
+    return max(0, min(255, value))
+
+
+def _get_scoreboard_background_color() -> Tuple[int, int, int]:
+    return (
+        _coerce_env_color_component("SCOREBOARD_BACKGROUND_R", 125),
+        _coerce_env_color_component("SCOREBOARD_BACKGROUND_G", 125),
+        _coerce_env_color_component("SCOREBOARD_BACKGROUND_B", 125),
+    )
+
+
+def _default_background_for_screen(screen_id: str) -> Tuple[int, int, int]:
+    lowered = screen_id.lower()
+    if lowered == "travel map":
+        return (18, 18, 18)
+    if any(token in lowered for token in ("scoreboard", "standings", "overview", "stand1", "stand2")):
+        return _get_scoreboard_background_color()
+    return (0, 0, 0)
+
+
 def _build_screen_entries(
     config: Dict[str, Any],
     style_config: Dict[str, Any],
@@ -111,7 +146,7 @@ def _build_screen_entries(
             "frequency": 0,
             "alt_screen": "",
             "alt_frequency": "",
-            "background": "",
+            "background": _rgb_to_hex(_default_background_for_screen(screen_id)),
         }
         if isinstance(raw, dict):
             entry["frequency"] = raw.get("frequency", 0)
@@ -125,7 +160,9 @@ def _build_screen_entries(
         if isinstance(style_entry, dict):
             background = style_entry.get("background")
             if isinstance(background, str):
-                entry["background"] = background
+                normalised = _normalise_hex_color(background)
+                if normalised:
+                    entry["background"] = normalised
         entries.append(entry)
 
     return entries
@@ -178,6 +215,13 @@ def _build_style_config(
         normalised = _normalise_hex_color(background_value)
         if not normalised:
             invalid_screens.append(screen_id)
+            continue
+        default_hex = _rgb_to_hex(_default_background_for_screen(screen_id))
+        if normalised == default_hex:
+            if screen_id in screens:
+                screens[screen_id].pop("background", None)
+                if not screens[screen_id]:
+                    screens.pop(screen_id, None)
             continue
         screens.setdefault(screen_id, {})["background"] = normalised
 
