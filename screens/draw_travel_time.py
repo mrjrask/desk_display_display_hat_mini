@@ -28,6 +28,7 @@ from config import (
     TRAVEL_ORIGIN,
     TRAVEL_TITLE,
     WIDTH,
+    get_screen_background_color,
 )
 from utils import (
     ScreenImage,
@@ -402,7 +403,8 @@ def _compose_travel_image(times: Dict[str, TravelTimeResult]) -> Image.Image:
         content_height += warning_height + 6
 
     canvas_height = max(content_height, HEIGHT)
-    img = Image.new("RGB", (WIDTH, canvas_height), "black")
+    background = get_screen_background_color("travel", (0, 0, 0))
+    img = Image.new("RGB", (WIDTH, canvas_height), background)
     draw = ImageDraw.Draw(img)
 
     y = title_height + header_gap

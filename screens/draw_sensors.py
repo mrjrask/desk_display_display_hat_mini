@@ -17,6 +17,7 @@ import logging
 from typing import Optional, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
+from config import get_screen_background_color
 from utils import ScreenImage
 
 # Optional sensor modules: only used if available.
@@ -236,6 +237,8 @@ def draw(context, **kwargs) -> Optional[Image.Image]:
     If `context.present_frame(img)` exists, pushes live frames.
     Otherwise returns the last frame and requests a 12s duration if supported.
     """
+    global BG
+    BG = get_screen_background_color("sensors", BG)
     duration_s = 12.0
     interval_s = 0.25  # ~4 Hz
 

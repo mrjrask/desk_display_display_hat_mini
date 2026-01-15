@@ -10,7 +10,7 @@ import subprocess
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 # ─── Environment helpers ───────────────────────────────────────────────────────
 
@@ -741,6 +741,22 @@ FONT_EMOJI = _load_emoji_font(30)
 FONT_EMOJI_SMALL = _load_emoji_font(18)
 
 
+def _normalise_hex_color(value: str) -> Optional[str]:
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    if not re.fullmatch(r"#?[0-9a-fA-F]{6}", cleaned):
+        return None
+    return cleaned.upper() if cleaned.startswith("#") else f"#{cleaned.upper()}"
+
+
+def _parse_hex_color(value: str) -> Optional[Tuple[int, int, int]]:
+    normalised = _normalise_hex_color(value)
+    if not normalised:
+        return None
+    return tuple(int(normalised[i : i + 2], 16) for i in (1, 3, 5))  # type: ignore[return-value]
+
+
 def _normalise_style_config(payload: Dict[str, Any]) -> Dict[str, Any]:
     normalised: Dict[str, Any] = {"screens": {}}
     if not isinstance(payload, dict):
@@ -787,6 +803,11 @@ def _normalise_style_config(payload: Dict[str, Any]) -> Dict[str, Any]:
                 images[image_slot] = {"scale": scale_value}
 
         entry: Dict[str, Any] = {}
+        background = spec.get("background")
+        if isinstance(background, str):
+            normalised_background = _normalise_hex_color(background)
+            if normalised_background:
+                entry["background"] = normalised_background
         if fonts:
             entry["fonts"] = fonts
         if images:
@@ -842,6 +863,21 @@ def get_screen_style(screen_id: str) -> Dict[str, Any]:
         return {}
     entry = screens.get(screen_id)
     return entry if isinstance(entry, dict) else {}
+
+
+def get_screen_background_color(
+    screen_id: str,
+    default: Tuple[int, int, int],
+) -> Tuple[int, int, int]:
+    """Return the background color override for *screen_id* if configured."""
+
+    style = get_screen_style(screen_id)
+    background = style.get("background")
+    if isinstance(background, str):
+        parsed = _parse_hex_color(background)
+        if parsed is not None:
+            return parsed
+    return default
 
 
 def _clone_font_instance(font: ImageFont.FreeTypeFont, size: int) -> ImageFont.FreeTypeFont:

@@ -63,6 +63,7 @@ from utils import (
 
 TS_PATH = TIMES_SQUARE_FONT_PATH
 NHL_DIR = NHL_IMAGES_DIR
+BACKGROUND_COLOR = (0, 0, 0)
 
 def _ts(size: int) -> ImageFont.ImageFont:
     try:
@@ -1084,7 +1085,7 @@ def _draw_next_card(
     is_hawks_home = (home_info.get("id") == TEAM_ID) or ((home_tri or "").upper() == TEAM_TRICODE)
 
     # Build canvas
-    img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     d   = ImageDraw.Draw(img)
 
     # Title
@@ -1205,6 +1206,8 @@ def _draw_next_card(
 # Public screens
 
 def draw_last_hawks_game(display, game, transition: bool=False):
+    global BACKGROUND_COLOR
+    BACKGROUND_COLOR = config.get_screen_background_color("hawks last", (0, 0, 0))
     """
     Ignores incoming 'game' and fetches most recent Final to ensure score+SOG.
     """
@@ -1224,7 +1227,7 @@ def draw_last_hawks_game(display, game, transition: bool=False):
         return None
 
     # Build the image
-    img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     d   = ImageDraw.Draw(img)
 
     # Title (MLB title font)
@@ -1337,6 +1340,8 @@ def draw_last_hawks_game(display, game, transition: bool=False):
     return _push(display, img, transition=transition, led_override=led_override)
 
 def draw_live_hawks_game(display, game, transition: bool=False):
+    global BACKGROUND_COLOR
+    BACKGROUND_COLOR = config.get_screen_background_color("hawks live", (0, 0, 0))
     """
     Ignores incoming 'game' and fetches current live game to ensure score+SOG.
     """
@@ -1355,7 +1360,7 @@ def draw_live_hawks_game(display, game, transition: bool=False):
         logging.warning("hawks live: no feed")
         return None
 
-    img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     d   = ImageDraw.Draw(img)
 
     dateline = _format_live_dateline(feed)
@@ -1397,6 +1402,8 @@ def draw_live_hawks_game(display, game, transition: bool=False):
     return _push(display, img, transition=transition)
 
 def draw_sports_screen_hawks(display, game, transition: bool=False):
+    global BACKGROUND_COLOR
+    BACKGROUND_COLOR = config.get_screen_background_color("hawks next", (0, 0, 0))
     """
     "Next Hawks game" card with '@ FULLNAME' / 'vs. FULLNAME', logos (local PNGs, centered and larger), and bottom time.
     Uses the provided 'game' payload from your scheduler for the next slot.
@@ -1405,5 +1412,7 @@ def draw_sports_screen_hawks(display, game, transition: bool=False):
 
 
 def draw_hawks_next_home_game(display, game, transition: bool=False):
+    global BACKGROUND_COLOR
+    BACKGROUND_COLOR = config.get_screen_background_color("hawks next home", (0, 0, 0))
     """Dedicated "Following at home..." card using the same layout as the next-game screen."""
     return _draw_next_card(display, game, title="Following at home...", transition=transition, log_label="hawks next home")

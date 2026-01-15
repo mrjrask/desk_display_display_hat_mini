@@ -87,7 +87,7 @@
     }
     .table-header {
       display: grid;
-      grid-template-columns: 48px 1.6fr 0.7fr 1.3fr 0.7fr;
+      grid-template-columns: 48px 1.4fr 0.7fr 0.9fr 1.3fr 0.7fr;
       gap: 0.75rem;
       padding: 0 0.5rem 0.25rem;
       text-transform: uppercase;
@@ -122,7 +122,7 @@
     }
     .row {
       display: grid;
-      grid-template-columns: 48px 1.6fr 0.7fr 1.3fr 0.7fr;
+      grid-template-columns: 48px 1.4fr 0.7fr 0.9fr 1.3fr 0.7fr;
       gap: 0.75rem;
       align-items: center;
       padding: 0.85rem 0.75rem;
@@ -203,6 +203,7 @@
         </label>
         <div>Freq</div>
       </div>
+      <div>Background</div>
       <div>Alt screen(s)</div>
       <div>Alt freq</div>
     </div>
@@ -218,11 +219,15 @@
           <div class="hint">0 disables this screen.</div>
         </div>
         <div>
-          <input type="text" list="screenIds" placeholder="Optional alternate screen(s)" value="{{ screen.alt_screen }}">
+          <input type="text" class="background-input" placeholder="#0F172A" value="{{ screen.background }}">
+          <div class="hint">Hex color (e.g. #000000).</div>
+        </div>
+        <div>
+          <input type="text" list="screenIds" placeholder="Optional alternate screen(s)" value="{{ screen.alt_screen }}" class="alt-screen-input">
           <div class="hint">Comma-separated list if needed.</div>
         </div>
         <div>
-          <input type="number" min="0" step="1" placeholder="1" value="{{ screen.alt_frequency }}">
+          <input type="number" min="0" step="1" placeholder="1" value="{{ screen.alt_frequency }}" class="alt-frequency-input">
           <div class="hint">Frequency for alternate.</div>
         </div>
       </div>
@@ -315,12 +320,12 @@
     function getCurrentScreens() {
       const rows = [...screenTable.querySelectorAll(".screen-row")];
       return rows.map((row) => {
-        const inputs = row.querySelectorAll("input");
         return {
           id: row.dataset.screenId,
-          frequency: inputs[0].value,
-          alt_screen: inputs[1].value,
-          alt_frequency: inputs[2].value,
+          frequency: row.querySelector(".freq-input")?.value ?? "",
+          background: row.querySelector(".background-input")?.value ?? "",
+          alt_screen: row.querySelector(".alt-screen-input")?.value ?? "",
+          alt_frequency: row.querySelector(".alt-frequency-input")?.value ?? "",
         };
       });
     }
@@ -364,11 +369,15 @@
           <div class="hint">0 disables this screen.</div>
         </div>
         <div>
-          <input type="text" list="screenIds" placeholder="Optional alternate screen(s)" value="${screen.alt_screen ?? ""}">
+          <input type="text" class="background-input" placeholder="#0F172A" value="${screen.background ?? ""}">
+          <div class="hint">Hex color (e.g. #000000).</div>
+        </div>
+        <div>
+          <input type="text" list="screenIds" placeholder="Optional alternate screen(s)" value="${screen.alt_screen ?? ""}" class="alt-screen-input">
           <div class="hint">Comma-separated list if needed.</div>
         </div>
         <div>
-          <input type="number" min="0" step="1" placeholder="1" value="${screen.alt_frequency ?? ""}">
+          <input type="number" min="0" step="1" placeholder="1" value="${screen.alt_frequency ?? ""}" class="alt-frequency-input">
           <div class="hint">Frequency for alternate.</div>
         </div>
       `;

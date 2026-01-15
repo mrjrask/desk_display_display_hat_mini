@@ -13,10 +13,16 @@ from typing import Dict, Iterable, Optional, Sequence
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
-from config import HEIGHT, WIDTH, SCREEN_DELAY, TIMES_SQUARE_FONT_PATH
+from config import (
+    HEIGHT,
+    WIDTH,
+    SCREEN_DELAY,
+    TIMES_SQUARE_FONT_PATH,
+    get_screen_background_color,
+)
 from utils import ScreenImage, clear_display, log_call
 
-BACKGROUND_COLOR = (0, 0, 0)
+BACKGROUND_COLOR = get_screen_background_color("nixie", (0, 0, 0))
 TUBE_HIGHLIGHT = (255, 214, 170, 90)
 DIGIT_COLOR = (255, 232, 179, 255)
 DIGIT_EDGE_COLOR = (255, 180, 90, 255)
@@ -377,6 +383,8 @@ def _play_flicker(display, base: Image.Image) -> None:
 
 @log_call
 def draw_nixie(display, transition: bool = False):
+    global BACKGROUND_COLOR
+    BACKGROUND_COLOR = get_screen_background_color("nixie", (0, 0, 0))
     frame = _compose_frame()
 
     if transition and not hasattr(display, "image"):

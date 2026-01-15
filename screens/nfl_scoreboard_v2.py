@@ -32,6 +32,7 @@ from config import (
     SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
     SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
+    get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
 )
@@ -108,13 +109,13 @@ IN_PROGRESS_SCORE_COLOR = SCOREBOARD_IN_PROGRESS_SCORE_COLOR
 IN_PROGRESS_STATUS_COLOR = IN_PROGRESS_SCORE_COLOR
 FINAL_WINNING_SCORE_COLOR = SCOREBOARD_FINAL_WINNING_SCORE_COLOR
 FINAL_LOSING_SCORE_COLOR = SCOREBOARD_FINAL_LOSING_SCORE_COLOR
-BACKGROUND_COLOR = SCOREBOARD_BACKGROUND_COLOR
+BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
 
 _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 
 
 def _apply_style_overrides() -> None:
-    global SCORE_FONT, STATUS_FONT, CENTER_FONT, LOGO_HEIGHT, LEAGUE_LOGO_HEIGHT
+    global SCORE_FONT, STATUS_FONT, CENTER_FONT, LOGO_HEIGHT, LEAGUE_LOGO_HEIGHT, BACKGROUND_COLOR
 
     SCORE_FONT = get_screen_font(
         SCREEN_ID,
@@ -134,6 +135,7 @@ def _apply_style_overrides() -> None:
         base_font=FONT_STATUS,
         default_size=18,
     )
+    BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
     team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
     LOGO_HEIGHT = max(1, int(round(TEAM_LOGO_BASE_HEIGHT * team_scale)))
     league_scale = get_screen_image_scale(SCREEN_ID, "league_logo", team_scale)

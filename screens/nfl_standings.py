@@ -26,6 +26,7 @@ from config import (
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
     SCOREBOARD_BACKGROUND_COLOR,
+    get_screen_background_color,
     get_screen_font,
 )
 from services.http_client import get_session
@@ -95,7 +96,7 @@ ROW_FONT = get_screen_font(
 
 
 def _apply_style_overrides(screen_id: str) -> None:
-    global DIVISION_FONT, COLUMN_FONT, ROW_FONT
+    global DIVISION_FONT, COLUMN_FONT, ROW_FONT, BACKGROUND_COLOR
 
     DIVISION_FONT = get_screen_font(
         screen_id,
@@ -115,6 +116,7 @@ def _apply_style_overrides(screen_id: str) -> None:
         base_font=FONT_STATUS,
         default_size=30,
     )
+    BACKGROUND_COLOR = get_screen_background_color(screen_id, SCOREBOARD_BACKGROUND_COLOR)
 
 TEAM_NAMES_BY_ABBR: dict[str, str] = {
     "ARI": "Cardinals",

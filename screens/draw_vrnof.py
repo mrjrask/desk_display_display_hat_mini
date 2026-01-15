@@ -23,6 +23,7 @@ from config import (
     FONT_STOCK_PRICE,
     FONT_STOCK_CHANGE,
     FONT_STOCK_TEXT,
+    get_screen_background_color,
     IMAGES_DIR,
 )
 from utils import (
@@ -122,6 +123,7 @@ def _fetch_price(symbol: str):
 
 def _build_image(symbol: str = "VRNO") -> Image.Image:
     """Construct the PIL image for the stock screen."""
+    background = get_screen_background_color("vrnof", (0, 0, 0))
     now = time.time()
     if _cache["price"] is None or (now - _cache["ts"] > VRNO_FRESHNESS_LIMIT):
         _fetch_price(symbol)
@@ -129,7 +131,7 @@ def _build_image(symbol: str = "VRNO") -> Image.Image:
     # Fallback when no price
     logo = _get_logo()
     if _cache["price"] is None:
-        img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+        img = Image.new("RGB", (WIDTH, HEIGHT), background)
         draw = ImageDraw.Draw(img)
         title = symbol
         title_top = 2
@@ -158,7 +160,7 @@ def _build_image(symbol: str = "VRNO") -> Image.Image:
     all_time = _cache["all_time"]
     chg_str = f"{change_val:+.3f} ({change_pct:+.2f}%)" if change_val is not None else "N/A"
 
-    img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    img = Image.new("RGB", (WIDTH, HEIGHT), background)
     draw = ImageDraw.Draw(img)
 
     title_top = 2

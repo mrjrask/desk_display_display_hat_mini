@@ -59,6 +59,11 @@ TIMEOUT   = 10
 BACKGROUND_COLOR = config.SCOREBOARD_BACKGROUND_COLOR
 
 
+def _set_background(screen_id: str) -> None:
+    global BACKGROUND_COLOR
+    BACKGROUND_COLOR = config.get_screen_background_color(screen_id, config.SCOREBOARD_BACKGROUND_COLOR)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Data fetchers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -484,40 +489,50 @@ def draw_wildcard_screen(display, league_id: int, title: str, transition=False):
 
 @log_call
 def draw_NL_Overview(display, transition=False):
+    _set_background("NL Overview")
     return draw_overview(display, "NL Overview", 104, transition)
 
 @log_call
 def draw_AL_Overview(display, transition=False):
+    _set_background("AL Overview")
     return draw_overview(display, "AL Overview", 103, transition)
 
 @log_call
 def draw_NL_East(display, transition=False):
+    _set_background("NL East")
     return draw_division_screen(display, 104, 204, "NL East", transition)
 
 @log_call
 def draw_NL_Central(display, transition=False):
+    _set_background("NL Central")
     return draw_division_screen(display, 104, 205, "NL Central", transition)
 
 @log_call
 def draw_NL_West(display, transition=False):
+    _set_background("NL West")
     return draw_division_screen(display, 104, 203, "NL West", transition)
 
 @log_call
 def draw_AL_East(display, transition=False):
+    _set_background("AL East")
     return draw_division_screen(display, 103, 201, "AL East", transition)
 
 @log_call
 def draw_AL_Central(display, transition=False):
+    _set_background("AL Central")
     return draw_division_screen(display, 103, 202, "AL Central", transition)
 
 @log_call
 def draw_AL_West(display, transition=False):
+    _set_background("AL West")
     return draw_division_screen(display, 103, 200, "AL West", transition)
 
 @log_call
 def draw_NL_WildCard(display, transition=False):
+    _set_background("NL Wild Card")
     return draw_wildcard_screen(display, 104, "NL Wild Card", transition)
 
 @log_call
 def draw_AL_WildCard(display, transition=False):
+    _set_background("AL Wild Card")
     return draw_wildcard_screen(display, 103, "AL Wild Card", transition)

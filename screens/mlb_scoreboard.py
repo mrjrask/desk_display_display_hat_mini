@@ -40,6 +40,7 @@ from config import (
     SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
     SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
+    get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
 )
@@ -113,7 +114,7 @@ def _league_logo_height() -> int:
     team_scale = get_screen_image_scale(SCREEN_ID, "team_logo", 1.0)
     scale = get_screen_image_scale(SCREEN_ID, "league_logo", team_scale)
     return max(1, int(round(LEAGUE_LOGO_BASE_HEIGHT * scale)))
-BACKGROUND_COLOR = SCOREBOARD_BACKGROUND_COLOR
+BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
 
 # Cache for resized logos { (abbr, height): Image }
 _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
@@ -590,6 +591,8 @@ def _scroll_display(display, full_img: Image.Image):
 # ─── Public API ───────────────────────────────────────────────────────────────
 @log_call
 def draw_mlb_scoreboard(display, transition: bool = False) -> ScreenImage:
+    global BACKGROUND_COLOR
+    BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
     now = datetime.datetime.now(CENTRAL_TIME)
     target_date = _scoreboard_date(now)
     games = _fetch_games_for_date(target_date)
