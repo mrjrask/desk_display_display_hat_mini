@@ -39,6 +39,7 @@ from config import (
     SCOREBOARD_IN_PROGRESS_SCORE_COLOR,
     SCOREBOARD_FINAL_WINNING_SCORE_COLOR,
     SCOREBOARD_FINAL_LOSING_SCORE_COLOR,
+    get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
 )
@@ -79,7 +80,7 @@ INTRO_MAX_BASE_HEIGHT = 100
 INTRO_ANIM_SCALES = (0.45, 0.6, 0.75, 0.9, 1.04, 0.98, 1.0)
 INTRO_ANIM_DELAY = 0.06
 INTRO_ANIM_HOLD = 0.4
-BACKGROUND_COLOR = SCOREBOARD_BACKGROUND_COLOR
+BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
 BACKGROUND_COLOR_RGBA = BACKGROUND_COLOR + (255,)
 IN_PROGRESS_SCORE_COLOR = SCOREBOARD_IN_PROGRESS_SCORE_COLOR
 IN_PROGRESS_STATUS_COLOR = IN_PROGRESS_SCORE_COLOR
@@ -1162,6 +1163,9 @@ def _scroll_display(display, full_img: Image.Image):
 # ─── Public API ───────────────────────────────────────────────────────────────
 @log_call
 def draw_nba_scoreboard(display, transition: bool = False) -> ScreenImage:
+    global BACKGROUND_COLOR, BACKGROUND_COLOR_RGBA
+    BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
+    BACKGROUND_COLOR_RGBA = BACKGROUND_COLOR + (255,)
     games = _fetch_games_for_date(_scoreboard_date())
     score_font, status_font, center_font = _scoreboard_fonts()
 

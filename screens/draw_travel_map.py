@@ -24,6 +24,7 @@ from config import (
     LONGITUDE,
     TRAVEL_TITLE,
     WIDTH,
+    get_screen_background_color,
 )
 from screens.draw_travel_time import (
     TRAVEL_ICON_294,
@@ -40,7 +41,7 @@ from utils import ScreenImage, log_call
 ROUTE_ICON_HEIGHT = 26
 MAP_MARGIN = 6
 LEGEND_GAP = 6
-BACKGROUND_COLOR = (18, 18, 18)
+BACKGROUND_COLOR = get_screen_background_color("travel map", (18, 18, 18))
 MAP_COLOR = (36, 36, 36)
 MAP_NIGHT_BRIGHTNESS = 0.9
 STATIC_MAP_TIMEOUT = 6
@@ -415,6 +416,8 @@ def _compose_travel_map(routes: Dict[str, Optional[dict]]) -> Image.Image:
 
 @log_call
 def draw_travel_map_screen(display, transition: bool = False) -> Optional[Image.Image | ScreenImage]:
+    global BACKGROUND_COLOR
+    BACKGROUND_COLOR = get_screen_background_color("travel map", (18, 18, 18))
     if not is_travel_screen_active():
         return None
 

@@ -15,7 +15,12 @@ import datetime
 import os
 from PIL import Image, ImageDraw
 import config
-from config import BEARS_BOTTOM_MARGIN, BEARS_SCHEDULE, NFL_TEAM_ABBREVIATIONS
+from config import (
+    BEARS_BOTTOM_MARGIN,
+    BEARS_SCHEDULE,
+    NFL_TEAM_ABBREVIATIONS,
+    get_screen_background_color,
+)
 from utils import (
     load_team_logo,
     next_game_from_schedule,
@@ -52,7 +57,8 @@ NFL_LOGO_DIR = os.path.join(config.IMAGES_DIR, "nfl")
 def show_bears_next_game(display, transition=False):
     game = next_game_from_schedule(BEARS_SCHEDULE)
     title = "Next for Da Bears:"
-    img   = Image.new("RGB", (config.WIDTH, config.HEIGHT), "black")
+    background = get_screen_background_color("bears next", (0, 0, 0))
+    img   = Image.new("RGB", (config.WIDTH, config.HEIGHT), background)
     draw  = ImageDraw.Draw(img)
 
     # Title

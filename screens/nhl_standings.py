@@ -23,6 +23,7 @@ from config import (
     SCOREBOARD_SCROLL_PAUSE_TOP,
     SCOREBOARD_SCROLL_PAUSE_BOTTOM,
     SCOREBOARD_BACKGROUND_COLOR,
+    get_screen_background_color,
     get_screen_font,
     get_screen_image_scale,
 )
@@ -118,7 +119,7 @@ DIVISION_FONT, COLUMN_FONT, COLUMN_FONT_POINTS, ROW_FONT, TEAM_NAME_FONT = _buil
 def _apply_style_overrides(screen_id: str) -> None:
     global DIVISION_FONT, COLUMN_FONT, COLUMN_FONT_POINTS, ROW_FONT, TEAM_NAME_FONT
     global LOGO_HEIGHT, OVERVIEW_MIN_LOGO_HEIGHT, OVERVIEW_MAX_LOGO_HEIGHT
-    global CONFERENCE_LOGO_HEIGHT
+    global CONFERENCE_LOGO_HEIGHT, BACKGROUND_COLOR
 
     (
         DIVISION_FONT,
@@ -135,6 +136,7 @@ def _apply_style_overrides(screen_id: str) -> None:
     OVERVIEW_MAX_LOGO_HEIGHT = max(1, int(round(_OVERVIEW_MAX_LOGO_BASE * overview_scale)))
     conference_scale = get_screen_image_scale(screen_id, "conference_logo", team_scale)
     CONFERENCE_LOGO_HEIGHT = max(1, int(round(_CONFERENCE_LOGO_BASE_HEIGHT * conference_scale)))
+    BACKGROUND_COLOR = get_screen_background_color(screen_id, SCOREBOARD_BACKGROUND_COLOR)
 
 OVERVIEW_TITLE = "NHL Overview"
 OVERVIEW_TITLE_WEST = "NHL West Wild Card"
@@ -153,7 +155,7 @@ _OVERVIEW_MAX_LOGO_BASE = 54
 OVERVIEW_MIN_LOGO_HEIGHT = _OVERVIEW_MIN_LOGO_BASE
 OVERVIEW_MAX_LOGO_HEIGHT = _OVERVIEW_MAX_LOGO_BASE
 OVERVIEW_LOGO_PADDING = 4
-BACKGROUND_COLOR = SCOREBOARD_BACKGROUND_COLOR
+BACKGROUND_COLOR = get_screen_background_color(_DEFAULT_STYLE_ID, SCOREBOARD_BACKGROUND_COLOR)
 OVERVIEW_DROP_STEPS = 30
 OVERVIEW_DROP_STAGGER = 0.4  # fraction of steps before next team starts
 DROP_FRAME_DELAY = 0.02

@@ -17,7 +17,8 @@ from config import (
     FONT_TITLE_SPORTS, FONT_DATE_SPORTS,
     FONT_TEAM_SPORTS, FONT_SCORE,
     MLB_CUBS_TEAM_ID, MLB_SOX_TEAM_ID,
-    CENTRAL_TIME
+    CENTRAL_TIME,
+    get_screen_background_color,
 )
 from utils import (
     LED_INDICATOR_LEVEL,
@@ -35,6 +36,13 @@ from utils import (
 )
 
 # ── Paths ────────────────────────────────────────────────────────────────────
+BACKGROUND_COLOR = (0, 0, 0)
+
+
+def _set_background(screen_id: Optional[str]) -> None:
+    global BACKGROUND_COLOR
+    if screen_id:
+        BACKGROUND_COLOR = get_screen_background_color(screen_id, BACKGROUND_COLOR)
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
 IMAGES_DIR    = os.path.join(SCRIPT_DIR, "images")
 MLB_LOGOS_DIR = os.path.join(IMAGES_DIR, "mlb")
@@ -389,7 +397,8 @@ def _draw_boxscore_table(img: Image.Image, draw: ImageDraw.ImageDraw, title: str
 # ── Screens ─────────────────────────────────────────────────────────────────
 
 @log_call
-def draw_last_game(display, game, title="Last Game...", transition=False):
+def draw_last_game(display, game, title="Last Game...", transition=False, screen_id: Optional[str] = None):
+    _set_background(screen_id)
     if not game:
         logging.warning(f"No game data for {title}")
         return None
@@ -413,7 +422,7 @@ def draw_last_game(display, game, title="Last Game...", transition=False):
     away_ls = ls.get("away", {})
     home_ls = ls.get("home", {})
 
-    img  = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    img  = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
 
     away_lbl = get_mlb_abbreviation(get_team_display_name(away["team"]))
@@ -463,7 +472,8 @@ def draw_last_game(display, game, title="Last Game...", transition=False):
 
 
 @log_call
-def draw_box_score(display, game, title="Live Game...", transition=False):
+def draw_box_score(display, game, title="Live Game...", transition=False, screen_id: Optional[str] = None):
+    _set_background(screen_id)
     if not game:
         # no live game → let main loop advance immediately (no sleep)
         return None
@@ -473,7 +483,7 @@ def draw_box_score(display, game, title="Live Game...", transition=False):
     away_ls = ls.get("teams", {}).get("away", {})
     home_ls = ls.get("teams", {}).get("home", {})
 
-    img  = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    img  = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
 
     away_lbl = get_mlb_abbreviation(get_team_display_name(game["teams"]["away"]["team"]))
@@ -501,12 +511,13 @@ def draw_box_score(display, game, title="Live Game...", transition=False):
 
 
 @log_call
-def draw_sports_screen(display, game, title, transition=False):
+def draw_sports_screen(display, game, title, transition=False, screen_id: Optional[str] = None):
+    _set_background(screen_id)
     if not game:
         logging.warning(f"No data for {title}")
         return None
 
-    img  = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    img  = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
 
     tw, th = draw.textsize(title, font=FONT_TITLE_SPORTS)
@@ -599,12 +610,19 @@ def draw_sports_screen(display, game, title, transition=False):
 
 
 @log_call
-def draw_next_home_game(display, game, transition=False):
+def draw_next_home_game(display, game, transition=False, screen_id: Optional[str] = None):
     """Wrapper to render the 'Next at home...' screen using sports layout."""
-    return draw_sports_screen(display, game, "Next at home...", transition=transition)
+    return draw_sports_screen(
+        display,
+        game,
+        "Next at home...",
+        transition=transition,
+        screen_id=screen_id,
+    )
 
 # ── Back-compat: main.py may still import this even though we no longer use it
 @log_call
 def draw_cubs_result(display, game, transition=False):
     """Deprecated full-screen Cubs flag; keep for import compatibility."""
+    _set_background("cubs result")
     return None

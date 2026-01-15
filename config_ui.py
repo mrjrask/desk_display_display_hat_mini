@@ -18,6 +18,9 @@ DEFAULT_CONFIG_PATH = os.environ.get(
 LOCAL_CONFIG_PATH = os.environ.get(
     "SCREENS_CONFIG_LOCAL_PATH", os.path.join(SCRIPT_DIR, "screens_config.local.json")
 )
+STYLE_CONFIG_PATH = os.environ.get(
+    "SCREENS_STYLE_PATH", os.path.join(SCRIPT_DIR, "screens_style.json")
+)
 
 SCREEN_CONFIG_HOST = os.environ.get("SCREEN_CONFIG_HOST", "0.0.0.0")
 SCREEN_CONFIG_PORT = int(os.environ.get("SCREEN_CONFIG_PORT", "5002"))
@@ -39,10 +42,28 @@ def _load_config(path: str) -> Dict[str, Any]:
     return data
 
 
+def _load_style_config(path: str) -> Dict[str, Any]:
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except FileNotFoundError:
+        return {"screens": {}}
+    if not isinstance(data, dict):
+        raise ValueError("Style configuration must be a JSON object")
+    screens = data.get("screens")
+    if not isinstance(screens, dict):
+        raise ValueError("Style configuration must include a 'screens' mapping")
+    return data
+
+
 def _load_active_config() -> Dict[str, Any]:
     if os.path.exists(LOCAL_CONFIG_PATH):
         return _load_config(LOCAL_CONFIG_PATH)
     return _load_config(DEFAULT_CONFIG_PATH)
+
+
+def _load_active_style_config() -> Dict[str, Any]:
+    return _load_style_config(STYLE_CONFIG_PATH)
 
 
 def _parse_alt_screen(value: Optional[str]) -> Optional[List[str]]:
@@ -61,10 +82,27 @@ def _serialize_alt_screen(value: Any) -> str:
     return ""
 
 
-def _build_screen_entries(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _normalise_hex_color(value: str) -> Optional[str]:
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    if not all(char in "0123456789abcdefABCDEF" for char in cleaned.lstrip("#")):
+        return None
+    if len(cleaned.lstrip("#")) != 6:
+        return None
+    return cleaned.upper() if cleaned.startswith("#") else f"#{cleaned.upper()}"
+
+
+def _build_screen_entries(
+    config: Dict[str, Any],
+    style_config: Dict[str, Any],
+) -> List[Dict[str, Any]]:
     screens = config.get("screens", {})
     if not isinstance(screens, dict):
         return []
+    style_screens = style_config.get("screens", {})
+    if not isinstance(style_screens, dict):
+        style_screens = {}
 
     entries: List[Dict[str, Any]] = []
     for screen_id, raw in screens.items():
@@ -73,6 +111,7 @@ def _build_screen_entries(config: Dict[str, Any]) -> List[Dict[str, Any]]:
             "frequency": 0,
             "alt_screen": "",
             "alt_frequency": "",
+            "background": "",
         }
         if isinstance(raw, dict):
             entry["frequency"] = raw.get("frequency", 0)
@@ -82,6 +121,11 @@ def _build_screen_entries(config: Dict[str, Any]) -> List[Dict[str, Any]]:
                 entry["alt_frequency"] = alt.get("frequency", "")
         else:
             entry["frequency"] = raw
+        style_entry = style_screens.get(screen_id)
+        if isinstance(style_entry, dict):
+            background = style_entry.get("background")
+            if isinstance(background, str):
+                entry["background"] = background
         entries.append(entry)
 
     return entries
@@ -107,12 +151,57 @@ def _build_config(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {"screens": screens}
 
 
+def _build_style_config(
+    entries: List[Dict[str, Any]],
+    style_config: Dict[str, Any],
+) -> Dict[str, Any]:
+    screens: Dict[str, Any] = {}
+    existing = style_config.get("screens")
+    if isinstance(existing, dict):
+        for screen_id, spec in existing.items():
+            if isinstance(screen_id, str) and isinstance(spec, dict):
+                screens[screen_id] = dict(spec)
+
+    invalid_screens: List[str] = []
+    for entry in entries:
+        screen_id = str(entry.get("id", "")).strip()
+        if not screen_id:
+            continue
+        background_raw = entry.get("background")
+        background_value = str(background_raw).strip() if background_raw is not None else ""
+        if not background_value:
+            if screen_id in screens:
+                screens[screen_id].pop("background", None)
+                if not screens[screen_id]:
+                    screens.pop(screen_id, None)
+            continue
+        normalised = _normalise_hex_color(background_value)
+        if not normalised:
+            invalid_screens.append(screen_id)
+            continue
+        screens.setdefault(screen_id, {})["background"] = normalised
+
+    if invalid_screens:
+        raise ValueError(
+            "Invalid background color for: " + ", ".join(sorted(set(invalid_screens)))
+        )
+    return {"screens": screens}
+
+
 def _save_config(config: Dict[str, Any]) -> None:
     tmp_path = f"{LOCAL_CONFIG_PATH}.tmp"
     with open(tmp_path, "w", encoding="utf-8") as fh:
         json.dump(config, fh, indent=2)
         fh.write("\n")
     os.replace(tmp_path, LOCAL_CONFIG_PATH)
+
+
+def _save_style_config(config: Dict[str, Any]) -> None:
+    tmp_path = f"{STYLE_CONFIG_PATH}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as fh:
+        json.dump(config, fh, indent=2)
+        fh.write("\n")
+    os.replace(tmp_path, STYLE_CONFIG_PATH)
 
 
 def run_config_ui(host: str = SCREEN_CONFIG_HOST, port: int = SCREEN_CONFIG_PORT) -> None:
@@ -122,7 +211,8 @@ def run_config_ui(host: str = SCREEN_CONFIG_HOST, port: int = SCREEN_CONFIG_PORT
 @app.route("/", methods=["GET"])
 def screen_config() -> str:
     config = _load_active_config()
-    entries = _build_screen_entries(config)
+    style_config = _load_active_style_config()
+    entries = _build_screen_entries(config, style_config)
     return render_template(
         "screen_config.html",
         screens=entries,
@@ -134,9 +224,10 @@ def screen_config() -> str:
 @app.get("/api/screens")
 def get_screens() -> Any:
     config = _load_active_config()
+    style_config = _load_active_style_config()
     return jsonify(
         {
-            "screens": _build_screen_entries(config),
+            "screens": _build_screen_entries(config, style_config),
             "screen_ids": sorted(SCREEN_IDS),
         }
     )
@@ -145,7 +236,8 @@ def get_screens() -> Any:
 @app.get("/api/screens/defaults")
 def get_default_screens() -> Any:
     config = _load_config(DEFAULT_CONFIG_PATH)
-    return jsonify({"screens": _build_screen_entries(config)})
+    style_config = _load_style_config(STYLE_CONFIG_PATH)
+    return jsonify({"screens": _build_screen_entries(config, style_config)})
 
 
 @app.get("/api/screens/export")
@@ -173,11 +265,14 @@ def save_screens() -> Any:
 
     try:
         config = _build_config(entries)
+        style_config = _load_active_style_config()
+        style_config = _build_style_config(entries, style_config)
         build_scheduler(config)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
 
     _save_config(config)
+    _save_style_config(style_config)
     return jsonify({"status": "ok"})
 
 

@@ -71,3 +71,16 @@ def test_reload_style_config_refreshes_cache(tmp_path, monkeypatch):
     _write_style_config(style_path, payload)
     module.reload_style_config()
     assert module.get_screen_image_scale("NBA Scoreboard", "team_logo", 1.0) == 0.8
+
+
+def test_get_screen_background_color_uses_hex_override(tmp_path, monkeypatch):
+    style_path = tmp_path / "screens_style.json"
+    payload = {"screens": {"weather1": {"background": "#1a2b3c"}}}
+    _write_style_config(style_path, payload)
+    monkeypatch.setenv("SCREENS_STYLE_PATH", str(style_path))
+
+    import config
+
+    module = importlib.reload(config)
+    color = module.get_screen_background_color("weather1", (0, 0, 0))
+    assert color == (26, 43, 60)

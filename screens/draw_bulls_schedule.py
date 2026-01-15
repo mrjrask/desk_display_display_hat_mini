@@ -33,6 +33,7 @@ from config import (
     WIDTH,
     HEIGHT,
     CENTRAL_TIME,
+    get_screen_background_color,
 )
 
 from utils import (
@@ -764,6 +765,8 @@ def _push(display, img: Optional[Image.Image], *, transition: bool = False, led_
 # Public entry points (used by screens/registry.py)
 
 def draw_last_bulls_game(display, game: Optional[Dict], transition: bool = False):
+    global BACKGROUND_COLOR
+    BACKGROUND_COLOR = get_screen_background_color("bulls last", (0, 0, 0))
     if not game:
         img = _render_message("Last Bulls game:", "No results")
         return _push(display, img, transition=transition)
@@ -794,6 +797,8 @@ def draw_last_bulls_game(display, game: Optional[Dict], transition: bool = False
     return _push(display, img, transition=transition, led_override=led_override)
 
 def draw_live_bulls_game(display, game: Optional[Dict], transition: bool = False):
+    global BACKGROUND_COLOR
+    BACKGROUND_COLOR = get_screen_background_color("bulls live", (0, 0, 0))
     if not game or _game_state(game) != "live":
         img = _render_message("Bulls Live:", "Not in progress")
         return _push(display, img, transition=transition)
@@ -804,6 +809,8 @@ def draw_live_bulls_game(display, game: Optional[Dict], transition: bool = False
     return _push(display, img, transition=transition)
 
 def draw_sports_screen_bulls(display, game: Optional[Dict], transition: bool = False):
+    global BACKGROUND_COLOR
+    BACKGROUND_COLOR = get_screen_background_color("bulls next", (0, 0, 0))
     if not game:
         img = _render_message("Next Bulls game:", "No upcoming games scheduled")
         return _push(display, img, transition=transition)
@@ -811,6 +818,8 @@ def draw_sports_screen_bulls(display, game: Optional[Dict], transition: bool = F
     return _push(display, img, transition=transition)
 
 def draw_bulls_next_home_game(display, game: Optional[Dict], transition: bool = False):
+    global BACKGROUND_COLOR
+    BACKGROUND_COLOR = get_screen_background_color("bulls next home", (0, 0, 0))
     if not game:
         img = _render_message("Following at home...", "No United Center games scheduled")
         return _push(display, img, transition=transition)

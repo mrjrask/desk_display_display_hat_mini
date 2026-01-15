@@ -36,6 +36,7 @@ from config import (
     DATE_TIME_GH_ICON_INVERT,
     DATE_TIME_GH_ICON_SIZE,
     DATE_TIME_GH_ICON_PATHS,
+    get_screen_background_color,
 )
 from utils import (
     ScreenImage,
@@ -58,12 +59,14 @@ def _compose_frame(
     col_top: Tuple[int,int,int],
     col_bottom: Tuple[int,int,int],
     gh_on: bool,
+    screen_id: str,
 ) -> Image.Image:
     """
     Build a single static frame with the requested order.
     Top block and bottom block are vertically centered within their halves.
     """
-    img  = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    background = get_screen_background_color(screen_id, (0, 0, 0))
+    img  = Image.new("RGB", (WIDTH, HEIGHT), background)
     draw = ImageDraw.Draw(img)
 
     now = datetime.datetime.now()
@@ -141,6 +144,7 @@ def _cycle_colors_after_load(
     display,
     base_order: Literal["date_time", "time_date"],
     gh_state: Callable[[], bool],
+    screen_id: str,
 ):
     """
     Optional subtle color-cycle that runs AFTER the first full static frame is already shown.
@@ -150,7 +154,7 @@ def _cycle_colors_after_load(
     time.sleep(0.6)
     # a few gentle color swaps (~2.7s extra on screen)
     for _ in range(6):
-        img = _compose_frame(base_order, bright_color(), bright_color(), gh_state())
+        img = _compose_frame(base_order, bright_color(), bright_color(), gh_state(), screen_id)
         display.image(img)
         time.sleep(0.45)
 
@@ -160,6 +164,7 @@ def _start_update_checks(
     colors: Tuple[Tuple[int, int, int], Tuple[int, int, int]],
     gh_state: dict,
     display,
+    screen_id: str,
     expected_frame_id: int | None = None,
 ):
     """Kick off apt/GitHub checks in the background, updating the screen when ready."""
@@ -178,7 +183,7 @@ def _start_update_checks(
                 )
                 return
 
-            refreshed = _compose_frame(order, colors[0], colors[1], gh_state["value"])
+            refreshed = _compose_frame(order, colors[0], colors[1], gh_state["value"], screen_id)
             display.image(refreshed)
             try:
                 display.show()
@@ -205,10 +210,10 @@ def draw_date(display, transition: bool=False):
     col_bottom = bright_color()
     gh_state   = {"value": get_update_status().github}
 
-    img = _compose_frame("date_time", col_top, col_bottom, gh_state["value"])
+    img = _compose_frame("date_time", col_top, col_bottom, gh_state["value"], "date")
 
     if transition:
-        _start_update_checks("date_time", (col_top, col_bottom), gh_state, None)
+        _start_update_checks("date_time", (col_top, col_bottom), gh_state, None, "date")
         return img
 
     clear_display(display)
@@ -222,7 +227,7 @@ def draw_date(display, transition: bool=False):
     # run a tiny, delayed cycle in a short thread so we don't block
     t = threading.Thread(
         target=_cycle_colors_after_load,
-        args=(display, "date_time", lambda: gh_state["value"]),
+        args=(display, "date_time", lambda: gh_state["value"], "date"),
         daemon=True,
     )
     t.start()
@@ -231,6 +236,7 @@ def draw_date(display, transition: bool=False):
         (col_top, col_bottom),
         gh_state,
         display,
+        "date",
         expected_frame_id=frame_id,
     )
     return ScreenImage(img, displayed=True)
@@ -245,10 +251,10 @@ def draw_time(display, transition: bool=False):
     col_bottom = bright_color()
     gh_state   = {"value": get_update_status().github}
 
-    img = _compose_frame("time_date", col_top, col_bottom, gh_state["value"])
+    img = _compose_frame("time_date", col_top, col_bottom, gh_state["value"], "time")
 
     if transition:
-        _start_update_checks("time_date", (col_top, col_bottom), gh_state, None)
+        _start_update_checks("time_date", (col_top, col_bottom), gh_state, None, "time")
         return img
 
     clear_display(display)
@@ -260,7 +266,7 @@ def draw_time(display, transition: bool=False):
     frame_id = display.frame_id()
     t = threading.Thread(
         target=_cycle_colors_after_load,
-        args=(display, "time_date", lambda: gh_state["value"]),
+        args=(display, "time_date", lambda: gh_state["value"], "time"),
         daemon=True,
     )
     t.start()
@@ -269,6 +275,7 @@ def draw_time(display, transition: bool=False):
         (col_top, col_bottom),
         gh_state,
         display,
+        "time",
         expected_frame_id=frame_id,
     )
     return ScreenImage(img, displayed=True)

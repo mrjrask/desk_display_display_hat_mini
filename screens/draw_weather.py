@@ -46,6 +46,7 @@ from config import (
     HOURLY_FORECAST_HOURS,
     LATITUDE,
     LONGITUDE,
+    get_screen_background_color,
 )
 from utils import (
     LED_INDICATOR_LEVEL,
@@ -306,6 +307,7 @@ def draw_weather_screen_1(display, weather, transition=False):
     if not weather:
         return None
 
+    background = get_screen_background_color("weather1", (0, 0, 0))
     severity, led_color = _detect_weather_alert(weather)
 
     current = weather.get("current", {})
@@ -320,7 +322,7 @@ def draw_weather_screen_1(display, weather, transition=False):
     lo    = round(daily.get("temp", {}).get("min", 0))
 
     clear_display(display)
-    img  = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    img  = Image.new("RGB", (WIDTH, HEIGHT), background)
     draw = ImageDraw.Draw(img)
 
     # Temperature
@@ -598,9 +600,10 @@ def _gather_hourly_forecast(
 
 @log_call
 def draw_weather_hourly(display, weather, transition: bool = False, hours: int = HOURLY_FORECAST_HOURS):
+    background = get_screen_background_color("weather hourly", (0, 0, 0))
     forecast = _gather_hourly_forecast(weather, hours)
     if not forecast:
-        img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+        img = Image.new("RGB", (WIDTH, HEIGHT), background)
         draw = ImageDraw.Draw(img)
         msg = "No hourly data"
         w, h = draw.textsize(msg, font=FONT_WEATHER_DETAILS_BOLD)
@@ -608,7 +611,7 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
         return ScreenImage(img, displayed=False)
 
     clear_display(display)
-    img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    img = Image.new("RGB", (WIDTH, HEIGHT), background)
     draw = ImageDraw.Draw(img)
 
     hours_to_show = len(forecast)
@@ -828,6 +831,7 @@ def draw_weather_screen_2(display, weather, transition=False):
     if not weather:
         return None
 
+    background = get_screen_background_color("weather2", (0, 0, 0))
     severity, led_color = _detect_weather_alert(weather)
 
     current = weather.get("current", {})
@@ -859,7 +863,7 @@ def draw_weather_screen_2(display, weather, transition=False):
     items.append(("UV Index:", str(uvi), uv_col))
 
     clear_display(display)
-    img  = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    img  = Image.new("RGB", (WIDTH, HEIGHT), background)
     draw = ImageDraw.Draw(img)
 
     # compute per-row heights
@@ -1016,11 +1020,12 @@ def _fetch_base_map(zoom: int = 7) -> Optional[Image.Image]:
 
 @log_call
 def draw_weather_radar(display, weather=None, transition: bool = False):
+    background = get_screen_background_color("weather radar", (0, 0, 0))
     zoom_level = 7
     frames = _fetch_radar_frames(zoom=zoom_level)
     base_map = _fetch_base_map(zoom=zoom_level)
     if not frames:
-        img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+        img = Image.new("RGB", (WIDTH, HEIGHT), background)
         draw = ImageDraw.Draw(img)
         msg = "Radar unavailable"
         w, h = draw.textsize(msg, font=FONT_WEATHER_DETAILS_BOLD)
@@ -1033,6 +1038,8 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
     map_section = None
     if base_map:
         map_section = base_map.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
+    else:
+        map_section = Image.new("RGBA", (WIDTH, HEIGHT), background + (255,))
 
     def _compose_frame(frame: RadarFrame) -> Image.Image:
         radar_resized = frame.image.resize((WIDTH, HEIGHT), Image.LANCZOS).convert("RGBA")
@@ -1041,12 +1048,9 @@ def draw_weather_radar(display, weather=None, transition: bool = False):
             alpha = radar_resized.getchannel("A")
             alpha = alpha.point(lambda p: int(p * radar_opacity))
             radar_resized.putalpha(alpha)
-        if map_section is None:
-            result = radar_resized.convert("RGB")
-        else:
-            combined = map_section.copy()
-            combined.alpha_composite(radar_resized)
-            result = combined.convert("RGB")
+        combined = map_section.copy()
+        combined.alpha_composite(radar_resized)
+        result = combined.convert("RGB")
 
         label = _format_radar_timestamp(frame.timestamp)
         if label:

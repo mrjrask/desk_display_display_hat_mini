@@ -60,6 +60,7 @@ from utils import (
 
 TS_PATH = TIMES_SQUARE_FONT_PATH
 AHL_DIR = AHL_IMAGES_DIR
+BACKGROUND_COLOR = (0, 0, 0)
 
 def _ts(size: int) -> ImageFont.ImageFont:
     try:
@@ -865,7 +866,7 @@ def _draw_next_card(
     is_wolves_home = (str(home_info.get("id")) == str(TEAM_ID)) or ((home_tri or "").upper() == TEAM_TRICODE)
 
     # Build canvas
-    img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     d   = ImageDraw.Draw(img)
 
     # Title
@@ -950,6 +951,8 @@ def _draw_next_card(
 # Public screens
 
 def draw_last_wolves_game(display, game, transition: bool=False):
+    global BACKGROUND_COLOR
+    BACKGROUND_COLOR = config.get_screen_background_color("wolves last", (0, 0, 0))
     """
     Display the last completed Wolves game with scoreboard.
     Expects AHL data structure with away/home dicts containing abbr, score, shots.
@@ -959,7 +962,7 @@ def draw_last_wolves_game(display, game, transition: bool=False):
         return None
 
     # Build the image
-    img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     d   = ImageDraw.Draw(img)
 
     # Title (MLB title font)
@@ -1024,6 +1027,8 @@ def draw_last_wolves_game(display, game, transition: bool=False):
     return _push(display, img, transition=transition, led_override=led_override)
 
 def draw_live_wolves_game(display, game, transition: bool=False):
+    global BACKGROUND_COLOR
+    BACKGROUND_COLOR = config.get_screen_background_color("wolves live", (0, 0, 0))
     """
     Display a live Wolves game with scoreboard and live status.
     Expects AHL data structure with away/home dicts containing abbr and score.
@@ -1033,7 +1038,7 @@ def draw_live_wolves_game(display, game, transition: bool=False):
         return None
 
     # Build the image
-    img = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    img = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     d   = ImageDraw.Draw(img)
 
     # Title (MLB title font)
@@ -1080,6 +1085,8 @@ def draw_live_wolves_game(display, game, transition: bool=False):
     return _push(display, img, transition=transition)
 
 def draw_sports_screen_wolves(display, game, transition: bool=False):
+    global BACKGROUND_COLOR
+    BACKGROUND_COLOR = config.get_screen_background_color("wolves next", (0, 0, 0))
     """
     "Next Wolves game" card with '@ FULLNAME' / 'vs. FULLNAME', logos (local PNGs, centered and larger), and bottom time.
     Uses the provided 'game' payload from your scheduler for the next slot.
@@ -1088,5 +1095,7 @@ def draw_sports_screen_wolves(display, game, transition: bool=False):
 
 
 def draw_wolves_next_home_game(display, game, transition: bool=False):
+    global BACKGROUND_COLOR
+    BACKGROUND_COLOR = config.get_screen_background_color("wolves next home", (0, 0, 0))
     """Dedicated "Next at home..." card using the same layout as the next-game screen."""
     return _draw_next_card(display, game, title="Next at home...", transition=transition, log_label="wolves next home", logo_scale=0.8)
