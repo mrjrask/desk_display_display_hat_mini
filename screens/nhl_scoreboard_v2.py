@@ -157,7 +157,7 @@ def _load_logo_cached(abbr: str) -> Optional[Image.Image]:
     for candidate in candidates:
         path = os.path.join(LOGO_DIR, f"{candidate}.png")
         if os.path.exists(path):
-            logo = load_team_logo(LOGO_DIR, candidate, height=height, trim=True)
+            logo = load_team_logo(LOGO_DIR, candidate, height=height, box_size=height, trim=True)
             _LOGO_CACHE[cache_token] = logo
             return logo
 

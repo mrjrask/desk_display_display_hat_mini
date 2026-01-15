@@ -323,7 +323,7 @@ def _load_logo_for_height(
         path = os.path.join(LOGO_DIR, f"{candidate}.png")
         if os.path.exists(path):
             try:
-                logo = load_team_logo(LOGO_DIR, candidate, height=height)
+                logo = load_team_logo(LOGO_DIR, candidate, height=height, box_size=height)
             except Exception as exc:  # pragma: no cover - defensive guard
                 logging.debug("NFL logo load failed for %s: %s", candidate, exc)
                 logo = None

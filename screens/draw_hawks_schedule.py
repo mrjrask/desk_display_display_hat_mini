@@ -56,6 +56,7 @@ from services.http_client import NHL_HEADERS, get_session, request_json
 from utils import (
     LED_INDICATOR_LEVEL,
     ScreenImage,
+    fit_logo_to_box,
     standard_next_game_logo_frame_width,
     standard_next_game_logo_height_for_space,
     temporary_display_led,
@@ -398,9 +399,7 @@ def _load_logo_png(abbr: str, height: int) -> Optional[Image.Image]:
         try:
             if os.path.exists(png_path):
                 img = Image.open(png_path).convert("RGBA")
-                w0, h0 = img.size
-                r = height / float(h0) if h0 else 1.0
-                return img.resize((max(1, int(w0*r)), height), Image.LANCZOS)
+                return fit_logo_to_box(img, height)
         except Exception:
             pass
 
@@ -408,9 +407,7 @@ def _load_logo_png(abbr: str, height: int) -> Optional[Image.Image]:
     try:
         if os.path.exists(FALLBACK_LOGO):
             img = Image.open(FALLBACK_LOGO).convert("RGBA")
-            w0, h0 = img.size
-            r = height / float(h0) if h0 else 1.0
-            return img.resize((max(1, int(w0*r)), height), Image.LANCZOS)
+            return fit_logo_to_box(img, height)
     except Exception:
         pass
     return None
