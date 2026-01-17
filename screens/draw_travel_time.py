@@ -511,6 +511,17 @@ def _scroll_travel_display(display, full_img: Image.Image) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def is_travel_screen_active(now: Optional[dt.time] = None) -> bool:
+    if isinstance(now, dt.datetime):
+        now_dt = now
+    elif now is None:
+        now_dt = dt.datetime.now(CENTRAL_TIME)
+    else:
+        now_dt = None
+
+    if now_dt is not None and now_dt.weekday() >= 5:
+        logging.debug("Travel screen skipped—weekend schedule.")
+        return False
+
     window = get_travel_active_window()
     if not window:
         return True
@@ -520,8 +531,8 @@ def is_travel_screen_active(now: Optional[dt.time] = None) -> bool:
     if start == end:
         return True
 
-    if isinstance(now, dt.datetime):
-        now = now.timetz() if now.tzinfo else now.time()
+    if now_dt is not None:
+        now = now_dt.timetz() if now_dt.tzinfo else now_dt.time()
     elif now is None:
         now = dt.datetime.now(CENTRAL_TIME).time()
 
