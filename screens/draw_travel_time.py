@@ -85,6 +85,7 @@ class TravelTimeResult:
 
     raw_text: str
     seconds: Optional[int] = None
+    color: Optional[Tuple[int, int, int]] = None
 
     @classmethod
     def from_route(cls, route: Optional[dict]) -> "TravelTimeResult":
@@ -98,7 +99,13 @@ class TravelTimeResult:
         else:
             seconds = None
 
-        return cls(format_duration_text(route), seconds)
+        ratio: Optional[float] = None
+        if seconds is not None:
+            baseline = route.get("_duration_base_sec")
+            if isinstance(baseline, (int, float)) and baseline:
+                ratio = seconds / baseline
+
+        return cls(format_duration_text(route), seconds, _traffic_color_for_ratio(ratio))
 
     def normalized(self) -> str:
         text = (self.raw_text or "").strip()
@@ -129,6 +136,17 @@ SCROLL_STEP = 2
 SCROLL_DELAY = 0.035
 SCROLL_PAUSE_TOP = 1.0
 SCROLL_PAUSE_BOTTOM = 1.0
+
+
+def _traffic_color_for_ratio(ratio: Optional[float]) -> Optional[Tuple[int, int, int]]:
+    if ratio is None:
+        return None
+
+    if ratio <= 1.1:
+        return (40, 200, 120)
+    if ratio <= 1.35:
+        return (255, 195, 60)
+    return (240, 80, 80)
 
 
 def _coerce_time(value: Any) -> Optional[dt.time]:
@@ -364,6 +382,7 @@ def _compose_travel_image(times: Dict[str, TravelTimeResult]) -> Image.Image:
         normalized = time_result.normalized()
         sign_image = factory()
         time_width, time_height = _measure(normalized, time_font)
+        display_color = time_result.color or color
 
         max_sign_height = max(max_sign_height, sign_image.height)
         max_time_height = max(max_time_height, time_height)
@@ -372,7 +391,7 @@ def _compose_travel_image(times: Dict[str, TravelTimeResult]) -> Image.Image:
             {
                 "sign": sign_image,
                 "normalized": normalized,
-                "color": color,
+                "color": display_color,
                 "time_width": time_width,
                 "time_height": time_height,
             }
