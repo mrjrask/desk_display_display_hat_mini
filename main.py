@@ -699,6 +699,56 @@ def _prune_screenshots_in_dir(dir_path: str, limit: int) -> int:
     return removed
 
 
+def _apply_screenshot_limits_on_startup() -> None:
+    if not ENABLE_SCREENSHOTS:
+        return
+
+    total_removed = 0
+    pruned_root = False
+    pruned_archive_root = False
+    try:
+        for entry in os.scandir(SCREENSHOT_DIR):
+            if entry.is_dir():
+                if os.path.abspath(entry.path) == os.path.abspath(CURRENT_SCREENSHOT_DIR):
+                    continue
+                total_removed += _prune_screenshots_in_dir(
+                    entry.path,
+                    MAX_SCREENSHOTS_PER_SCREEN,
+                )
+            elif entry.is_file() and not pruned_root:
+                if entry.name.lower().endswith(ALLOWED_SCREEN_EXTS):
+                    total_removed += _prune_screenshots_in_dir(
+                        SCREENSHOT_DIR,
+                        MAX_SCREENSHOTS_PER_SCREEN,
+                    )
+                    pruned_root = True
+    except FileNotFoundError:
+        return
+
+    try:
+        for entry in os.scandir(SCREENSHOT_ARCHIVE_BASE):
+            if entry.is_dir():
+                total_removed += _prune_screenshots_in_dir(
+                    entry.path,
+                    MAX_ARCHIVED_SCREENSHOTS_PER_SCREEN,
+                )
+            elif entry.is_file() and not pruned_archive_root:
+                if entry.name.lower().endswith(ALLOWED_SCREEN_EXTS):
+                    total_removed += _prune_screenshots_in_dir(
+                        SCREENSHOT_ARCHIVE_BASE,
+                        MAX_ARCHIVED_SCREENSHOTS_PER_SCREEN,
+                    )
+                    pruned_archive_root = True
+    except FileNotFoundError:
+        return
+
+    if total_removed:
+        logging.info(
+            "🧹 Pruned %d screenshot(s) to enforce limits on startup.",
+            total_removed,
+        )
+
+
 def _ensure_screenshot_counter_locked() -> int:
     global _screenshot_count, _archive_pending
 
@@ -1191,6 +1241,7 @@ def init_runtime() -> None:
         os.makedirs(SCREENSHOT_DIR, exist_ok=True)
         os.makedirs(CURRENT_SCREENSHOT_DIR, exist_ok=True)
         os.makedirs(SCREENSHOT_ARCHIVE_BASE, exist_ok=True)
+        _apply_screenshot_limits_on_startup()
 
     if ENABLE_VIDEO:
         import cv2, numpy as np
