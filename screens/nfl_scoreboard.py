@@ -3,8 +3,10 @@
 nfl_scoreboard.py
 
 Render a scrolling NFL scoreboard mirroring the layout of the MLB board.
-Shows all games in the active NFL week (Thursday through Monday). Final scores
-persist until Wednesday at 9:00 AM Central before advancing to the next week.
+Shows all games in the active NFL week (Thursday through Monday), including
+playoff weeks that can span January and February. During January and February,
+final scores persist until the playoff-aware cutoff time before advancing to
+the next week.
 """
 
 from __future__ import annotations
@@ -54,6 +56,7 @@ BLOCK_SPACING       = 10
 SCORE_ROW_H         = 56
 STATUS_ROW_H        = 18
 REQUEST_TIMEOUT     = 10
+SUPER_BOWL_LOGO_GAP = 6
 
 COL_WIDTHS = [70, 60, 60, 60, 70]
 _TOTAL_COL_WIDTH = sum(COL_WIDTHS)
@@ -105,6 +108,7 @@ IN_GAME_STATUS_OVERRIDES = {
 
 _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
 _LEAGUE_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
+_SUPER_BOWL_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
 
 
 def _apply_style_overrides() -> None:
@@ -136,9 +140,20 @@ def _apply_style_overrides() -> None:
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
-def _week_start(now: Optional[datetime.datetime] = None) -> datetime.date:
-    now = now or datetime.datetime.now(CENTRAL_TIME)
+def _week_start_for_date(day: datetime.date) -> datetime.date:
+    days_since_thursday = (day.weekday() - 3) % 7
+    return day - datetime.timedelta(days=days_since_thursday)
 
+
+def _week_dates_from_start(start: datetime.date) -> list[datetime.date]:
+    return [start + datetime.timedelta(days=offset) for offset in range(5)]
+
+
+def _playoff_rules_active(now: datetime.datetime) -> bool:
+    return now.month in {1, 2}
+
+
+def _regular_week_start(now: datetime.datetime) -> datetime.date:
     if now.weekday() == 2:  # Wednesday
         cutoff = now.replace(hour=9, minute=0, second=0, microsecond=0)
         if now >= cutoff:
@@ -147,14 +162,7 @@ def _week_start(now: Optional[datetime.datetime] = None) -> datetime.date:
             ref_date = now.date()
     else:
         ref_date = now.date()
-
-    days_since_thursday = (ref_date.weekday() - 3) % 7
-    return ref_date - datetime.timedelta(days=days_since_thursday)
-
-
-def _week_dates(now: Optional[datetime.datetime] = None) -> list[datetime.date]:
-    start = _week_start(now)
-    return [start + datetime.timedelta(days=offset) for offset in range(5)]
+    return _week_start_for_date(ref_date)
 
 
 def _load_logo_cached(abbr: str) -> Optional[Image.Image]:
@@ -190,6 +198,15 @@ def _get_league_logo() -> Optional[Image.Image]:
             return logo
     _LEAGUE_LOGO_CACHE[height] = None
     return None
+
+
+def _get_super_bowl_logo() -> Optional[Image.Image]:
+    height = LOGO_HEIGHT
+    if height in _SUPER_BOWL_LOGO_CACHE:
+        return _SUPER_BOWL_LOGO_CACHE[height]
+    logo = load_team_logo(LOGO_DIR, "SB", height=height, box_size=height)
+    _SUPER_BOWL_LOGO_CACHE[height] = logo
+    return logo
 
 
 def _team_logo_abbr(team: dict) -> str:
@@ -407,13 +424,16 @@ def _draw_game_block(canvas: Image.Image, draw: ImageDraw.ImageDraw, game: dict,
     _center_text(draw, status_text, STATUS_FONT, COL_X[2], COL_WIDTHS[2], status_top, STATUS_ROW_H, fill=status_fill)
 
 
-def _compose_canvas(games: list[dict]) -> Image.Image:
+def _compose_canvas(games: list[dict], *, show_super_bowl_logo: bool) -> Image.Image:
     if not games:
         return Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
     block_height = SCORE_ROW_H + STATUS_ROW_H
     total_height = block_height * len(games)
     if len(games) > 1:
         total_height += BLOCK_SPACING * (len(games) - 1)
+    super_bowl_logo = _get_super_bowl_logo() if show_super_bowl_logo else None
+    if super_bowl_logo:
+        total_height += SUPER_BOWL_LOGO_GAP + super_bowl_logo.height
     canvas = Image.new("RGB", (WIDTH, total_height), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(canvas)
 
@@ -425,6 +445,10 @@ def _compose_canvas(games: list[dict]) -> Image.Image:
             sep_y = y + BLOCK_SPACING // 2
             draw.line((10, sep_y, WIDTH - 10, sep_y), fill=(45, 45, 45))
             y += BLOCK_SPACING
+    if super_bowl_logo:
+        y += SUPER_BOWL_LOGO_GAP
+        logo_x = (WIDTH - super_bowl_logo.width) // 2
+        canvas.paste(super_bowl_logo, (logo_x, y), super_bowl_logo)
     return canvas
 
 
@@ -493,16 +517,49 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
     return _hydrate_games(raw_games)
 
 
+def _week_cutoff_datetime(week_start: datetime.date, game_count: int) -> datetime.datetime:
+    def _localize(day: datetime.date, hour: int, minute: int) -> datetime.datetime:
+        naive = datetime.datetime.combine(day, datetime.time(hour=hour, minute=minute))
+        try:
+            return CENTRAL_TIME.localize(naive)  # type: ignore[attr-defined]
+        except Exception:
+            return naive.replace(tzinfo=CENTRAL_TIME)
+
+    if game_count == 6:
+        return _localize(week_start + datetime.timedelta(days=5), 15, 0)
+    if game_count in {2, 4}:
+        return _localize(week_start + datetime.timedelta(days=4), 15, 15)
+    return _localize(week_start + datetime.timedelta(days=6), 9, 0)
+
+
 def _fetch_games_for_week(now: Optional[datetime.datetime] = None) -> list[dict]:
-    games: list[dict] = []
-    for day in _week_dates(now):
+    now = now or datetime.datetime.now(CENTRAL_TIME)
+    if not _playoff_rules_active(now):
+        week_start = _regular_week_start(now)
+        games = []
+        for day in _week_dates_from_start(week_start):
+            games.extend(_fetch_games_for_date(day))
+        games.sort(key=_game_sort_key)
+        return games
+
+    week_start = _week_start_for_date(now.date())
+    games = []
+    for day in _week_dates_from_start(week_start):
         games.extend(_fetch_games_for_date(day))
     games.sort(key=_game_sort_key)
+
+    cutoff = _week_cutoff_datetime(week_start, len(games))
+    if now >= cutoff:
+        week_start = week_start + datetime.timedelta(days=7)
+        games = []
+        for day in _week_dates_from_start(week_start):
+            games.extend(_fetch_games_for_date(day))
+        games.sort(key=_game_sort_key)
     return games
 
 
-def _render_scoreboard(games: list[dict]) -> Image.Image:
-    canvas = _compose_canvas(games)
+def _render_scoreboard(games: list[dict], *, show_super_bowl_logo: bool) -> Image.Image:
+    canvas = _compose_canvas(games, show_super_bowl_logo=show_super_bowl_logo)
 
     dummy = Image.new("RGB", (WIDTH, 10), BACKGROUND_COLOR)
     dd = ImageDraw.Draw(dummy)
@@ -589,7 +646,9 @@ def _scroll_display(display, full_img: Image.Image):
 @log_call
 def draw_nfl_scoreboard(display, transition: bool = False) -> ScreenImage:
     _apply_style_overrides()
-    games = _fetch_games_for_week()
+    now = datetime.datetime.now(CENTRAL_TIME)
+    games = _fetch_games_for_week(now)
+    show_super_bowl_logo = _playoff_rules_active(now) and len(games) == 1
 
     if not games:
         clear_display(display)
@@ -618,7 +677,7 @@ def draw_nfl_scoreboard(display, transition: bool = False) -> ScreenImage:
         time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
         return ScreenImage(img, displayed=True)
 
-    full_img = _render_scoreboard(games)
+    full_img = _render_scoreboard(games, show_super_bowl_logo=show_super_bowl_logo)
     if transition:
         _scroll_display(display, full_img)
         return ScreenImage(full_img, displayed=True)
