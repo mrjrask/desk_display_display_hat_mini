@@ -127,6 +127,7 @@ def draw_standings_screen1(
     logo_path,
     division_name,
     *,
+    logo_size=None,
     show_games_back=True,
     show_wild_card=True,
     show_streak=False,
@@ -156,7 +157,8 @@ def draw_standings_screen1(
     logo = None
     try:
         logo_img = Image.open(logo_path).convert("RGBA")
-        logo = fit_logo_to_box(logo_img, LOGO_SZ)
+        logo_target = LOGO_SZ if logo_size is None else logo_size
+        logo = fit_logo_to_box(logo_img, logo_target)
     except:
         pass
     if logo:
@@ -277,6 +279,7 @@ def draw_standings_screen2(
     rec,
     logo_path,
     *,
+    logo_size=None,
     pct_precision=None,
     record_details_fn=None,
     split_order=("lastTen", "home", "away"),
@@ -299,7 +302,8 @@ def draw_standings_screen2(
     logo = None
     try:
         logo_img = Image.open(logo_path).convert("RGBA")
-        logo = fit_logo_to_box(logo_img, LOGO_SZ)
+        logo_target = LOGO_SZ if logo_size is None else logo_size
+        logo = fit_logo_to_box(logo_img, logo_target)
     except:
         pass
     if logo:

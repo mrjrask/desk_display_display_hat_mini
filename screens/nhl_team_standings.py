@@ -1,11 +1,14 @@
 """NHL team standings screens."""
 from screens.mlb_team_standings import (
+    LOGO_SZ,
     draw_standings_screen1 as _base_screen1,
     draw_standings_screen2 as _base_screen2,
     _format_int,
 )
 from config import FONT_STAND1_RANK
 from utils import log_call
+
+NHL_LOGO_SZ = int(round(LOGO_SZ * 1.2))
 
 
 def _strip_pct_leading_zero(rec, *, precision=3):
@@ -121,6 +124,7 @@ def draw_nhl_standings_screen1(display, rec, logo_path, division_name, *, transi
         conference_label="conference",
         show_conference_rank=True,
         record_details_fn=_format_nhl_record,
+        logo_size=NHL_LOGO_SZ,
         transition=transition,
     )
 
@@ -159,6 +163,7 @@ def draw_nhl_standings_screen2(display, rec, logo_path, *, transition=False):
         split_order=("division", "conference", "home", "away"),
         show_streak=False,
         show_points=False,
+        logo_size=NHL_LOGO_SZ,
         transition=transition,
     )
 
