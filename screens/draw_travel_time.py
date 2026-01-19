@@ -219,18 +219,17 @@ def _select_travel_routes(
     )
 
     lake_shore_tokens = [
-        "lake shore",
+        "n la salle dr",
+        "n jean baptiste pointe du sable lake shore dr",
         "lake shore dr",
-        "lake shore drive",
-        "us-41",
-        "us 41",
-        "lsd",
-        "sheridan",
         "sheridan rd",
-        "sheridan road",
-        "dundee",
+        "burnham pl",
+        "forest ave",
+        "park ave",
+        "green bay rd",
         "dundee rd",
-        "dundee road",
+        "sutton dr",
+        "rutgers ln",
     ]
     kennedy_edens_tokens = [
         "edens",
@@ -240,7 +239,6 @@ def _select_travel_routes(
         "i94",
         "90/94",
         "kennedy",
-        "dan ryan",
     ]
     kennedy_294_tokens = [
         "i-294",
@@ -266,7 +264,7 @@ def get_travel_routes() -> Dict[str, Optional[dict]]:
 
     try:
         routes_all = list(_fetch_routes(avoid_highways=False))
-        lake_shore_routes = list(_fetch_routes(avoid_highways=True))
+        lake_shore_routes = list(_fetch_routes(avoid_highways=True, avoid_tolls=True))
         kennedy_edens_routes = list(_fetch_routes(avoid_tolls=True))
         return _select_travel_routes(
             routes_all,
