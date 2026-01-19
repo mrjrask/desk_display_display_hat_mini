@@ -1,9 +1,12 @@
 """NBA team standings screens."""
 from screens.mlb_team_standings import (
+    LOGO_SZ,
     draw_standings_screen1 as _base_screen1,
     draw_standings_screen2 as _base_screen2,
 )
 from utils import log_call
+
+NBA_LOGO_SZ = int(round(LOGO_SZ * 1.2))
 
 
 def _strip_pct_leading_zero(rec, *, precision=3):
@@ -70,6 +73,7 @@ def draw_nba_standings_screen1(display, rec, logo_path, division_name, *, transi
         ),
         show_pct=False,
         show_streak=True,
+        logo_size=NBA_LOGO_SZ,
         transition=transition,
     )
 
@@ -82,6 +86,7 @@ def draw_nba_standings_screen2(display, rec, logo_path, *, transition=False):
         display,
         _strip_pct_leading_zero(rec),
         logo_path,
+        logo_size=NBA_LOGO_SZ,
         pct_precision=3,
         transition=transition,
     )
