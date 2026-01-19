@@ -58,6 +58,7 @@ from screens.nfl_scoreboard import (
     _format_status,
     _team_logo_abbr,
     _get_league_logo,
+    _playoff_rules_active,
 )
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -68,6 +69,7 @@ PAIR_SPACING = 4
 SCORE_ROW_H = 30
 STATUS_ROW_H = 14
 GAME_WIDTH = 160
+SUPER_BOWL_LOGO_GAP = 6
 
 # Dual-game column layout (per game, 160px wide)
 # [Score 40][Logo 30][@ 20][Logo 30][Score 40] = 160
@@ -112,6 +114,7 @@ FINAL_LOSING_SCORE_COLOR = SCOREBOARD_FINAL_LOSING_SCORE_COLOR
 BACKGROUND_COLOR = get_screen_background_color(SCREEN_ID, SCOREBOARD_BACKGROUND_COLOR)
 
 _LOGO_CACHE: dict[tuple[str, int], Optional[Image.Image]] = {}
+_SUPER_BOWL_LOGO_CACHE: dict[int, Optional[Image.Image]] = {}
 
 
 def _apply_style_overrides() -> None:
@@ -162,6 +165,15 @@ def _load_logo_cached(abbr: str) -> Optional[Image.Image]:
 
     _LOGO_CACHE[cache_token] = None
     return None
+
+
+def _get_super_bowl_logo() -> Optional[Image.Image]:
+    height = LOGO_HEIGHT
+    if height in _SUPER_BOWL_LOGO_CACHE:
+        return _SUPER_BOWL_LOGO_CACHE[height]
+    logo = load_team_logo(LOGO_DIR, "SB", height=height, box_size=height)
+    _SUPER_BOWL_LOGO_CACHE[height] = logo
+    return logo
 
 
 def _center_text(
@@ -276,7 +288,7 @@ def _draw_game_pair(
         _draw_single_game(canvas, draw, game2, GAME_WIDTH, top)
 
 
-def _compose_canvas(games: list[dict]) -> Image.Image:
+def _compose_canvas(games: list[dict], *, show_super_bowl_logo: bool) -> Image.Image:
     if not games:
         return Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
 
@@ -292,6 +304,9 @@ def _compose_canvas(games: list[dict]) -> Image.Image:
     total_height = pair_height * len(pairs)
     if len(pairs) > 1:
         total_height += BLOCK_SPACING * (len(pairs) - 1)
+    super_bowl_logo = _get_super_bowl_logo() if show_super_bowl_logo else None
+    if super_bowl_logo:
+        total_height += SUPER_BOWL_LOGO_GAP + super_bowl_logo.height
 
     canvas = Image.new("RGB", (WIDTH, total_height), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(canvas)
@@ -304,12 +319,16 @@ def _compose_canvas(games: list[dict]) -> Image.Image:
             sep_y = y + BLOCK_SPACING // 2
             draw.line((10, sep_y, WIDTH - 10, sep_y), fill=(45, 45, 45))
             y += BLOCK_SPACING
+    if super_bowl_logo:
+        y += SUPER_BOWL_LOGO_GAP
+        logo_x = (WIDTH - super_bowl_logo.width) // 2
+        canvas.paste(super_bowl_logo, (logo_x, y), super_bowl_logo)
 
     return canvas
 
 
-def _render_scoreboard(games: list[dict]) -> Image.Image:
-    canvas = _compose_canvas(games)
+def _render_scoreboard(games: list[dict], *, show_super_bowl_logo: bool) -> Image.Image:
+    canvas = _compose_canvas(games, show_super_bowl_logo=show_super_bowl_logo)
 
     dummy = Image.new("RGB", (WIDTH, 10), BACKGROUND_COLOR)
     dd = ImageDraw.Draw(dummy)
@@ -390,7 +409,9 @@ def _scroll_display(display, full_img: Image.Image):
 @log_call
 def draw_nfl_scoreboard_v2(display, transition: bool = False) -> ScreenImage:
     _apply_style_overrides()
-    games = _fetch_games_for_week()
+    now = datetime.datetime.now(CENTRAL_TIME)
+    games = _fetch_games_for_week(now)
+    show_super_bowl_logo = _playoff_rules_active(now) and len(games) == 1
 
     if not games:
         clear_display(display)
@@ -421,7 +442,7 @@ def draw_nfl_scoreboard_v2(display, transition: bool = False) -> ScreenImage:
         time.sleep(SCOREBOARD_SCROLL_PAUSE_BOTTOM)
         return ScreenImage(img, displayed=True)
 
-    full_img = _render_scoreboard(games)
+    full_img = _render_scoreboard(games, show_super_bowl_logo=show_super_bowl_logo)
     if transition:
         _scroll_display(display, full_img)
         return ScreenImage(full_img, displayed=True)
