@@ -111,6 +111,8 @@ CONFIG_PATH = LOCAL_CONFIG_PATH if os.path.exists(LOCAL_CONFIG_PATH) else DEFAUL
 ARCHIVE_THRESHOLD = 500  # archive when we reach this many images
 ARCHIVE_DEFAULT_FOLDER = "Screens"
 ALLOWED_SCREEN_EXTS = (".png", ".jpg", ".jpeg")  # images only
+MAX_SCREENSHOTS_PER_SCREEN = 5
+MAX_ARCHIVED_SCREENSHOTS_PER_SCREEN = 50
 
 _storage_paths = None
 SCREENSHOT_DIR = ""
@@ -664,6 +666,39 @@ def _compute_existing_screenshot_count() -> int:
     return count
 
 
+def _prune_screenshots_in_dir(dir_path: str, limit: int) -> int:
+    if limit < 1:
+        limit = 0
+    if not os.path.isdir(dir_path):
+        return 0
+
+    entries = []
+    for entry in os.scandir(dir_path):
+        if not entry.is_file():
+            continue
+        if not entry.name.lower().endswith(ALLOWED_SCREEN_EXTS):
+            continue
+        try:
+            mtime = entry.stat().st_mtime
+        except OSError:
+            continue
+        entries.append((mtime, entry.path))
+
+    if len(entries) <= limit:
+        return 0
+
+    entries.sort(key=lambda item: (item[0], item[1]))
+    to_remove = entries[: max(0, len(entries) - limit)]
+    removed = 0
+    for _, path in to_remove:
+        try:
+            os.remove(path)
+            removed += 1
+        except OSError as exc:
+            logging.warning("Failed to prune screenshot %s: %s", path, exc)
+    return removed
+
+
 def _ensure_screenshot_counter_locked() -> int:
     global _screenshot_count, _archive_pending
 
@@ -727,6 +762,17 @@ def _save_screenshot(sid: str, img: Image.Image) -> Optional[Tuple[str, bool]]:
         img.save(current_path)
     except Exception:
         logging.warning(f"⚠️ Failed to update current screenshot for '{sid}'")
+
+    if saved:
+        removed = _prune_screenshots_in_dir(target_dir, MAX_SCREENSHOTS_PER_SCREEN)
+        if removed:
+            _register_screenshots_removed(removed)
+            logging.info(
+                "🧹 Pruned %d screenshot(s) from %s (limit %d).",
+                removed,
+                target_dir,
+                MAX_SCREENSHOTS_PER_SCREEN,
+            )
 
     if saved:
         return folder, archive_needed
@@ -801,6 +847,18 @@ def maybe_archive_screenshots(latest_folder: str) -> None:
                 latest_folder,
                 SCREENSHOT_ARCHIVE_MIRROR,
             )
+            archive_dir = os.path.join(SCREENSHOT_ARCHIVE_MIRROR, latest_folder)
+            removed = _prune_screenshots_in_dir(
+                archive_dir,
+                MAX_ARCHIVED_SCREENSHOTS_PER_SCREEN,
+            )
+            if removed:
+                logging.info(
+                    "🧹 Pruned %d archived screenshot(s) from %s (limit %d).",
+                    removed,
+                    archive_dir,
+                    MAX_ARCHIVED_SCREENSHOTS_PER_SCREEN,
+                )
 
 # ─── SIGTERM handler ─────────────────────────────────────────────────────────
 def _handle_sigterm(signum, frame):
