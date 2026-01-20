@@ -14,6 +14,7 @@ Shows the next Chicago Bears game with:
 import datetime
 import os
 import time
+from functools import lru_cache
 from PIL import Image, ImageDraw
 import config
 from config import (
@@ -55,9 +56,14 @@ def _format_game_date(date_text: str) -> str:
 
 
 NFL_LOGO_DIR = os.path.join(config.IMAGES_DIR, "nfl")
-DROP_STEPS = 30
-DROP_STAGGER = 0.4
-DROP_FRAME_DELAY = 0.02
+DROP_STEPS = 18
+DROP_STAGGER = 0.25
+DROP_FRAME_DELAY = 0.01
+
+
+@lru_cache(maxsize=96)
+def _cached_team_logo(abbr: str, logo_size: int) -> Image.Image | None:
+    return load_team_logo(NFL_LOGO_DIR, abbr, height=logo_size, box_size=logo_size)
 
 
 def _ease_out_cubic(t: float) -> float:
@@ -341,7 +347,7 @@ def show_bears_next_season(display, transition=False):
         col = idx % columns_per_side
         y = logos_top + row * (logo_size + row_gap)
         x = col * (subcolumn_width + col_gap) + (subcolumn_width - logo_size) // 2
-        logo = load_team_logo(NFL_LOGO_DIR, abbr, height=logo_size, box_size=logo_size)
+        logo = _cached_team_logo(abbr, logo_size)
         if logo:
             lx, ly = _logo_position(logo, x, y)
             placements_by_row[row].append((logo, lx, ly))
@@ -356,7 +362,7 @@ def show_bears_next_season(display, transition=False):
             + col * (subcolumn_width + col_gap)
             + (subcolumn_width - logo_size) // 2
         )
-        logo = load_team_logo(NFL_LOGO_DIR, abbr, height=logo_size, box_size=logo_size)
+        logo = _cached_team_logo(abbr, logo_size)
         if logo:
             lx, ly = _logo_position(logo, x, y)
             placements_by_row[row].append((logo, lx, ly))
