@@ -41,6 +41,8 @@ from utils import ScreenImage, log_call
 ROUTE_ICON_HEIGHT = 26
 MAP_MARGIN = 6
 LEGEND_GAP = 6
+LEGEND_PADDING = 6
+LEGEND_ROW_GAP = 4
 BACKGROUND_COLOR = get_screen_background_color("travel map", (18, 18, 18))
 MAP_COLOR = (36, 36, 36)
 MAP_NIGHT_BRIGHTNESS = 0.9
@@ -57,6 +59,24 @@ MAP_NIGHT_STYLES = (
     "style=feature:transit|visibility:off",
     "style=feature:water|element:geometry|color:0x0b1218",
 )
+ROUTE_METADATA = {
+    "lake_shore": {
+        "label": "Lake Shore",
+        "icons": [TRAVEL_ICON_LSD],
+        "color": (90, 170, 255),
+    },
+    "kennedy_edens": {
+        "label": "I-90 / I-94",
+        "icons": [TRAVEL_ICON_90, TRAVEL_ICON_94],
+        "color": (186, 140, 255),
+    },
+    "kennedy_294": {
+        "label": "I-90 / I-294",
+        "icons": [TRAVEL_ICON_90, TRAVEL_ICON_294],
+        "color": (255, 160, 100),
+    },
+}
+ROUTE_ORDER = ["lake_shore", "kennedy_edens", "kennedy_294"]
 
 
 def _decode_polyline(polyline: str) -> List[Tuple[float, float]]:
@@ -328,9 +348,14 @@ def _draw_routes(
     route_segments: Dict[str, List[Tuple[List[Tuple[float, float]], Tuple[int, int, int]]]],
     canvas_size: Tuple[int, int],
     map_view: Optional[Tuple[Tuple[float, float], int]] = None,
+    route_colors: Optional[Dict[str, Tuple[int, int, int]]] = None,
+    route_order: Optional[Sequence[str]] = None,
 ) -> None:
     if not route_segments:
         return
+
+    route_colors = route_colors or {}
+    route_order = list(route_order) if route_order else list(route_segments.keys())
 
     if map_view:
         center, zoom = map_view
@@ -340,19 +365,34 @@ def _draw_routes(
         top_left, bottom_right = _bounds(all_points)
         projector = lambda pt: _project(pt, top_left, bottom_right, *canvas_size)
 
-    for segments in route_segments.values():
+    for key in route_order:
+        segments = route_segments.get(key, [])
+        if not segments:
+            continue
+
+        outline_color = route_colors.get(key, (200, 200, 200))
+        for points, _ in segments:
+            if len(points) < 2:
+                continue
+            projected = [projector(pt) for pt in points]
+            draw.line(projected, fill=outline_color, width=8, joint="curve")
+
         for points, color in segments:
             if len(points) < 2:
                 continue
             projected = [projector(pt) for pt in points]
-            draw.line(projected, fill=color, width=5, joint="curve")
+            draw.line(projected, fill=color, width=4, joint="curve")
 
 
 def _compose_legend_entry(
-    label: str, value: str, icon_paths: Sequence[str], fill: Tuple[int, int, int]
+    label: str,
+    value: str,
+    icon_paths: Sequence[str],
+    swatch_color: Tuple[int, int, int],
+    value_color: Tuple[int, int, int],
 ) -> Image.Image:
     icon = _compose_icons(icon_paths, height=ROUTE_ICON_HEIGHT)
-    swatch = Image.new("RGBA", (icon.width, icon.height), fill + (255,))
+    swatch = Image.new("RGBA", (icon.width, icon.height), swatch_color + (255,))
     swatch.putalpha(128)
     swatch = swatch.convert("RGB")
 
@@ -375,43 +415,98 @@ def _compose_legend_entry(
         (width - value_w - padding, (entry_height - value_h) // 2),
         value,
         font=FONT_TRAVEL_VALUE,
-        fill=fill,
+        fill=value_color,
     )
 
     return canvas
 
 
+def _compose_legend(routes: Dict[str, Optional[dict]]) -> Optional[Image.Image]:
+    entries: List[Image.Image] = []
+    for key in ROUTE_ORDER:
+        route = routes.get(key)
+        meta = ROUTE_METADATA.get(key)
+        if not meta:
+            continue
+        time_result = TravelTimeResult.from_route(route)
+        value = time_result.normalized()
+        value_color = time_result.color or (200, 200, 200)
+        entry = _compose_legend_entry(
+            meta["label"],
+            value,
+            meta["icons"],
+            meta["color"],
+            value_color,
+        )
+        entries.append(entry)
+
+    if not entries:
+        return None
+
+    rows: List[List[Image.Image]] = [[]]
+    row_widths = [0]
+    row_heights = [0]
+    max_width = WIDTH - 2 * LEGEND_PADDING
+
+    for entry in entries:
+        entry_width = entry.width
+        if rows[-1] and row_widths[-1] + LEGEND_GAP + entry_width > max_width:
+            rows.append([])
+            row_widths.append(0)
+            row_heights.append(0)
+        if rows[-1]:
+            row_widths[-1] += LEGEND_GAP
+        rows[-1].append(entry)
+        row_widths[-1] += entry_width
+        row_heights[-1] = max(row_heights[-1], entry.height)
+
+    legend_height = (
+        sum(row_heights) + LEGEND_PADDING * 2 + LEGEND_ROW_GAP * (len(rows) - 1)
+    )
+    legend_width = min(max(row_widths) + LEGEND_PADDING * 2, WIDTH)
+    legend = Image.new("RGB", (legend_width, legend_height), BACKGROUND_COLOR)
+
+    y = LEGEND_PADDING
+    for row, row_height, row_width in zip(rows, row_heights, row_widths):
+        x = LEGEND_PADDING + max(0, (legend_width - 2 * LEGEND_PADDING - row_width) // 2)
+        for entry in row:
+            legend.paste(entry, (x, y + (row_height - entry.height) // 2))
+            x += entry.width + LEGEND_GAP
+        y += row_height + LEGEND_ROW_GAP
+
+    return legend
+
+
 def _compose_travel_map(routes: Dict[str, Optional[dict]]) -> Image.Image:
-    route_order = ["lake_shore", "kennedy_edens", "kennedy_294"]
     route_segments = _extract_route_segments(routes)
     brightness = MAP_NIGHT_BRIGHTNESS
 
-    base_width = WIDTH // 3
-    map_widths = [base_width, base_width, WIDTH - 2 * base_width]
-    map_images: List[Image.Image] = []
+    polylines = [points for segments in route_segments.values() for points, _ in segments]
+    map_view = _select_map_view(polylines, (WIDTH, HEIGHT), (LATITUDE, LONGITUDE))
 
-    for key, map_width in zip(route_order, map_widths):
-        segments = route_segments.get(key, [])
-        polylines = [points for points, _ in segments]
-        map_view = _select_map_view(polylines, (map_width, HEIGHT), (LATITUDE, LONGITUDE))
+    base_map = _fetch_base_map(map_view[0], map_view[1], (WIDTH, HEIGHT))
+    if base_map is None:
+        map_canvas = Image.new("RGB", (WIDTH, HEIGHT), MAP_COLOR)
+    else:
+        map_canvas = ImageEnhance.Brightness(base_map).enhance(brightness)
 
-        base_map = _fetch_base_map(map_view[0], map_view[1], (map_width, HEIGHT))
-        if base_map is None:
-            map_canvas = Image.new("RGB", (map_width, HEIGHT), MAP_COLOR)
-        else:
-            map_canvas = ImageEnhance.Brightness(base_map).enhance(brightness)
+    draw = ImageDraw.Draw(map_canvas)
+    _draw_routes(
+        draw,
+        route_segments,
+        (WIDTH, HEIGHT),
+        map_view=map_view,
+        route_colors={key: meta["color"] for key, meta in ROUTE_METADATA.items()},
+        route_order=ROUTE_ORDER,
+    )
 
-        draw = ImageDraw.Draw(map_canvas)
-        _draw_routes(draw, {key: segments}, (map_width, HEIGHT), map_view=map_view)
-        map_images.append(map_canvas)
+    legend = _compose_legend(routes)
+    if legend:
+        legend_x = max(0, (WIDTH - legend.width) // 2)
+        legend_y = max(0, HEIGHT - legend.height - MAP_MARGIN)
+        map_canvas.paste(legend, (legend_x, legend_y))
 
-    canvas = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND_COLOR)
-    x_offset = 0
-    for map_image in map_images:
-        canvas.paste(map_image, (x_offset, 0))
-        x_offset += map_image.width
-
-    return canvas
+    return map_canvas
 
 
 @log_call
