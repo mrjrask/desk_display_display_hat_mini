@@ -201,3 +201,75 @@ def show_bears_next_game(display, transition=False):
     display.image(img)
     display.show()
     return None
+
+
+def show_bears_next_season(display, transition=False):
+    title = "2026 Bears Opponents"
+    background = get_screen_background_color("bears next season", (0, 0, 0))
+    img = Image.new("RGB", (config.WIDTH, config.HEIGHT), background)
+    draw = ImageDraw.Draw(img)
+
+    home_opponents = ["det", "gb", "min", "tb", "phi", "jax", "nyj", "ne", "no"]
+    away_opponents = ["det", "gb", "min", "buf", "mia", "atl", "car", "sea"]
+
+    title_w, title_h = _text_size(draw, title, font=config.FONT_TITLE_SPORTS)
+    draw.text(
+        ((config.WIDTH - title_w) // 2, 0),
+        title,
+        font=config.FONT_TITLE_SPORTS,
+        fill=(255, 255, 255),
+    )
+
+    column_width = config.WIDTH // 2
+    header_y = title_h + 4
+    header_font = config.FONT_DATE_SPORTS
+    home_label = "Home"
+    away_label = "Away"
+    home_w, home_h = _text_size(draw, home_label, font=header_font)
+    away_w, away_h = _text_size(draw, away_label, font=header_font)
+
+    draw.text(
+        ((column_width - home_w) // 2, header_y),
+        home_label,
+        font=header_font,
+        fill=(255, 255, 255),
+    )
+    draw.text(
+        (column_width + (column_width - away_w) // 2, header_y),
+        away_label,
+        font=header_font,
+        fill=(255, 255, 255),
+    )
+
+    logos_top = header_y + max(home_h, away_h) + 4
+    row_gap = 2
+    rows = max(len(home_opponents), len(away_opponents))
+    available_h = config.HEIGHT - logos_top - 2
+    logo_size = max(
+        1,
+        min(column_width - 8, (available_h - row_gap * (rows - 1)) // rows),
+    )
+
+    def _paste_logo(logo, x, y):
+        if not logo:
+            return
+        lx = x + (logo_size - logo.width) // 2
+        ly = y + (logo_size - logo.height) // 2
+        img.paste(logo, (lx, ly), logo)
+
+    for idx, abbr in enumerate(home_opponents):
+        y = logos_top + idx * (logo_size + row_gap)
+        logo = load_team_logo(NFL_LOGO_DIR, abbr, height=logo_size, box_size=logo_size)
+        _paste_logo(logo, (column_width - logo_size) // 2, y)
+
+    for idx, abbr in enumerate(away_opponents):
+        y = logos_top + idx * (logo_size + row_gap)
+        logo = load_team_logo(NFL_LOGO_DIR, abbr, height=logo_size, box_size=logo_size)
+        _paste_logo(logo, column_width + (column_width - logo_size) // 2, y)
+
+    if transition:
+        return img
+
+    display.image(img)
+    display.show()
+    return None
