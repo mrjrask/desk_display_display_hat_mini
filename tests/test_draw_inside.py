@@ -29,6 +29,14 @@ def test_build_metric_entries_prefers_inhg():
     assert "inHg" in first_metric["value"]
 
 
+def test_build_metric_entries_omits_pressure_hpa():
+    data = {"pressure_hpa": 1013.2}
+
+    metrics = _build_metric_entries(data)
+
+    assert metrics == []
+
+
 def test_build_voc_tile_includes_bme680_providers():
     data = {"voc_ohms": 12_000.0}
 

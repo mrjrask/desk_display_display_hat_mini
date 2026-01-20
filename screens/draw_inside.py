@@ -1495,8 +1495,6 @@ def _format_generic_metric_value(key: str, value: float) -> str:
         return f"{value:.1f}%"
     if key_lower.endswith("_inhg"):
         return f"{value:.2f} inHg"
-    if key_lower.endswith("_hpa"):
-        return f"{value:.1f} hPa"
     magnitude = abs(value)
     if magnitude >= 1000:
         return f"{value:,.0f}"
@@ -1587,7 +1585,6 @@ def _build_metric_entries(data: Dict[str, Optional[float]]) -> List[Dict[str, An
         # Prefer inHg for consistency with the standalone Pimoroni BME280 CLI
         # script; fall back to metric units if necessary.
         ("pressure_inhg", "Pressure", lambda v: f"{v:.2f} inHg", config.INSIDE_CHIP_AMBER, "pressure"),
-        ("pressure_hpa", "Pressure", lambda v: f"{v:.1f} hPa", config.INSIDE_CHIP_AMBER, "pressure"),
         ("pressure_pa", "Pressure", lambda v: f"{v:.0f} Pa", config.INSIDE_CHIP_AMBER, "pressure"),
         ("voc_ohms", "VOC", format_voc_ohms, config.INSIDE_CHIP_PURPLE, "voc"),
         ("voc_index", "VOC Index", lambda v: f"{v:.0f}", config.INSIDE_CHIP_PURPLE, "voc"),
@@ -1606,7 +1603,7 @@ def _build_metric_entries(data: Dict[str, Optional[float]]) -> List[Dict[str, An
         if group:
             used_groups.add(group)
 
-    skip_keys = {"temp", "temperature"}
+    skip_keys = {"temp", "temperature", "pressure_hpa"}
     extra_palette_index = 0
     for key in sorted(data.keys()):
         if key in used_keys or key == "temp_f":
@@ -1756,9 +1753,10 @@ def draw_inside(display, transition: bool=False):
     content_bottom = H - bottom_margin
     content_height = max(1, content_bottom - content_top)
 
-    metric_count = len(metrics) + (1 if voc_tile else 0)
+    metric_count = len(metrics)
     _, grid_rows = _metric_grid_dimensions(metric_count)
-    if metric_count:
+    total_rows = grid_rows + (1 if voc_tile else 0)
+    if metric_count or voc_tile:
         temp_ratio = max(0.42, 0.58 - 0.03 * min(metric_count, 6))
         min_temp = max(84, 118 - 8 * min(metric_count, 6))
     else:
@@ -1766,12 +1764,12 @@ def draw_inside(display, transition: bool=False):
         min_temp = 128
 
     temp_height = min(content_height, max(min_temp, int(content_height * temp_ratio)))
-    metric_block_gap = 12 if metric_count else 0
-    if metric_count:
+    metric_block_gap = 12 if (metric_count or voc_tile) else 0
+    if metric_count or voc_tile:
         min_metric_row_height = 44
-        min_metric_gap = 10 if grid_rows > 1 else 0
+        min_metric_gap = 10 if total_rows > 1 else 0
         target_metrics_height = (
-            grid_rows * min_metric_row_height + max(0, grid_rows - 1) * min_metric_gap
+            total_rows * min_metric_row_height + max(0, total_rows - 1) * min_metric_gap
         )
         preferred_temp_cap = content_height - (target_metrics_height + metric_block_gap)
         min_temp_floor = min(54, content_height)
@@ -1798,37 +1796,67 @@ def draw_inside(display, transition: bool=False):
         label_base,
     )
 
-    if metric_count:
+    if metric_count or voc_tile:
         metrics_rect = (
             side_pad,
             min(content_bottom, temp_rect[3] + metric_block_gap),
             W - side_pad,
             content_bottom,
         )
-        total_tiles = metric_count
-        cells = _metric_grid_cells(metrics_rect, total_tiles)
-        metric_cells = cells[: len(metrics)] if metrics else []
-        if metrics and metric_cells:
-            _draw_metric_rows(
-                draw,
-                metrics_rect,
-                metrics,
-                label_base,
-                value_base,
-                cells=metric_cells,
+        metrics_x0, metrics_y0, metrics_x1, metrics_y1 = metrics_rect
+        metrics_height = max(0, metrics_y1 - metrics_y0)
+        total_rows = grid_rows + (1 if voc_tile else 0)
+        if total_rows > 1:
+            desired_v_gap = max(8, metrics_height // 30)
+            max_v_gap = max(0, (metrics_height - total_rows) // (total_rows - 1))
+            v_gap = min(desired_v_gap, max_v_gap)
+        else:
+            v_gap = 0
+        available_height = max(total_rows, metrics_height - v_gap * (total_rows - 1))
+        row_height = max(44, available_height // total_rows) if total_rows else 0
+        if total_rows and row_height * total_rows + v_gap * (total_rows - 1) > metrics_height:
+            row_height = max(1, available_height // total_rows)
+        grid_height = min(metrics_height, row_height * total_rows + v_gap * (total_rows - 1)) if total_rows else 0
+        start_y = metrics_y0 + max(0, (metrics_height - grid_height) // 2)
+
+        if metric_count and grid_rows:
+            metrics_area_height = row_height * grid_rows + v_gap * max(0, grid_rows - 1)
+            metrics_area_rect = (
+                metrics_x0,
+                start_y,
+                metrics_x1,
+                min(metrics_y1, start_y + metrics_area_height),
             )
-        if voc_tile and cells:
-            voc_rect = cells[-1]
-            _draw_voc_tile(
-                draw,
-                voc_rect,
-                voc_tile["label"],
-                voc_tile["value"],
-                voc_tile["descriptor"],
-                voc_tile["score"],
-                label_base,
-                value_base,
+            metric_cells = _metric_grid_cells(metrics_area_rect, metric_count)
+            if metric_cells:
+                _draw_metric_rows(
+                    draw,
+                    metrics_area_rect,
+                    metrics,
+                    label_base,
+                    value_base,
+                    cells=metric_cells,
+                )
+
+        if voc_tile and total_rows:
+            voc_top = start_y + (row_height * grid_rows) + (v_gap * max(0, grid_rows))
+            voc_rect = (
+                metrics_x0,
+                min(metrics_y1, voc_top),
+                metrics_x1,
+                min(metrics_y1, voc_top + row_height),
             )
+            if voc_rect[3] > voc_rect[1]:
+                _draw_voc_tile(
+                    draw,
+                    voc_rect,
+                    voc_tile["label"],
+                    voc_tile["value"],
+                    voc_tile["descriptor"],
+                    voc_tile["score"],
+                    label_base,
+                    value_base,
+                )
 
     if transition:
         return img
