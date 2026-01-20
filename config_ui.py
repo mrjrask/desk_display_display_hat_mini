@@ -139,8 +139,14 @@ def _build_screen_entries(
     if not isinstance(style_screens, dict):
         style_screens = {}
 
+    ordered_screen_ids = list(SCREEN_IDS)
+    for screen_id in screens:
+        if screen_id not in SCREEN_IDS:
+            ordered_screen_ids.append(screen_id)
+
     entries: List[Dict[str, Any]] = []
-    for screen_id, raw in screens.items():
+    for screen_id in ordered_screen_ids:
+        raw = screens.get(screen_id, 0)
         entry: Dict[str, Any] = {
             "id": screen_id,
             "frequency": 0,
