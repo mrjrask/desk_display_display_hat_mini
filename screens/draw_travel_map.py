@@ -18,6 +18,8 @@ from PIL import Image, ImageDraw, ImageEnhance
 from config import (
     FONT_TRAVEL_HEADER,
     FONT_TRAVEL_VALUE,
+    FONT_WEATHER_DETAILS_SMALL,
+    FONT_WEATHER_DETAILS_SMALL_BOLD,
     GOOGLE_MAPS_API_KEY,
     HEIGHT,
     LATITUDE,
@@ -40,9 +42,12 @@ from utils import ScreenImage, log_call
 
 ROUTE_ICON_HEIGHT = 26
 MAP_MARGIN = 6
-LEGEND_GAP = 6
-LEGEND_PADDING = 6
-LEGEND_ROW_GAP = 4
+LEGEND_GAP = 4
+LEGEND_PADDING = 4
+LEGEND_ROW_GAP = 2
+LEGEND_ICON_HEIGHT = 18
+LEGEND_LABEL_FONT = FONT_WEATHER_DETAILS_SMALL
+LEGEND_VALUE_FONT = FONT_WEATHER_DETAILS_SMALL_BOLD
 BACKGROUND_COLOR = get_screen_background_color("travel map", (18, 18, 18))
 MAP_COLOR = (36, 36, 36)
 MAP_NIGHT_BRIGHTNESS = 0.9
@@ -62,16 +67,19 @@ MAP_NIGHT_STYLES = (
 ROUTE_METADATA = {
     "lake_shore": {
         "label": "Lake Shore",
+        "short_label": "LSD",
         "icons": [TRAVEL_ICON_LSD],
         "color": (90, 170, 255),
     },
     "kennedy_edens": {
         "label": "I-90 / I-94",
+        "short_label": "90/94",
         "icons": [TRAVEL_ICON_90, TRAVEL_ICON_94],
         "color": (186, 140, 255),
     },
     "kennedy_294": {
         "label": "I-90 / I-294",
+        "short_label": "90/294",
         "icons": [TRAVEL_ICON_90, TRAVEL_ICON_294],
         "color": (255, 160, 100),
     },
@@ -390,17 +398,21 @@ def _compose_legend_entry(
     icon_paths: Sequence[str],
     swatch_color: Tuple[int, int, int],
     value_color: Tuple[int, int, int],
+    *,
+    label_font=FONT_TRAVEL_HEADER,
+    value_font=FONT_TRAVEL_VALUE,
+    icon_height: int = ROUTE_ICON_HEIGHT,
 ) -> Image.Image:
-    icon = _compose_icons(icon_paths, height=ROUTE_ICON_HEIGHT)
+    icon = _compose_icons(icon_paths, height=icon_height)
     swatch = Image.new("RGBA", (icon.width, icon.height), swatch_color + (255,))
     swatch.putalpha(128)
     swatch = swatch.convert("RGB")
 
-    entry_height = max(icon.height, 24)
-    padding = 6
+    entry_height = max(icon.height, 20)
+    padding = 4
     measurement = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-    label_w, label_h = measurement.textsize(label, font=FONT_TRAVEL_HEADER)
-    value_w, value_h = measurement.textsize(value, font=FONT_TRAVEL_VALUE)
+    label_w, label_h = measurement.textsize(label, font=label_font)
+    value_w, value_h = measurement.textsize(value, font=value_font)
 
     width = max(icon.width, label_w + value_w + padding) + padding * 2
     canvas = Image.new("RGB", (width, entry_height), (0, 0, 0))
@@ -410,11 +422,11 @@ def _compose_legend_entry(
 
     draw = ImageDraw.Draw(canvas)
     text_y = (entry_height - label_h) // 2
-    draw.text((icon.width + padding * 2, text_y), label, font=FONT_TRAVEL_HEADER, fill=(230, 230, 230))
+    draw.text((icon.width + padding * 2, text_y), label, font=label_font, fill=(230, 230, 230))
     draw.text(
         (width - value_w - padding, (entry_height - value_h) // 2),
         value,
-        font=FONT_TRAVEL_VALUE,
+        font=value_font,
         fill=value_color,
     )
 
@@ -432,11 +444,14 @@ def _compose_legend(routes: Dict[str, Optional[dict]]) -> Optional[Image.Image]:
         value = time_result.normalized()
         value_color = time_result.color or (200, 200, 200)
         entry = _compose_legend_entry(
-            meta["label"],
+            meta.get("short_label") or meta["label"],
             value,
             meta["icons"],
             meta["color"],
             value_color,
+            label_font=LEGEND_LABEL_FONT,
+            value_font=LEGEND_VALUE_FONT,
+            icon_height=LEGEND_ICON_HEIGHT,
         )
         entries.append(entry)
 
@@ -502,8 +517,8 @@ def _compose_travel_map(routes: Dict[str, Optional[dict]]) -> Image.Image:
 
     legend = _compose_legend(routes)
     if legend:
-        legend_x = max(0, (WIDTH - legend.width) // 2)
-        legend_y = max(0, HEIGHT - legend.height - MAP_MARGIN)
+        legend_x = max(0, WIDTH - legend.width - MAP_MARGIN)
+        legend_y = MAP_MARGIN
         map_canvas.paste(legend, (legend_x, legend_y))
 
     return map_canvas
