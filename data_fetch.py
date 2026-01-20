@@ -510,7 +510,7 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
         "wind_gust": _measurement_value(current_raw.get("windGust")),
         "wind_deg": current_raw.get("windDirection"),
         "humidity": humidity_pct,
-        "pressure": current_raw.get("pressure"),
+        "pressure": _measurement_value(current_raw.get("pressure")),
         "uvi": current_raw.get("uvIndex"),
         "sunrise": sunrise,
         "sunset": sunset,
