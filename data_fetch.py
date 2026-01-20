@@ -15,6 +15,7 @@ import os
 import re
 import socket
 import time
+from collections import deque
 from typing import Any, Dict, List, Optional, Tuple
 
 import pytz
@@ -72,6 +73,10 @@ _weatherkit_token: Optional[str] = None
 _weatherkit_token_exp: Optional[datetime.datetime] = None
 _weatherkit_key_cache: Optional[Any] = None
 _owm_backoff_until: Optional[datetime.datetime] = None
+_PRESSURE_TREND_WINDOW_SECONDS = 3 * 60 * 60
+_PRESSURE_TREND_PRUNE_SECONDS = 6 * 60 * 60
+_PRESSURE_TREND_THRESHOLD_HPA = 0.5
+_PRESSURE_HISTORY: deque[tuple[float, float]] = deque()
 # Cache statsapi DNS availability to avoid repeated slow lookups
 _statsapi_dns_available: Optional[bool] = None
 _statsapi_dns_checked_at: Optional[float] = None
@@ -104,6 +109,44 @@ def _store_team_standings_cache(cache_key: str, data: Optional[dict], *, success
         "success": success,
         "fetched_at": time.time(),
     }
+
+
+def _update_pressure_trend(timestamp: Optional[float], pressure_hpa: Optional[float]) -> Optional[str]:
+    if pressure_hpa is None:
+        return None
+
+    try:
+        pressure_val = float(pressure_hpa)
+    except (TypeError, ValueError):
+        return None
+
+    now_ts = float(timestamp) if timestamp is not None else time.time()
+    if _PRESSURE_HISTORY and now_ts < _PRESSURE_HISTORY[-1][0]:
+        now_ts = _PRESSURE_HISTORY[-1][0] + 0.001
+
+    if not _PRESSURE_HISTORY or _PRESSURE_HISTORY[-1] != (now_ts, pressure_val):
+        _PRESSURE_HISTORY.append((now_ts, pressure_val))
+
+    while _PRESSURE_HISTORY and now_ts - _PRESSURE_HISTORY[0][0] > _PRESSURE_TREND_PRUNE_SECONDS:
+        _PRESSURE_HISTORY.popleft()
+
+    target_time = now_ts - _PRESSURE_TREND_WINDOW_SECONDS
+    baseline = None
+    for ts, val in _PRESSURE_HISTORY:
+        if ts <= target_time:
+            baseline = val
+        else:
+            break
+
+    if baseline is None:
+        return None
+
+    delta = pressure_val - baseline
+    if delta > _PRESSURE_TREND_THRESHOLD_HPA:
+        return "rising"
+    if delta < -_PRESSURE_TREND_THRESHOLD_HPA:
+        return "falling"
+    return "steady"
 
 # -----------------------------------------------------------------------------
 # WEATHER — Apple WeatherKit primary, OpenWeatherMap secondary
@@ -474,6 +517,7 @@ def _normalise_weatherkit_response(data: dict[str, Any]) -> Optional[dict[str, A
         "dt": _parse_iso_timestamp(current_raw.get("asOf")),
         "clouds": int(round(float(current_raw.get("cloudCover")) * 100)) if current_raw.get("cloudCover") is not None else None,
     }
+    current["pressure_trend"] = _update_pressure_trend(current.get("dt"), current.get("pressure"))
 
     daily: list[dict[str, Any]] = []
     for day in daily_raw:
@@ -608,6 +652,7 @@ def _normalise_openweathermap_response(data: dict[str, Any]) -> Optional[dict[st
         "dt": current_raw.get("dt"),
         "clouds": current_raw.get("clouds"),
     }
+    current["pressure_trend"] = _update_pressure_trend(current.get("dt"), current.get("pressure"))
 
     daily: list[dict[str, Any]] = []
     for day in daily_raw:

@@ -73,6 +73,11 @@ ALERT_ICON_COLORS = {
     "hazard": (255, 215, 0),
 }
 SUN_EVENT_GRACE = datetime.timedelta(minutes=20)
+PRESSURE_TREND_SYMBOLS = {
+    "rising": ("↑", (0, 255, 0)),
+    "falling": ("↓", (255, 0, 0)),
+    "steady": ("↔", (255, 255, 255)),
+}
 
 
 def _render_stat_text(parts):
@@ -851,11 +856,31 @@ def draw_weather_screen_2(display, weather, transition=False):
     if wind_dir:
         wind_value = f"{wind_value} {wind_dir}"
 
+    pressure_raw = current.get("pressure")
+    pressure_inhg = None
+    if pressure_raw is not None:
+        try:
+            pressure_inhg = float(pressure_raw) * 0.0338639
+        except (TypeError, ValueError):
+            pressure_inhg = None
+    pressure_text = f"{pressure_inhg:.2f} inHg" if pressure_inhg is not None else "—"
+    pressure_trend = current.get("pressure_trend")
+    pressure_value = pressure_text
+    if pressure_trend in PRESSURE_TREND_SYMBOLS:
+        symbol, symbol_color = PRESSURE_TREND_SYMBOLS[pressure_trend]
+        pressure_value = _render_stat_text(
+            [
+                (pressure_text, FONT_WEATHER_DETAILS, (255, 255, 255)),
+                (" ", FONT_WEATHER_DETAILS, (255, 255, 255)),
+                (symbol, FONT_WEATHER_DETAILS, symbol_color),
+            ]
+        )
+
     items += [
         ("Wind:",     wind_value),
         ("Gust:",     f"{round(current.get('wind_gust',0))} mph"),
         ("Humidity:", f"{current.get('humidity',0)}%"),
-        ("Pressure:", f"{round(current.get('pressure',0)*0.0338639,2)} inHg"),
+        ("Pressure:", pressure_value),
     ]
 
     uvi = round(current.get("uvi", 0))
@@ -872,9 +897,12 @@ def draw_weather_screen_2(display, weather, transition=False):
     for it in items:
         lbl, val = it[0], it[1]
         h1 = draw.textsize(lbl, font=FONT_WEATHER_DETAILS_BOLD)[1]
-        h2 = draw.textsize(val, font=FONT_WEATHER_DETAILS)[1]
-        row_h = max(h1, h2)
-        row_metrics.append((lbl, val, row_h, h1, h2, it[2] if len(it)==3 else (255,255,255)))
+        if isinstance(val, Image.Image):
+            val_w, val_h = val.size
+        else:
+            val_w, val_h = draw.textsize(val, font=FONT_WEATHER_DETAILS)
+        row_h = max(h1, val_h)
+        row_metrics.append((lbl, val, row_h, h1, val_h, val_w, it[2] if len(it)==3 else (255,255,255)))
         total_h += row_h
 
     # vertical spacing
@@ -882,17 +910,19 @@ def draw_weather_screen_2(display, weather, transition=False):
     y = space
 
     # render each row, vertically centering label & value
-    for lbl, val, row_h, h_lbl, h_val, color in row_metrics:
+    for lbl, val, row_h, h_lbl, h_val, v_w, color in row_metrics:
         lw, _ = draw.textsize(lbl, font=FONT_WEATHER_DETAILS_BOLD)
-        vw, _ = draw.textsize(val, font=FONT_WEATHER_DETAILS)
-        row_w = lw + 4 + vw
+        row_w = lw + 4 + v_w
         x0    = (WIDTH - row_w)//2
 
         y_lbl = y + (row_h - h_lbl)//2
         y_val = y + (row_h - h_val)//2
 
         draw.text((x0,          y_lbl), lbl, font=FONT_WEATHER_DETAILS_BOLD, fill=(255,255,255))
-        draw.text((x0 + lw + 4, y_val), val, font=FONT_WEATHER_DETAILS,      fill=color)
+        if isinstance(val, Image.Image):
+            img.paste(val, (x0 + lw + 4, y_val), val)
+        else:
+            draw.text((x0 + lw + 4, y_val), val, font=FONT_WEATHER_DETAILS,      fill=color)
         y += row_h + space
 
     _draw_alert_indicator(draw, severity)
