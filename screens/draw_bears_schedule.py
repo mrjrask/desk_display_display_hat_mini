@@ -13,6 +13,7 @@ Shows the next Chicago Bears game with:
 
 import datetime
 import os
+import time
 from PIL import Image, ImageDraw
 import config
 from config import (
@@ -54,6 +55,78 @@ def _format_game_date(date_text: str) -> str:
 
 
 NFL_LOGO_DIR = os.path.join(config.IMAGES_DIR, "nfl")
+DROP_STEPS = 30
+DROP_STAGGER = 0.4
+DROP_FRAME_DELAY = 0.02
+
+
+def _ease_out_cubic(t: float) -> float:
+    if t <= 0.0:
+        return 0.0
+    if t >= 1.0:
+        return 1.0
+    inv = 1.0 - t
+    return 1.0 - inv * inv * inv
+
+
+def _animate_logo_drop(display, base: Image.Image, row_positions):
+    has_logos = any(row for row in row_positions)
+    if not has_logos:
+        return
+
+    steps = max(2, DROP_STEPS)
+    stagger = max(1, int(round(steps * DROP_STAGGER)))
+
+    schedule = []
+    start_step = 0
+    for row_idx in range(len(row_positions) - 1, -1, -1):
+        drops = row_positions[row_idx]
+        if not drops:
+            continue
+        schedule.append((start_step, drops))
+        start_step += stagger
+
+    if not schedule:
+        return
+
+    total_duration = schedule[-1][0] + steps + 1
+    placed = []
+    completed = [False] * len(schedule)
+
+    for current_step in range(total_duration):
+        frame_start = time.time()
+
+        for idx, (start, drops) in enumerate(schedule):
+            if current_step >= start + steps and not completed[idx]:
+                placed.extend(drops)
+                completed[idx] = True
+
+        frame = base.copy()
+        for logo, x0, y0 in placed:
+            frame.paste(logo, (x0, y0), logo)
+
+        for idx, (start, drops) in enumerate(schedule):
+            progress = current_step - start
+            if progress < 0 or progress >= steps:
+                continue
+
+            frac = progress / (steps - 1) if steps > 1 else 1.0
+            eased = _ease_out_cubic(frac)
+            for logo, x0, y_target in drops:
+                start_y = -logo.height
+                y_pos = int(start_y + (y_target - start_y) * eased)
+                if y_pos > y_target:
+                    y_pos = y_target
+                frame.paste(logo, (x0, y_pos), logo)
+
+        display.image(frame)
+        if hasattr(display, "show"):
+            display.show()
+
+        elapsed = time.time() - frame_start
+        sleep_time = max(0, DROP_FRAME_DELAY - elapsed)
+        if sleep_time > 0:
+            time.sleep(sleep_time)
 def show_bears_next_game(display, transition=False):
     game = next_game_from_schedule(BEARS_SCHEDULE)
     title = "Next for Da Bears:"
@@ -243,33 +316,60 @@ def show_bears_next_season(display, transition=False):
 
     logos_top = header_y + max(home_h, away_h) + 4
     row_gap = 2
-    rows = max(len(home_opponents), len(away_opponents))
+    col_gap = 4
+    columns_per_side = 2
+    home_rows = (len(home_opponents) + columns_per_side - 1) // columns_per_side
+    away_rows = (len(away_opponents) + columns_per_side - 1) // columns_per_side
+    rows = max(home_rows, away_rows)
     available_h = config.HEIGHT - logos_top - 2
+    subcolumn_width = max(1, (column_width - col_gap) // columns_per_side)
     logo_size = max(
         1,
-        min(column_width - 8, (available_h - row_gap * (rows - 1)) // rows),
+        min(subcolumn_width, (available_h - row_gap * (rows - 1)) // rows),
     )
 
-    def _paste_logo(logo, x, y):
-        if not logo:
-            return
+    def _logo_position(logo, x, y):
         lx = x + (logo_size - logo.width) // 2
         ly = y + (logo_size - logo.height) // 2
-        img.paste(logo, (lx, ly), logo)
+        return lx, ly
+
+    placements_by_row = [[] for _ in range(rows)]
+    placements = []
 
     for idx, abbr in enumerate(home_opponents):
-        y = logos_top + idx * (logo_size + row_gap)
+        row = idx // columns_per_side
+        col = idx % columns_per_side
+        y = logos_top + row * (logo_size + row_gap)
+        x = col * (subcolumn_width + col_gap) + (subcolumn_width - logo_size) // 2
         logo = load_team_logo(NFL_LOGO_DIR, abbr, height=logo_size, box_size=logo_size)
-        _paste_logo(logo, (column_width - logo_size) // 2, y)
+        if logo:
+            lx, ly = _logo_position(logo, x, y)
+            placements_by_row[row].append((logo, lx, ly))
+            placements.append((logo, lx, ly))
 
     for idx, abbr in enumerate(away_opponents):
-        y = logos_top + idx * (logo_size + row_gap)
+        row = idx // columns_per_side
+        col = idx % columns_per_side
+        y = logos_top + row * (logo_size + row_gap)
+        x = (
+            column_width
+            + col * (subcolumn_width + col_gap)
+            + (subcolumn_width - logo_size) // 2
+        )
         logo = load_team_logo(NFL_LOGO_DIR, abbr, height=logo_size, box_size=logo_size)
-        _paste_logo(logo, column_width + (column_width - logo_size) // 2, y)
+        if logo:
+            lx, ly = _logo_position(logo, x, y)
+            placements_by_row[row].append((logo, lx, ly))
+            placements.append((logo, lx, ly))
+
+    final_img = img.copy()
+    for logo, lx, ly in placements:
+        final_img.paste(logo, (lx, ly), logo)
 
     if transition:
-        return img
+        return final_img
 
-    display.image(img)
+    _animate_logo_drop(display, img, placements_by_row)
+    display.image(final_img)
     display.show()
     return None
