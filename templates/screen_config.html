@@ -259,6 +259,7 @@
     const errorBox = document.getElementById("errorBox");
     const hideZeroFreqToggle = document.getElementById("hideZeroFreq");
     const draftStorageKey = "screen-config-draft";
+    let isDirty = false;
 
     function getDragAfterElement(container, y) {
       const draggableElements = [...container.querySelectorAll(".screen-row:not(.dragging)")];
@@ -301,6 +302,10 @@
         updateZeroFrequencyVisibility();
       }
     });
+
+    if (hideZeroFreqToggle) {
+      hideZeroFreqToggle.addEventListener("change", updateZeroFrequencyVisibility);
+    }
 
     function showError(message) {
       errorBox.textContent = message;
@@ -513,6 +518,7 @@
         clearDraft();
       }
     }
+    updateZeroFrequencyVisibility();
   </script>
 </body>
 </html>
