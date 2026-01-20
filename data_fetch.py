@@ -76,6 +76,34 @@ _owm_backoff_until: Optional[datetime.datetime] = None
 _statsapi_dns_available: Optional[bool] = None
 _statsapi_dns_checked_at: Optional[float] = None
 _STATSAPI_DNS_RECHECK_SECONDS = 600
+# Cache team standings to avoid repeated slow API calls.
+_TEAM_STANDINGS_CACHE: dict[str, dict[str, Any]] = {}
+_TEAM_STANDINGS_CACHE_SUCCESS_SECONDS = 300
+_TEAM_STANDINGS_CACHE_FAILURE_SECONDS = 60
+_TEAM_STANDINGS_TIMEOUT = (3.05, 5.0)
+
+
+def _get_cached_team_standings(cache_key: str) -> tuple[Optional[dict], bool]:
+    entry = _TEAM_STANDINGS_CACHE.get(cache_key)
+    if not entry:
+        return None, False
+
+    ttl = (
+        _TEAM_STANDINGS_CACHE_SUCCESS_SECONDS
+        if entry.get("success")
+        else _TEAM_STANDINGS_CACHE_FAILURE_SECONDS
+    )
+    if time.time() - entry.get("fetched_at", 0) < ttl:
+        return entry.get("data"), True
+    return None, False
+
+
+def _store_team_standings_cache(cache_key: str, data: Optional[dict], *, success: bool) -> None:
+    _TEAM_STANDINGS_CACHE[cache_key] = {
+        "data": data,
+        "success": success,
+        "fetched_at": time.time(),
+    }
 
 # -----------------------------------------------------------------------------
 # WEATHER — Apple WeatherKit primary, OpenWeatherMap secondary
@@ -1175,9 +1203,15 @@ def fetch_bears_standings():
 
 
 def _fetch_nhl_team_standings(team_abbr: str):
+    cache_key = f"nhl:{team_abbr}"
+    cached, hit = _get_cached_team_standings(cache_key)
+    if hit:
+        logging.debug("Using cached NHL standings for %s", team_abbr)
+        return cached
+
     try:
         url = "https://api-web.nhle.com/v1/standings/now"
-        resp = _session.get(url, timeout=10, headers=NHL_HEADERS)
+        resp = _session.get(url, timeout=_TEAM_STANDINGS_TIMEOUT, headers=NHL_HEADERS)
         resp.raise_for_status()
         payload = resp.json() or {}
         standings = payload.get("standings", []) or []
@@ -1235,7 +1269,7 @@ def _fetch_nhl_team_standings(team_abbr: str):
                 "confRank",
             )
 
-            return {
+            payload = {
                 "leagueRecord": record,
                 "divisionRank": div_rank,
                 "divisionGamesBack": None,
@@ -1249,16 +1283,22 @@ def _fetch_nhl_team_standings(team_abbr: str):
                 "divisionName": entry.get("divisionName")
                 or entry.get("divisionAbbrev"),
             }
+            _store_team_standings_cache(cache_key, payload, success=True)
+            return payload
         logging.warning("Team %s not found in NHL standings; trying fallback", team_abbr)
     except Exception as exc:
         logging.error("Error fetching NHL standings for %s: %s", team_abbr, exc)
     fallback = _fetch_nhl_team_standings_espn(team_abbr)
     if fallback:
+        _store_team_standings_cache(cache_key, fallback, success=True)
         return fallback
     if not _statsapi_available():
         logging.info("Skipping statsapi NHL standings fallback due to DNS failure")
+        _store_team_standings_cache(cache_key, None, success=False)
         return None
-    return _fetch_nhl_team_standings_statsapi(team_abbr)
+    statsapi = _fetch_nhl_team_standings_statsapi(team_abbr)
+    _store_team_standings_cache(cache_key, statsapi, success=bool(statsapi))
+    return statsapi
 
 
 def fetch_blackhawks_standings():
@@ -1287,7 +1327,7 @@ def _fetch_nhl_team_standings_espn(team_abbr: str):
 
     try:
         url = "https://site.web.api.espn.com/apis/v2/sports/hockey/nhl/standings"
-        resp = _session.get(url, timeout=10)
+        resp = _session.get(url, timeout=_TEAM_STANDINGS_TIMEOUT)
         resp.raise_for_status()
         data = resp.json() or {}
 
@@ -1357,7 +1397,7 @@ def _fetch_nhl_team_standings_espn(team_abbr: str):
 def _fetch_nhl_team_standings_statsapi(team_abbr: str):
     try:
         url = "https://statsapi.web.nhl.com/api/v1/standings"
-        resp = _session.get(url, timeout=10, headers=NHL_HEADERS)
+        resp = _session.get(url, timeout=_TEAM_STANDINGS_TIMEOUT, headers=NHL_HEADERS)
         resp.raise_for_status()
         payload = resp.json() or {}
         for record in payload.get("records", []) or []:
@@ -1410,6 +1450,12 @@ def _fetch_nhl_team_standings_statsapi(team_abbr: str):
 
 
 def _fetch_nba_team_standings(team_tricode: str):
+    cache_key = f"nba:{team_tricode}"
+    cached, hit = _get_cached_team_standings(cache_key)
+    if hit:
+        logging.debug("Using cached NBA standings for %s", team_tricode)
+        return cached
+
     def _load_json() -> Optional[dict]:
         endpoints = {
             "cdn": "https://cdn.nba.com/static/json/liveData/standings/league.json",
@@ -1426,7 +1472,11 @@ def _fetch_nba_team_standings(team_tricode: str):
         # parsing code expects. If it is blocked (403) or missing (404), fall back
         # to ESPN without emitting warnings on every launch.
         try:
-            resp = _session.get(endpoints["cdn"], timeout=10, headers=headers)
+            resp = _session.get(
+                endpoints["cdn"],
+                timeout=_TEAM_STANDINGS_TIMEOUT,
+                headers=headers,
+            )
             if resp.status_code == 403:
                 logging.debug(
                     "NBA CDN standings blocked (HTTP 403); using ESPN fallback instead"
@@ -1467,7 +1517,7 @@ def _fetch_nba_team_standings(team_tricode: str):
             conference_name = conference.get("name") or conference.get("displayName")
             conference_rank = conference.get("rank")
 
-            return {
+            payload = {
                 "leagueRecord": record,
                 "divisionRank": entry.get("divisionRank")
                 or (entry.get("teamDivision") or {}).get("rank"),
@@ -1479,6 +1529,8 @@ def _fetch_nba_team_standings(team_tricode: str):
                 "conferenceRank": conference_rank,
                 "conferenceName": conference_name,
             }
+            _store_team_standings_cache(cache_key, payload, success=True)
+            return payload
 
         if teams:
             logging.warning("Team %s not found in NBA standings", team_tricode)
@@ -1487,10 +1539,13 @@ def _fetch_nba_team_standings(team_tricode: str):
 
     fallback = _fetch_nba_team_standings_espn()
     if fallback:
+        _store_team_standings_cache(cache_key, fallback, success=True)
         return fallback
 
     logging.warning("Using placeholder NBA standings for %s due to fetch errors", team_tricode)
-    return _empty_standings_record(team_tricode)
+    placeholder = _empty_standings_record(team_tricode)
+    _store_team_standings_cache(cache_key, placeholder, success=False)
+    return placeholder
 
 
 def fetch_bulls_standings():
@@ -1519,7 +1574,7 @@ def _fetch_nba_team_standings_espn() -> Optional[dict]:
 
     try:
         url = "https://site.web.api.espn.com/apis/v2/sports/basketball/nba/standings"
-        resp = _session.get(url, timeout=10)
+        resp = _session.get(url, timeout=_TEAM_STANDINGS_TIMEOUT)
         resp.raise_for_status()
         data = resp.json() or {}
 
