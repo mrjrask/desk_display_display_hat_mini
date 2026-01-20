@@ -1261,10 +1261,11 @@ def _draw_metric_row(
     label_x = x0 + padding_x
     label_y = y0 + padding_y
     value_x = x0 + padding_x
-    value_y = y1 - padding_y - value_h
     min_gap = max(6, height // 12)
-    if value_y - (label_y + label_h) < min_gap:
-        value_y = min(y1 - padding_y - value_h, label_y + label_h + min_gap)
+    value_y = label_y + label_h + min_gap
+    max_value_y = y1 - padding_y - value_h
+    if value_y > max_value_y:
+        value_y = max_value_y
 
     label_color = _mix_color(accent, config.INSIDE_COL_TEXT, 0.25)
     value_color = config.INSIDE_COL_TEXT
@@ -1343,10 +1344,15 @@ def _draw_voc_tile(
     )
     value_w, value_h = measure_text(draw, value, value_font)
     value_x = x0 + padding_x
-    value_y = max(label_y + label_h + max(8, height // 14), y0 + (height - value_h) // 2)
-    if has_descriptor:
-        max_value_y = desc_y - max(8, height // 16) - value_h
-        value_y = min(value_y, max_value_y)
+    value_gap = max(8, height // 14)
+    desc_gap = max(8, height // 16)
+    top_limit = label_y + label_h + value_gap
+    bottom_limit = desc_y - desc_gap if has_descriptor else y1 - padding_y
+    available_space = bottom_limit - top_limit
+    if available_space >= value_h:
+        value_y = top_limit + (available_space - value_h) // 2
+    else:
+        value_y = min(top_limit, bottom_limit - value_h)
 
     label_color = _mix_color(bg, config.INSIDE_COL_TEXT, 0.3)
     value_color = config.INSIDE_COL_TEXT
