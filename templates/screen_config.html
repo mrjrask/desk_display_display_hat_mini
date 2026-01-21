@@ -424,10 +424,14 @@
     }
 
     function savePlaylistState() {
-      localStorage.setItem(
-        playlistStorageKey,
-        JSON.stringify({ playlists, assignments: playlistAssignments })
-      );
+      try {
+        localStorage.setItem(
+          playlistStorageKey,
+          JSON.stringify({ playlists, assignments: playlistAssignments })
+        );
+      } catch (error) {
+        console.warn("Unable to save playlist state.", error);
+      }
     }
 
     function syncPlaylistsToScreens(screens) {
@@ -607,7 +611,11 @@
         playlists,
         assignments: playlistAssignments,
       };
-      sessionStorage.setItem(draftStorageKey, JSON.stringify(payload));
+      try {
+        sessionStorage.setItem(draftStorageKey, JSON.stringify(payload));
+      } catch (error) {
+        console.warn("Unable to save draft state.", error);
+      }
     }
 
     function clearDraft() {
