@@ -585,15 +585,19 @@
 
     function getCurrentScreens() {
       const rows = [...screenTable.querySelectorAll(".screen-row")];
-      return rows.map((row) => {
-        return {
-          id: row.dataset.screenId,
-          frequency: row.querySelector(".freq-input")?.value ?? "",
-          background: row.querySelector(".background-input")?.value ?? "",
-          alt_screen: row.querySelector(".alt-screen-input")?.value ?? "",
-          alt_frequency: row.querySelector(".alt-frequency-input")?.value ?? "",
-        };
-      });
+      return rows
+        .map((row) => {
+          const screenId = row.dataset.screenId;
+          if (!screenId) return null;
+          return {
+            id: screenId,
+            frequency: row.querySelector(".freq-input")?.value ?? "",
+            background: row.querySelector(".background-input")?.value ?? "",
+            alt_screen: row.querySelector(".alt-screen-input")?.value ?? "",
+            alt_frequency: row.querySelector(".alt-frequency-input")?.value ?? "",
+          };
+        })
+        .filter(Boolean);
     }
 
     function saveDraft() {
@@ -620,6 +624,12 @@
     function markClean() {
       isDirty = false;
       clearDraft();
+    }
+
+    function normalizeScreens(screens) {
+      return (screens || []).filter(
+        (screen) => screen && screen.id !== undefined && screen.id !== null
+      );
     }
 
     function addPlaylist(name) {
@@ -664,6 +674,9 @@
         </div>
       `;
       const select = row.querySelector(".playlist-select");
+      if (!select) {
+        return row;
+      }
       const ungrouped = new Option("Ungrouped", "");
       select.appendChild(ungrouped);
       playlists.forEach((playlist) => {
@@ -692,14 +705,15 @@
 
     function renderScreens(screens) {
       screenTable.innerHTML = "";
-      syncPlaylistsToScreens(screens);
+      const safeScreens = normalizeScreens(screens);
+      syncPlaylistsToScreens(safeScreens);
       savePlaylistState();
       const groups = [
         { id: "", name: "Ungrouped" },
         ...playlists.map((playlist) => ({ id: playlist.id, name: playlist.name })),
       ];
       groups.forEach((group) => {
-        const groupScreens = screens.filter(
+        const groupScreens = safeScreens.filter(
           (screen) => (playlistAssignments[screen.id] || "") === group.id
         );
         const header = buildPlaylistHeader(group, groupScreens.length);
