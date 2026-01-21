@@ -280,6 +280,24 @@ def _latlng_to_world_xy(lat: float, lng: float, zoom: int) -> Tuple[float, float
     return x, y
 
 
+def _world_xy_to_latlng(x: float, y: float, zoom: int) -> Tuple[float, float]:
+    scale = 256 * (2 ** zoom)
+    lng = x / scale * 360.0 - 180.0
+    n = math.pi - (2 * math.pi * y / scale)
+    lat = math.degrees(math.atan(math.sinh(n)))
+    return lat, lng
+
+
+def _apply_map_center_offset(
+    center: Tuple[float, float],
+    zoom: int,
+    offset_px: Tuple[float, float],
+) -> Tuple[float, float]:
+    center_x, center_y = _latlng_to_world_xy(center[0], center[1], zoom)
+    offset_x, offset_y = offset_px
+    return _world_xy_to_latlng(center_x + offset_x, center_y + offset_y, zoom)
+
+
 def _project_to_map(
     point: Tuple[float, float],
     center: Tuple[float, float],
@@ -496,8 +514,15 @@ def _compose_travel_map(routes: Dict[str, Optional[dict]]) -> Image.Image:
     route_segments = _extract_route_segments(routes)
     brightness = MAP_NIGHT_BRIGHTNESS
 
+    legend = _compose_legend(routes)
+
     polylines = [points for segments in route_segments.values() for points, _ in segments]
     map_view = _select_map_view(polylines, (WIDTH, HEIGHT), (LATITUDE, LONGITUDE))
+    if legend:
+        center, zoom = map_view
+        offset_x = (legend.width + MAP_MARGIN) / 2
+        offset_y = -((legend.height + MAP_MARGIN) / 2)
+        map_view = (_apply_map_center_offset(center, zoom, (offset_x, offset_y)), zoom)
 
     base_map = _fetch_base_map(map_view[0], map_view[1], (WIDTH, HEIGHT))
     if base_map is None:
@@ -515,7 +540,6 @@ def _compose_travel_map(routes: Dict[str, Optional[dict]]) -> Image.Image:
         route_order=ROUTE_ORDER,
     )
 
-    legend = _compose_legend(routes)
     if legend:
         legend_x = max(0, WIDTH - legend.width - MAP_MARGIN)
         legend_y = MAP_MARGIN
