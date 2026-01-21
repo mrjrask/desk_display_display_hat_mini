@@ -54,6 +54,7 @@ RIGHT_MARGIN = 6
 TEAM_COLUMN_GAP = 6
 STATS_FIRST_COLUMN_GAP = 26
 STATS_COLUMN_MIN_STEP = 36
+STATS_COLUMN_MAX_STEP: int | None = None
 ROW_PADDING = 2
 ROW_SPACING = 2
 SECTION_GAP = 10
@@ -264,6 +265,13 @@ def _build_column_layout(max_team_name_width: int) -> tuple[dict[str, int], int]
     else:
         available_space = max(0.0, stats_right - first_column)
         step = available_space / (column_count - 1) if column_count > 1 else 0.0
+        max_step = STATS_COLUMN_MAX_STEP
+        if max_step is not None and step > max_step:
+            capped_first = stats_right - max_step * (column_count - 1)
+            min_first = team_x + STATS_FIRST_COLUMN_GAP
+            if capped_first >= min_first:
+                first_column = capped_first
+                step = max_step
 
         positions: list[int] = []
         for idx in range(column_count):

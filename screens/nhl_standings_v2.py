@@ -74,6 +74,16 @@ def _update_column_metrics() -> None:
     nhl_standings.COLUMN_ROW_HEIGHT = nhl_standings.COLUMN_TEXT_HEIGHT + 2
 
 
+@contextmanager
+def _cap_wildcard_column_spacing(max_step: int | None) -> None:
+    original_max_step = nhl_standings.STATS_COLUMN_MAX_STEP
+    try:
+        nhl_standings.STATS_COLUMN_MAX_STEP = max_step
+        yield
+    finally:
+        nhl_standings.STATS_COLUMN_MAX_STEP = original_max_step
+
+
 def _normalize_wildcard_team(team: dict) -> dict:
     normalized = dict(team)
     wins = _normalize_int(normalized.get("wins"))
@@ -331,7 +341,7 @@ def draw_nhl_overview_east_v3(display, transition: bool = False) -> ScreenImage:
 
 @log_call
 def draw_nhl_standings_west_v2(display, transition: bool = False) -> ScreenImage:
-    with _wildcard_columns():
+    with _wildcard_columns(), _cap_wildcard_column_spacing(nhl_standings.STATS_COLUMN_MIN_STEP):
         standings_by_conf = _fetch_standings_data()
         wildcard_order = nhl_standings._fetch_wildcard_order_api_web()
         wildcard_standings = _build_wildcard_standings(standings_by_conf, wildcard_order)
