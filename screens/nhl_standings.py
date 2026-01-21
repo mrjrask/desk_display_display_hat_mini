@@ -72,9 +72,10 @@ _COLUMN_BASE_SIZE = 24
 _ROW_BASE_SIZE = 28
 _COLUMN_POINTS_DELTA = 6
 _TEAM_NAME_DELTA = 3
+_ROW_STATS_DELTA = 2
 
 
-def _build_fonts(style_id: str) -> tuple:
+def _build_fonts(style_id: str, *, reduce_row_stats: bool = False) -> tuple:
     division = get_screen_font(
         style_id,
         "division",
@@ -100,6 +101,15 @@ def _build_fonts(style_id: str) -> tuple:
         base_font=FONT_STATUS,
         default_size=_ROW_BASE_SIZE,
     )
+    row_stats_size = getattr(row, "size", _ROW_BASE_SIZE)
+    if reduce_row_stats:
+        row_stats_size = max(8, row_stats_size - _ROW_STATS_DELTA)
+    row_stats = get_screen_font(
+        style_id,
+        "row_stats",
+        base_font=row,
+        default_size=row_stats_size,
+    )
     team_name_size = max(8, getattr(row, "size", _ROW_BASE_SIZE) - _TEAM_NAME_DELTA)
     team_name = get_screen_font(
         style_id,
@@ -107,26 +117,35 @@ def _build_fonts(style_id: str) -> tuple:
         base_font=row,
         default_size=team_name_size,
     )
-    return division, column, column_points, row, team_name
+    return division, column, column_points, row, row_stats, team_name
 
 
-DIVISION_FONT, COLUMN_FONT, COLUMN_FONT_POINTS, ROW_FONT, TEAM_NAME_FONT = _build_fonts(
+(
+    DIVISION_FONT,
+    COLUMN_FONT,
+    COLUMN_FONT_POINTS,
+    ROW_FONT,
+    ROW_STATS_FONT,
+    TEAM_NAME_FONT,
+) = _build_fonts(
     _DEFAULT_STYLE_ID
 )
 
 
 def _apply_style_overrides(screen_id: str) -> None:
-    global DIVISION_FONT, COLUMN_FONT, COLUMN_FONT_POINTS, ROW_FONT, TEAM_NAME_FONT
+    global DIVISION_FONT, COLUMN_FONT, COLUMN_FONT_POINTS, ROW_FONT, ROW_STATS_FONT, TEAM_NAME_FONT
     global LOGO_HEIGHT, OVERVIEW_MIN_LOGO_HEIGHT, OVERVIEW_MAX_LOGO_HEIGHT
     global CONFERENCE_LOGO_HEIGHT, BACKGROUND_COLOR
 
+    reduce_row_stats = screen_id in {"NHL Standings West", "NHL Standings East"}
     (
         DIVISION_FONT,
         COLUMN_FONT,
         COLUMN_FONT_POINTS,
         ROW_FONT,
+        ROW_STATS_FONT,
         TEAM_NAME_FONT,
-    ) = _build_fonts(screen_id)
+    ) = _build_fonts(screen_id, reduce_row_stats=reduce_row_stats)
 
     team_scale = get_screen_image_scale(screen_id, "team_logo", 1.0)
     LOGO_HEIGHT = max(1, int(round(_LOGO_BASE_HEIGHT * team_scale)))
@@ -1307,7 +1326,7 @@ def _draw_division(
             _draw_text(
                 draw,
                 str(team.get(key, "")),
-                ROW_FONT,
+                ROW_STATS_FONT,
                 column_layout[key],
                 row_top,
                 ROW_HEIGHT,
