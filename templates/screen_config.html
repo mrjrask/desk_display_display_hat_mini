@@ -275,6 +275,7 @@
         <button class="btn" id="saveBtn">Save changes</button>
         <button class="btn" id="loadDefaultsBtn" type="button">Load defaults</button>
         <button class="btn" id="exportBtn" type="button">Export configuration</button>
+        <button class="btn" id="importBtn" type="button">Import configuration</button>
       </div>
     </div>
     <div class="error" id="errorBox"></div>
@@ -335,9 +336,12 @@
         <button class="btn" id="saveBtnBottom">Save changes</button>
         <button class="btn" id="loadDefaultsBtnBottom" type="button">Load defaults</button>
         <button class="btn" id="exportBtnBottom" type="button">Export configuration</button>
+        <button class="btn" id="importBtnBottom" type="button">Import configuration</button>
       </div>
     </div>
   </div>
+
+  <input type="file" id="importFile" accept="application/json" hidden>
 
   <datalist id="screenIds">
     {% for screen_id in screen_ids %}
@@ -350,9 +354,12 @@
     const saveBtn = document.getElementById("saveBtn");
     const loadDefaultsBtn = document.getElementById("loadDefaultsBtn");
     const exportBtn = document.getElementById("exportBtn");
+    const importBtn = document.getElementById("importBtn");
     const saveBtnBottom = document.getElementById("saveBtnBottom");
     const loadDefaultsBtnBottom = document.getElementById("loadDefaultsBtnBottom");
     const exportBtnBottom = document.getElementById("exportBtnBottom");
+    const importBtnBottom = document.getElementById("importBtnBottom");
+    const importFileInput = document.getElementById("importFile");
     const errorBox = document.getElementById("errorBox");
     const hideZeroFreqToggle = document.getElementById("hideZeroFreq");
     const newPlaylistNameInput = document.getElementById("newPlaylistName");
@@ -582,7 +589,16 @@
     }
 
     function setButtonsDisabled(disabled) {
-      [saveBtn, loadDefaultsBtn, exportBtn, saveBtnBottom, loadDefaultsBtnBottom, exportBtnBottom].forEach((btn) => {
+      [
+        saveBtn,
+        loadDefaultsBtn,
+        exportBtn,
+        importBtn,
+        saveBtnBottom,
+        loadDefaultsBtnBottom,
+        exportBtnBottom,
+        importBtnBottom,
+      ].forEach((btn) => {
         if (btn) btn.disabled = disabled;
       });
     }
@@ -798,12 +814,54 @@
       }
     }
 
+    async function importConfiguration(config) {
+      clearError();
+      setButtonsDisabled(true);
+      try {
+        const response = await fetch("/api/screens/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ config }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Unable to import configuration");
+        }
+        renderScreens(data.screens || []);
+        markClean();
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        setButtonsDisabled(false);
+      }
+    }
+
     saveBtn.addEventListener("click", saveConfiguration);
     saveBtnBottom.addEventListener("click", saveConfiguration);
     loadDefaultsBtn.addEventListener("click", loadDefaults);
     loadDefaultsBtnBottom.addEventListener("click", loadDefaults);
     exportBtn.addEventListener("click", exportConfiguration);
     exportBtnBottom.addEventListener("click", exportConfiguration);
+    if (importBtn && importFileInput) {
+      importBtn.addEventListener("click", () => importFileInput.click());
+    }
+    if (importBtnBottom && importFileInput) {
+      importBtnBottom.addEventListener("click", () => importFileInput.click());
+    }
+    if (importFileInput) {
+      importFileInput.addEventListener("change", async (event) => {
+        const file = event.target.files?.[0];
+        event.target.value = "";
+        if (!file) return;
+        try {
+          const text = await file.text();
+          const config = JSON.parse(text);
+          await importConfiguration(config);
+        } catch (error) {
+          showError(error.message || "Unable to import configuration");
+        }
+      });
+    }
 
     if (addPlaylistBtn) {
       addPlaylistBtn.addEventListener("click", () => {

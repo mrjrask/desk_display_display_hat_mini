@@ -42,6 +42,15 @@ def _load_config(path: str) -> Dict[str, Any]:
     return data
 
 
+def _validate_config_payload(data: Any) -> Dict[str, Any]:
+    if not isinstance(data, dict):
+        raise ValueError("Configuration must be a JSON object")
+    screens = data.get("screens")
+    if not isinstance(screens, dict):
+        raise ValueError("Configuration must include a 'screens' mapping")
+    return data
+
+
 def _load_style_config(path: str) -> Dict[str, Any]:
     try:
         with open(path, "r", encoding="utf-8") as fh:
@@ -324,6 +333,25 @@ def save_screens() -> Any:
     _save_config(config)
     _save_style_config(style_config)
     return jsonify({"status": "ok"})
+
+
+@app.post("/api/screens/import")
+def import_screens() -> Any:
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Invalid payload"}), 400
+
+    config_payload = payload.get("config", payload)
+    try:
+        config = _validate_config_payload(config_payload)
+        build_scheduler(config)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    _save_config(config)
+    style_config = _load_active_style_config()
+    entries = _build_screen_entries(config, style_config)
+    return jsonify({"status": "ok", "screens": entries})
 
 
 if __name__ == "__main__":
