@@ -322,7 +322,19 @@ def _select_map_view(
         return fallback_center, 12
 
     (min_lat, min_lng), (max_lat, max_lng) = _bounds(all_points)
-    center = ((min_lat + max_lat) / 2, (min_lng + max_lng) / 2)
+    midpoint_candidates: List[Tuple[float, float]] = []
+    for points in polylines:
+        if len(points) < 2:
+            continue
+        start_lat, start_lng = points[0]
+        end_lat, end_lng = points[-1]
+        midpoint_candidates.append(((start_lat + end_lat) / 2, (start_lng + end_lng) / 2))
+    if midpoint_candidates:
+        center_lat = sum(lat for lat, _ in midpoint_candidates) / len(midpoint_candidates)
+        center_lng = sum(lng for _, lng in midpoint_candidates) / len(midpoint_candidates)
+        center = (center_lat, center_lng)
+    else:
+        center = ((min_lat + max_lat) / 2, (min_lng + max_lng) / 2)
     available_w = max(1, canvas_size[0] - 2 * MAP_MARGIN)
     available_h = max(1, canvas_size[1] - 2 * MAP_MARGIN)
 
@@ -476,36 +488,19 @@ def _compose_legend(routes: Dict[str, Optional[dict]]) -> Optional[Image.Image]:
     if not entries:
         return None
 
-    rows: List[List[Image.Image]] = [[]]
-    row_widths = [0]
-    row_heights = [0]
-    max_width = WIDTH - 2 * LEGEND_PADDING
-
-    for entry in entries:
-        entry_width = entry.width
-        if rows[-1] and row_widths[-1] + LEGEND_GAP + entry_width > max_width:
-            rows.append([])
-            row_widths.append(0)
-            row_heights.append(0)
-        if rows[-1]:
-            row_widths[-1] += LEGEND_GAP
-        rows[-1].append(entry)
-        row_widths[-1] += entry_width
-        row_heights[-1] = max(row_heights[-1], entry.height)
-
+    legend_width = min(max(entry.width for entry in entries) + LEGEND_PADDING * 2, WIDTH)
     legend_height = (
-        sum(row_heights) + LEGEND_PADDING * 2 + LEGEND_ROW_GAP * (len(rows) - 1)
+        sum(entry.height for entry in entries)
+        + LEGEND_ROW_GAP * (len(entries) - 1)
+        + LEGEND_PADDING * 2
     )
-    legend_width = min(max(row_widths) + LEGEND_PADDING * 2, WIDTH)
     legend = Image.new("RGB", (legend_width, legend_height), BACKGROUND_COLOR)
 
     y = LEGEND_PADDING
-    for row, row_height, row_width in zip(rows, row_heights, row_widths):
-        x = LEGEND_PADDING + max(0, (legend_width - 2 * LEGEND_PADDING - row_width) // 2)
-        for entry in row:
-            legend.paste(entry, (x, y + (row_height - entry.height) // 2))
-            x += entry.width + LEGEND_GAP
-        y += row_height + LEGEND_ROW_GAP
+    for entry in entries:
+        x = LEGEND_PADDING + max(0, (legend_width - 2 * LEGEND_PADDING - entry.width) // 2)
+        legend.paste(entry, (x, y))
+        y += entry.height + LEGEND_ROW_GAP
 
     return legend
 
@@ -518,12 +513,6 @@ def _compose_travel_map(routes: Dict[str, Optional[dict]]) -> Image.Image:
 
     polylines = [points for segments in route_segments.values() for points, _ in segments]
     map_view = _select_map_view(polylines, (WIDTH, HEIGHT), (LATITUDE, LONGITUDE))
-    if legend:
-        center, zoom = map_view
-        offset_x = (legend.width + MAP_MARGIN) / 2
-        offset_y = -((legend.height + MAP_MARGIN) / 2)
-        map_view = (_apply_map_center_offset(center, zoom, (offset_x, offset_y)), zoom)
-
     base_map = _fetch_base_map(map_view[0], map_view[1], (WIDTH, HEIGHT))
     if base_map is None:
         map_canvas = Image.new("RGB", (WIDTH, HEIGHT), MAP_COLOR)
