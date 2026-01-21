@@ -10,12 +10,25 @@
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #0f172a;
       color: #e2e8f0;
+      --panel-bg: rgba(15, 23, 42, 0.92);
+      --panel-border: rgba(148, 163, 184, 0.2);
+      --panel-shadow: 0 30px 60px rgba(15, 23, 42, 0.5);
+      --field-bg: rgba(15, 23, 42, 0.65);
+      --field-border: rgba(148, 163, 184, 0.3);
+      --field-radius: 12px;
+      --field-padding: 0.55rem 0.65rem;
     }
     body {
       margin: 0;
       padding: 1.5rem;
       min-height: 100vh;
       background: radial-gradient(circle at 15% 20%, rgba(56, 189, 248, 0.1), transparent 35%), #0f172a;
+      box-sizing: border-box;
+    }
+    *,
+    *::before,
+    *::after {
+      box-sizing: inherit;
     }
     h1 {
       text-align: center;
@@ -31,11 +44,12 @@
     .panel {
       max-width: 1100px;
       margin: 0 auto;
-      background: rgba(15, 23, 42, 0.9);
+      background: var(--panel-bg);
       border-radius: 20px;
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      box-shadow: 0 20px 40px rgba(15, 23, 42, 0.5);
-      padding: 1.5rem;
+      border: 1px solid var(--panel-border);
+      box-shadow: var(--panel-shadow);
+      padding: clamp(1.25rem, 2.5vw, 2rem);
+      backdrop-filter: blur(12px);
     }
     .toolbar,
     .footer-actions {
@@ -98,19 +112,22 @@
       align-items: center;
       gap: 0.75rem;
       flex-wrap: wrap;
+      flex: 1 1 320px;
     }
     .playlist-controls input {
-      padding: 0.5rem 0.75rem;
+      padding: var(--field-padding);
       border-radius: 999px;
-      border: 1px solid rgba(148, 163, 184, 0.3);
-      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--field-border);
+      background: var(--field-bg);
       color: #e2e8f0;
       font-size: 0.95rem;
       min-width: 220px;
+      flex: 1 1 240px;
     }
     .playlist-controls .hint {
       color: #94a3b8;
       font-size: 0.85rem;
+      flex: 1 1 260px;
     }
     .playlist-row {
       grid-column: 1 / -1;
@@ -163,7 +180,14 @@
     }
     .table-header {
       display: grid;
-      grid-template-columns: 48px 1.4fr 0.9fr 0.7fr 0.9fr 1.3fr 0.7fr;
+      grid-template-columns:
+        40px
+        minmax(180px, 1.4fr)
+        minmax(140px, 0.9fr)
+        minmax(120px, 0.7fr)
+        minmax(140px, 0.9fr)
+        minmax(200px, 1.3fr)
+        minmax(120px, 0.7fr);
       gap: 0.75rem;
       padding: 0 0.5rem 0.25rem;
       text-transform: uppercase;
@@ -198,29 +222,36 @@
     }
     .row {
       display: grid;
-      grid-template-columns: 48px 1.4fr 0.9fr 0.7fr 0.9fr 1.3fr 0.7fr;
+      grid-template-columns:
+        40px
+        minmax(180px, 1.4fr)
+        minmax(140px, 0.9fr)
+        minmax(120px, 0.7fr)
+        minmax(140px, 0.9fr)
+        minmax(200px, 1.3fr)
+        minmax(120px, 0.7fr);
       gap: 0.75rem;
       align-items: center;
-      padding: 0.85rem 0.75rem;
+      padding: 0.9rem 0.85rem;
       border-radius: 14px;
       border: 1px solid rgba(148, 163, 184, 0.2);
       background: rgba(15, 23, 42, 0.8);
     }
     .row input {
       width: 100%;
-      padding: 0.5rem 0.6rem;
-      border-radius: 10px;
-      border: 1px solid rgba(148, 163, 184, 0.3);
-      background: rgba(15, 23, 42, 0.6);
+      padding: var(--field-padding);
+      border-radius: var(--field-radius);
+      border: 1px solid var(--field-border);
+      background: var(--field-bg);
       color: #e2e8f0;
       font-size: 0.95rem;
     }
     .row select {
       width: 100%;
-      padding: 0.5rem 0.6rem;
-      border-radius: 10px;
-      border: 1px solid rgba(148, 163, 184, 0.3);
-      background: rgba(15, 23, 42, 0.6);
+      padding: var(--field-padding);
+      border-radius: var(--field-radius);
+      border: 1px solid var(--field-border);
+      background: var(--field-bg);
       color: #e2e8f0;
       font-size: 0.95rem;
     }
@@ -246,6 +277,28 @@
       color: #94a3b8;
       margin-top: 0.25rem;
     }
+    .row > div {
+      min-width: 0;
+    }
+    .row input:focus,
+    .row select:focus,
+    .playlist-controls input:focus {
+      outline: 2px solid rgba(56, 189, 248, 0.55);
+      outline-offset: 1px;
+    }
+    @media (max-width: 1100px) {
+      .table-header,
+      .row {
+        grid-template-columns:
+          32px
+          minmax(160px, 1.3fr)
+          minmax(130px, 0.9fr)
+          minmax(110px, 0.7fr)
+          minmax(130px, 0.9fr)
+          minmax(180px, 1.1fr)
+          minmax(110px, 0.7fr);
+      }
+    }
     @media (max-width: 900px) {
       .table-header {
         display: none;
@@ -260,6 +313,11 @@
       .row .handle {
         grid-column: span 2;
         justify-content: flex-start;
+      }
+      .playlist-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.6rem;
       }
     }
   </style>
