@@ -77,6 +77,10 @@ _PRESSURE_TREND_WINDOW_SECONDS = 3 * 60 * 60
 _PRESSURE_TREND_PRUNE_SECONDS = 6 * 60 * 60
 _PRESSURE_TREND_THRESHOLD_HPA = 0.5
 _PRESSURE_HISTORY: deque[tuple[float, float]] = deque()
+_PRESSURE_HISTORY_LOADED = False
+_PRESSURE_HISTORY_LAST_SAVE = 0.0
+_PRESSURE_HISTORY_SAVE_INTERVAL_SECONDS = 60.0
+_PRESSURE_HISTORY_PATH = os.environ.get("PRESSURE_HISTORY_PATH", "pressure_history.json")
 # Cache statsapi DNS availability to avoid repeated slow lookups
 _statsapi_dns_available: Optional[bool] = None
 _statsapi_dns_checked_at: Optional[float] = None
@@ -112,6 +116,7 @@ def _store_team_standings_cache(cache_key: str, data: Optional[dict], *, success
 
 
 def _update_pressure_trend(timestamp: Optional[float], pressure_hpa: Optional[float]) -> Optional[str]:
+    _load_pressure_history()
     if pressure_hpa is None:
         return None
 
@@ -124,11 +129,17 @@ def _update_pressure_trend(timestamp: Optional[float], pressure_hpa: Optional[fl
     if _PRESSURE_HISTORY and now_ts < _PRESSURE_HISTORY[-1][0]:
         now_ts = _PRESSURE_HISTORY[-1][0] + 0.001
 
+    history_changed = False
     if not _PRESSURE_HISTORY or _PRESSURE_HISTORY[-1] != (now_ts, pressure_val):
         _PRESSURE_HISTORY.append((now_ts, pressure_val))
+        history_changed = True
 
     while _PRESSURE_HISTORY and now_ts - _PRESSURE_HISTORY[0][0] > _PRESSURE_TREND_PRUNE_SECONDS:
         _PRESSURE_HISTORY.popleft()
+        history_changed = True
+
+    if history_changed:
+        _save_pressure_history(now_ts)
 
     target_time = now_ts - _PRESSURE_TREND_WINDOW_SECONDS
     baseline = None
@@ -147,6 +158,56 @@ def _update_pressure_trend(timestamp: Optional[float], pressure_hpa: Optional[fl
     if delta < -_PRESSURE_TREND_THRESHOLD_HPA:
         return "falling"
     return "steady"
+
+
+def _load_pressure_history() -> None:
+    global _PRESSURE_HISTORY_LOADED
+    if _PRESSURE_HISTORY_LOADED:
+        return
+
+    _PRESSURE_HISTORY_LOADED = True
+    path = _expand_path(_PRESSURE_HISTORY_PATH)
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            payload = json.load(fh)
+        history = payload.get("history", payload)
+        if not isinstance(history, list):
+            raise ValueError("Invalid pressure history payload")
+
+        for entry in history:
+            if (
+                isinstance(entry, (list, tuple))
+                and len(entry) == 2
+                and isinstance(entry[0], (int, float))
+                and isinstance(entry[1], (int, float))
+            ):
+                _PRESSURE_HISTORY.append((float(entry[0]), float(entry[1])))
+        if _PRESSURE_HISTORY:
+            now_ts = time.time()
+            while _PRESSURE_HISTORY and now_ts - _PRESSURE_HISTORY[0][0] > _PRESSURE_TREND_PRUNE_SECONDS:
+                _PRESSURE_HISTORY.popleft()
+    except FileNotFoundError:
+        return
+    except Exception as exc:
+        logging.warning("Unable to load pressure history from %s: %s", path, exc)
+
+
+def _save_pressure_history(now_ts: float) -> None:
+    global _PRESSURE_HISTORY_LAST_SAVE
+    if now_ts - _PRESSURE_HISTORY_LAST_SAVE < _PRESSURE_HISTORY_SAVE_INTERVAL_SECONDS:
+        return
+
+    path = _expand_path(_PRESSURE_HISTORY_PATH)
+    try:
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        payload = {"history": list(_PRESSURE_HISTORY)}
+        tmp_path = f"{path}.tmp"
+        with open(tmp_path, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh)
+        os.replace(tmp_path, path)
+        _PRESSURE_HISTORY_LAST_SAVE = now_ts
+    except Exception as exc:
+        logging.warning("Unable to save pressure history to %s: %s", path, exc)
 
 # -----------------------------------------------------------------------------
 # WEATHER — Apple WeatherKit primary, OpenWeatherMap secondary
