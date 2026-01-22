@@ -378,7 +378,7 @@ def draw_nhl_standings_west_v2(display, transition: bool = False) -> ScreenImage
 
 @log_call
 def draw_nhl_standings_east_v2(display, transition: bool = False) -> ScreenImage:
-    with _wildcard_columns():
+    with _wildcard_columns(), _cap_wildcard_column_spacing(nhl_standings.STATS_COLUMN_MIN_STEP):
         standings_by_conf = _fetch_standings_data()
         wildcard_order = nhl_standings._fetch_wildcard_order_api_web()
         wildcard_standings = _build_wildcard_standings(standings_by_conf, wildcard_order)
