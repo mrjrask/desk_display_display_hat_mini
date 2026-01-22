@@ -1354,12 +1354,15 @@ def _render_conference(
     subtitle: str | None = None,
     division_labels: Dict[str, str] | None = None,
     conference_key: str | None = None,
+    column_layout: dict[str, int] | None = None,
+    team_name_max_width: int | None = None,
 ) -> Image.Image:
     divisions = [division for division in division_order if standings.get(division)]
     if not divisions:
         divisions = division_order
 
-    column_layout, team_name_max_width = _conference_column_layout(standings, divisions)
+    if column_layout is None or team_name_max_width is None:
+        column_layout, team_name_max_width = _conference_column_layout(standings, divisions)
 
     total_height = TITLE_MARGIN_TOP
     logo_height = _conference_logo_height(conference_key)
@@ -1859,12 +1862,21 @@ def draw_nhl_standings_west(display, transition: bool = False) -> ScreenImage:
         display.image(img)
         return ScreenImage(img, displayed=True)
 
+    east = standings_by_conf.get(CONFERENCE_EAST_KEY, {})
+    east_divisions = [d for d in DIVISION_ORDER_EAST if east.get(d)]
+    if east and east_divisions:
+        column_layout, team_name_max_width = _conference_column_layout(east, east_divisions)
+    else:
+        column_layout, team_name_max_width = _conference_column_layout(conference, divisions)
+
     full_img = _render_conference(
         TITLE_WEST,
         divisions,
         conference,
         subtitle=TITLE_SUBTITLE_DIVISION,
         conference_key=CONFERENCE_WEST_KEY,
+        column_layout=column_layout,
+        team_name_max_width=team_name_max_width,
     )
     clear_display(display)
     _scroll_vertical(display, full_img)
