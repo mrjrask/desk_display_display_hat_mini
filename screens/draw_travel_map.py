@@ -16,9 +16,7 @@ import requests
 from PIL import Image, ImageDraw, ImageEnhance
 
 from config import (
-    FONT_TRAVEL_HEADER,
     FONT_TRAVEL_VALUE,
-    FONT_WEATHER_DETAILS_SMALL,
     FONT_WEATHER_DETAILS_SMALL_BOLD,
     GOOGLE_MAPS_API_KEY,
     HEIGHT,
@@ -46,7 +44,6 @@ LEGEND_GAP = 4
 LEGEND_PADDING = 4
 LEGEND_ROW_GAP = 2
 LEGEND_ICON_HEIGHT = 18
-LEGEND_LABEL_FONT = FONT_WEATHER_DETAILS_SMALL
 LEGEND_VALUE_FONT = FONT_WEATHER_DETAILS_SMALL_BOLD
 BACKGROUND_COLOR = get_screen_background_color("travel map", (18, 18, 18))
 MAP_COLOR = (36, 36, 36)
@@ -423,13 +420,11 @@ def _draw_routes(
 
 
 def _compose_legend_entry(
-    label: str,
     value: str,
     icon_paths: Sequence[str],
     swatch_color: Tuple[int, int, int],
     value_color: Tuple[int, int, int],
     *,
-    label_font=FONT_TRAVEL_HEADER,
     value_font=FONT_TRAVEL_VALUE,
     icon_height: int = ROUTE_ICON_HEIGHT,
 ) -> Image.Image:
@@ -441,20 +436,17 @@ def _compose_legend_entry(
     entry_height = max(icon.height, 20)
     padding = 4
     measurement = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-    label_w, label_h = measurement.textsize(label, font=label_font)
     value_w, value_h = measurement.textsize(value, font=value_font)
 
-    width = max(icon.width, label_w + value_w + padding) + padding * 2
+    width = icon.width + value_w + padding * 3
     canvas = Image.new("RGB", (width, entry_height), (0, 0, 0))
 
     canvas.paste(swatch, (padding, (entry_height - swatch.height) // 2))
     canvas.paste(icon, (padding, (entry_height - icon.height) // 2), icon)
 
     draw = ImageDraw.Draw(canvas)
-    text_y = (entry_height - label_h) // 2
-    draw.text((icon.width + padding * 2, text_y), label, font=label_font, fill=(230, 230, 230))
     draw.text(
-        (width - value_w - padding, (entry_height - value_h) // 2),
+        (icon.width + padding * 2, (entry_height - value_h) // 2),
         value,
         font=value_font,
         fill=value_color,
@@ -474,12 +466,10 @@ def _compose_legend(routes: Dict[str, Optional[dict]]) -> Optional[Image.Image]:
         value = time_result.normalized()
         value_color = time_result.color or (200, 200, 200)
         entry = _compose_legend_entry(
-            meta.get("short_label") or meta["label"],
             value,
             meta["icons"],
             meta["color"],
             value_color,
-            label_font=LEGEND_LABEL_FONT,
             value_font=LEGEND_VALUE_FONT,
             icon_height=LEGEND_ICON_HEIGHT,
         )
