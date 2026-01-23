@@ -105,6 +105,14 @@ Override `PROJECT_DIR` when you want the installer to target a different checkou
 PROJECT_DIR=/home/pi/desk_display bash ./scripts/install_bookworm.sh
 ```
 
+To uninstall the service and remove the virtual environment, run:
+
+```bash
+bash ./scripts/uninstall.sh
+```
+
+Set `KEEP_VENV=1` if you want to keep the virtual environment directory in place.
+
 ### Screen configuration UI
 
 The screen configuration UI launches automatically with the main service. To edit the screen order, frequencies, and alternates via a drag-and-drop UI, you can also run the configuration app directly:
