@@ -7,7 +7,6 @@ PYTHON_BIN="${PYTHON:-python3}"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
-VENV_DIR="$PROJECT_DIR/venv"
 SERVICE_USER="${SUDO_USER:-$(whoami)}"
 MAINTENANCE_DIR="$PROJECT_DIR/tools/maintenance"
 
@@ -45,7 +44,17 @@ if [[ ! -d "$PROJECT_DIR/.git" ]]; then
   warn "No git repository detected in $PROJECT_DIR. Clone the project before running this installer."
 fi
 
-if [[ ! -d "$VENV_DIR" ]]; then
+VENV_DIR="$PROJECT_DIR/venv"
+EXISTING_VENV=$(detect_existing_venv "$PROJECT_DIR" || true)
+if [[ -n "$EXISTING_VENV" ]]; then
+  VENV_DIR="$EXISTING_VENV"
+  log "Found existing virtual environment at $VENV_DIR"
+fi
+
+if [[ ! -f "$VENV_DIR/pyvenv.cfg" ]]; then
+  if [[ -d "$VENV_DIR" ]]; then
+    warn "$VENV_DIR exists but does not look like a virtual environment. Recreating."
+  fi
   log "Creating virtual environment with $PYTHON_BIN at $VENV_DIR"
   "$PYTHON_BIN" -m venv "$VENV_DIR"
 else
