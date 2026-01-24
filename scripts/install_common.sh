@@ -16,6 +16,30 @@ ensure_executable() {
   fi
 }
 
+detect_existing_venv() {
+  local project_dir="$1"
+  local candidates=(
+    "$project_dir/venv"
+    "$project_dir/.venv"
+  )
+
+  for candidate in "${candidates[@]}"; do
+    if [[ -f "$candidate/pyvenv.cfg" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  local venv_cfg
+  venv_cfg=$(find "$project_dir" -maxdepth 2 -mindepth 2 -type f -name pyvenv.cfg -print -quit 2>/dev/null || true)
+  if [[ -n "$venv_cfg" ]]; then
+    dirname "$venv_cfg"
+    return 0
+  fi
+
+  return 1
+}
+
 # Return the preferred libtiff development package for the given codename,
 # falling back gracefully when a codename-specific package is unavailable.
 select_libtiff_pkg() {
