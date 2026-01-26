@@ -57,6 +57,7 @@ SCORE_ROW_H         = 56
 STATUS_ROW_H        = 18
 REQUEST_TIMEOUT     = 10
 SUPER_BOWL_LOGO_GAP = 6
+SUPER_BOWL_DATE     = (2, 8)  # Feb 8
 
 COL_WIDTHS = [70, 60, 60, 60, 70]
 _TOTAL_COL_WIDTH = sum(COL_WIDTHS)
@@ -488,6 +489,19 @@ def _hydrate_games(raw_games: Iterable[dict]) -> list[dict]:
     return games
 
 
+def _is_super_bowl_game(game: dict) -> bool:
+    if not isinstance(game, dict):
+        return False
+    for key in ("_event_name", "_event_short_name", "name", "shortName"):
+        value = game.get(key)
+        if isinstance(value, str) and "super bowl" in value.lower():
+            return True
+    start_local = game.get("_start_local")
+    if isinstance(start_local, datetime.datetime):
+        return (start_local.month, start_local.day) == SUPER_BOWL_DATE
+    return False
+
+
 def _fetch_games_for_date(day: datetime.date) -> list[dict]:
     url = (
         "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
@@ -513,6 +527,8 @@ def _fetch_games_for_date(day: datetime.date) -> list[dict]:
         comp = competitions[0] or {}
         comp = dict(comp)
         comp["_event_date"] = event_date
+        comp["_event_name"] = event.get("name")
+        comp["_event_short_name"] = event.get("shortName")
         raw_games.append(comp)
     return _hydrate_games(raw_games)
 
@@ -525,6 +541,11 @@ def _week_cutoff_datetime(week_start: datetime.date, game_count: int) -> datetim
         except Exception:
             return naive.replace(tzinfo=CENTRAL_TIME)
 
+    if game_count == 1:
+        super_bowl_date = datetime.date(week_start.year, *SUPER_BOWL_DATE)
+        week_end = week_start + datetime.timedelta(days=6)
+        if week_start <= super_bowl_date <= week_end:
+            return _localize(super_bowl_date, 23, 59)
     if game_count == 6:
         return _localize(week_start + datetime.timedelta(days=5), 15, 0)
     if game_count in {2, 4}:
@@ -648,7 +669,7 @@ def draw_nfl_scoreboard(display, transition: bool = False) -> ScreenImage:
     _apply_style_overrides()
     now = datetime.datetime.now(CENTRAL_TIME)
     games = _fetch_games_for_week(now)
-    show_super_bowl_logo = _playoff_rules_active(now) and len(games) == 1
+    show_super_bowl_logo = len(games) == 1 and _is_super_bowl_game(games[0])
 
     if not games:
         clear_display(display)
