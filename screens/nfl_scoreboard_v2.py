@@ -50,6 +50,7 @@ from screens.nfl_scoreboard import (
     _fetch_games_for_week,
     _is_game_in_progress,
     _is_game_final,
+    _is_super_bowl_game,
     _should_display_scores,
     _score_text,
     _score_value,
@@ -58,7 +59,6 @@ from screens.nfl_scoreboard import (
     _format_status,
     _team_logo_abbr,
     _get_league_logo,
-    _playoff_rules_active,
 )
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -411,7 +411,7 @@ def draw_nfl_scoreboard_v2(display, transition: bool = False) -> ScreenImage:
     _apply_style_overrides()
     now = datetime.datetime.now(CENTRAL_TIME)
     games = _fetch_games_for_week(now)
-    show_super_bowl_logo = _playoff_rules_active(now) and len(games) == 1
+    show_super_bowl_logo = len(games) == 1 and _is_super_bowl_game(games[0])
 
     if not games:
         clear_display(display)

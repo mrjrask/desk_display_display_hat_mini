@@ -517,6 +517,13 @@ def _normalise_condition(hour: dict) -> str:
     return ""
 
 
+def _format_day_label(timestamp: Optional[int], *, index: int) -> str:
+    dt = timestamp_to_datetime(timestamp, CENTRAL_TIME)
+    if dt:
+        return dt.strftime("%a")
+    return f"+{index}d"
+
+
 def _wind_arrow(degrees: Optional[float]) -> str:
     try:
         deg_val = float(degrees)
@@ -599,6 +606,41 @@ def _gather_hourly_forecast(
         }
         if weather_list:
             entry["icon"] = weather_list[0].get("icon")
+        forecast.append(entry)
+    return forecast
+
+
+def _gather_daily_forecast(weather: object, days: int) -> list[dict]:
+    if not isinstance(weather, dict):
+        return []
+    daily = weather.get("daily") if isinstance(weather.get("daily"), list) else []
+    if not daily:
+        return []
+
+    start_idx = 1 if len(daily) > 1 else 0
+    entries = daily[start_idx : start_idx + days]
+    forecast = []
+
+    for idx, day in enumerate(entries):
+        if not isinstance(day, dict):
+            continue
+        temp_data = day.get("temp") if isinstance(day.get("temp"), dict) else {}
+        try:
+            hi_val = round(float(temp_data.get("max", 0)))
+        except Exception:
+            hi_val = None
+        try:
+            lo_val = round(float(temp_data.get("min", 0)))
+        except Exception:
+            lo_val = None
+
+        entry = {
+            "day": _format_day_label(day.get("dt"), index=idx + 1),
+            "hi": hi_val,
+            "lo": lo_val,
+            "pop": _pop_pct_from(day),
+            "is_snow": _is_snow_condition(day),
+        }
         forecast.append(entry)
     return forecast
 
@@ -822,6 +864,142 @@ def draw_weather_hourly(display, weather, transition: bool = False, hours: int =
                     # Just render text centered
                     draw.text((cx - text_w // 2, text_y), text, font=font, fill=color)
 
+
+    if transition:
+        return ScreenImage(img, displayed=False)
+
+    display.image(img)
+    display.show()
+    return None
+
+
+@log_call
+def draw_weather_daily(display, weather, transition: bool = False, days: int = 5):
+    background = get_screen_background_color("weather daily", (0, 0, 0))
+    forecast = _gather_daily_forecast(weather, days)
+    if not forecast:
+        img = Image.new("RGB", (WIDTH, HEIGHT), background)
+        draw = ImageDraw.Draw(img)
+        msg = "No daily data"
+        w, h = draw.textsize(msg, font=FONT_WEATHER_DETAILS_BOLD)
+        draw.text(((WIDTH - w) // 2, (HEIGHT - h) // 2), msg, font=FONT_WEATHER_DETAILS_BOLD, fill=(255, 255, 255))
+        return ScreenImage(img, displayed=False)
+
+    clear_display(display)
+    img = Image.new("RGB", (WIDTH, HEIGHT), background)
+    draw = ImageDraw.Draw(img)
+
+    title = "Next 5 days"
+    title_w, title_h = draw.textsize(title, font=FONT_WEATHER_LABEL)
+    draw.text(((WIDTH - title_w) // 2, 2), title, font=FONT_WEATHER_LABEL, fill=(200, 200, 200))
+
+    days_to_show = len(forecast)
+    gap = 4
+    available_width = WIDTH - gap * (days_to_show + 1)
+    col_w = max(1, available_width // days_to_show)
+    x_start = (WIDTH - (days_to_show * col_w + gap * (days_to_show - 1))) // 2
+
+    card_top = title_h + 6
+    card_bottom = HEIGHT - 6
+
+    line_gap = 2
+
+    for idx, day in enumerate(forecast):
+        x0 = x_start + idx * (col_w + gap)
+        x1 = x0 + col_w
+        cx = (x0 + x1) // 2
+
+        draw.rounded_rectangle(
+            (x0, card_top, x1, card_bottom),
+            radius=6,
+            fill=(18, 18, 28),
+            outline=(40, 40, 60),
+        )
+
+        day_label = day.get("day", "")
+        hi_val = day.get("hi")
+        lo_val = day.get("lo")
+        pop_val = day.get("pop")
+        is_snow = day.get("is_snow", False)
+
+        items = []
+        items.append(
+            {
+                "text": day_label,
+                "font": FONT_WEATHER_DETAILS_SMALL_BOLD,
+                "color": (235, 235, 235),
+            }
+        )
+
+        hi_text = f"Hi {hi_val}°" if hi_val is not None else "Hi —"
+        lo_text = f"Lo {lo_val}°" if lo_val is not None else "Lo —"
+        items.append(
+            {
+                "text": hi_text,
+                "font": FONT_WEATHER_DETAILS_SMALL,
+                "color": (255, 120, 120),
+            }
+        )
+        items.append(
+            {
+                "text": lo_text,
+                "font": FONT_WEATHER_DETAILS_SMALL,
+                "color": (120, 170, 255),
+            }
+        )
+
+        pop_text = "PoP —"
+        precip_icon = None
+        precip_color = (135, 206, 250)
+        if pop_val is not None:
+            clamped_pop = max(0, min(pop_val, 100))
+            precip_color = (173, 216, 230) if is_snow else (135, 206, 250)
+            pop_text = f"PoP {clamped_pop}%"
+            precip_icon = _render_precip_icon(is_snow, 10, precip_color)
+
+        items.append(
+            {
+                "text": pop_text,
+                "font": FONT_WEATHER_DETAILS_TINY_LARGE,
+                "color": precip_color,
+                "icon": precip_icon,
+            }
+        )
+
+        item_heights = []
+        for item in items:
+            text_w, text_h = draw.textsize(item["text"], font=item["font"])
+            icon = item.get("icon")
+            icon_h = icon.size[1] if icon else 0
+            item_heights.append(max(text_h, icon_h))
+
+        total_h = sum(item_heights) + line_gap * (len(items) - 1)
+        content_top = card_top + 6
+        content_bottom = card_bottom - 6
+        start_y = content_top + max(0, (content_bottom - content_top - total_h) // 2)
+
+        y = start_y
+        for item, item_h in zip(items, item_heights):
+            text = item["text"]
+            font = item["font"]
+            color = item["color"]
+            text_w, text_h = draw.textsize(text, font=font)
+            icon = item.get("icon")
+            if icon:
+                icon_w, icon_h = icon.size
+                gap_icon = 2
+                total_w = icon_w + gap_icon + text_w
+                icon_x = cx - total_w // 2
+                icon_y = y + (item_h - icon_h) // 2
+                text_x = icon_x + icon_w + gap_icon
+                text_y = y + (item_h - text_h) // 2
+                img.paste(icon, (icon_x, icon_y), icon)
+                draw.text((text_x, text_y), text, font=font, fill=color)
+            else:
+                text_x = cx - text_w // 2
+                text_y = y + (item_h - text_h) // 2
+                draw.text((text_x, text_y), text, font=font, fill=color)
+            y += item_h + line_gap
 
     if transition:
         return ScreenImage(img, displayed=False)
