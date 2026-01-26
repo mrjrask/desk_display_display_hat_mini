@@ -115,8 +115,16 @@ def _format_timestamp(timestamp: float) -> str:
 
 def _build_screenshot_entries() -> List[Dict[str, Optional[str]]]:
     current_dir = _current_screenshot_dir()
-    entries: List[Dict[str, Optional[str]]] = []
+    config = _load_active_config()
+    screens_config = config.get("screens", {})
+    ordered_screen_ids: List[str] = []
+    if isinstance(screens_config, dict):
+        ordered_screen_ids.extend(list(screens_config.keys()))
     for screen_id in SCREEN_IDS:
+        if screen_id not in ordered_screen_ids:
+            ordered_screen_ids.append(screen_id)
+    entries: List[Dict[str, Optional[str]]] = []
+    for screen_id in ordered_screen_ids:
         prefix = _sanitize_filename_prefix(screen_id)
         filename = f"{prefix}.png"
         path = current_dir / filename
