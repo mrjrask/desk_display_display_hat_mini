@@ -33,7 +33,9 @@ from screens.draw_wolves_schedule import (
 from screens.draw_inside import draw_inside
 from screens.draw_sensors import draw_sensors
 from screens.draw_travel_map import draw_travel_map_screen
+from screens.draw_travel_map_v2 import draw_travel_map_v2_screen
 from screens.draw_travel_time import draw_travel_time_screen
+from screens.draw_travel_time_v2 import draw_travel_time_v2_screen
 from screens.draw_vrnof import draw_vrnof_screen
 from screens.draw_weather import (
     _pop_pct_from,
@@ -367,6 +369,16 @@ def build_screen_registry(context: ScreenContext) -> Tuple[Dict[str, ScreenDefin
         register(
             "travel map",
             lambda: draw_travel_map_screen(context.display, transition=True),
+            available=travel_available,
+        )
+        register(
+            "travel v2",
+            lambda: draw_travel_time_v2_screen(context.display, transition=True),
+            available=travel_available,
+        )
+        register(
+            "travel map v2",
+            lambda: draw_travel_map_v2_screen(context.display, transition=True),
             available=travel_available,
         )
     else:
