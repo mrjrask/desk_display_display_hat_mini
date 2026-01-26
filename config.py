@@ -228,6 +228,19 @@ OWM_UNITS     = os.environ.get("OWM_UNITS", "imperial")
 OWM_LANGUAGE  = os.environ.get("OWM_LANGUAGE", "en")
 
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY")
+APPLE_MAPS_API_KEY = os.environ.get("APPLE_MAPS_API_KEY")
+APPLE_MAPS_TEAM_ID = os.environ.get("APPLE_MAPS_TEAM_ID")
+APPLE_MAPS_KEY_ID = os.environ.get("APPLE_MAPS_KEY_ID")
+APPLE_MAPS_KEY_PATH = os.environ.get("APPLE_MAPS_KEY_PATH")
+APPLE_MAPS_PRIVATE_KEY = os.environ.get("APPLE_MAPS_PRIVATE_KEY")
+APPLE_MAPS_DIRECTIONS_URL = os.environ.get(
+    "APPLE_MAPS_DIRECTIONS_URL",
+    "https://maps-api.apple.com/v1/directions",
+)
+APPLE_MAPS_SNAPSHOT_URL = os.environ.get(
+    "APPLE_MAPS_SNAPSHOT_URL",
+    "https://maps-api.apple.com/v1/snapshot",
+)
 
 # ─── Display configuration ─────────────────────────────────────────────────────
 WIDTH                    = 320
