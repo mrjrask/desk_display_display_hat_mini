@@ -228,7 +228,8 @@ OWM_UNITS     = os.environ.get("OWM_UNITS", "imperial")
 OWM_LANGUAGE  = os.environ.get("OWM_LANGUAGE", "en")
 
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY")
-APPLE_MAPS_API_KEY = os.environ.get("APPLE_MAPS_API_KEY")
+MAPKIT_TOKEN = os.environ.get("MAPKIT_TOKEN")
+APPLE_MAPS_API_KEY = os.environ.get("APPLE_MAPS_API_KEY") or MAPKIT_TOKEN
 APPLE_MAPS_TEAM_ID = os.environ.get("APPLE_MAPS_TEAM_ID")
 APPLE_MAPS_KEY_ID = os.environ.get("APPLE_MAPS_KEY_ID")
 APPLE_MAPS_KEY_PATH = os.environ.get("APPLE_MAPS_KEY_PATH")
