@@ -119,7 +119,7 @@ class ConfigStore:
     def _write_config(self, config: Dict[str, Any]) -> None:
         tmp_path = self.config_path.with_suffix(".tmp")
         with tmp_path.open("w", encoding="utf-8") as fh:
-            json.dump(config, fh, indent=2, sort_keys=True)
+            json.dump(config, fh, indent=2, sort_keys=False)
             fh.write("\n")
         tmp_path.replace(self.config_path)
 
@@ -131,7 +131,7 @@ class ConfigStore:
         summary: str,
         metadata: Dict[str, Any],
     ) -> int:
-        payload = json.dumps(config, indent=2, sort_keys=True)
+        payload = json.dumps(config, indent=2, sort_keys=False)
         metadata_json = json.dumps(metadata, sort_keys=True)
         created_at = _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
