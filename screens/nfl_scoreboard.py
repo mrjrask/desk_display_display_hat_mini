@@ -579,6 +579,20 @@ def _fetch_games_for_week(now: Optional[datetime.datetime] = None) -> list[dict]
     return games
 
 
+def _fetch_next_games(
+    start_date: datetime.date,
+    *,
+    max_days: int = 370,
+) -> list[dict]:
+    for offset in range(max_days + 1):
+        day = start_date + datetime.timedelta(days=offset)
+        games = _fetch_games_for_date(day)
+        if games:
+            return games
+    logging.warning("NFL scoreboard could not find upcoming games after %s", start_date)
+    return []
+
+
 def _render_scoreboard(games: list[dict], *, show_super_bowl_logo: bool) -> Image.Image:
     canvas = _compose_canvas(games, show_super_bowl_logo=show_super_bowl_logo)
 
@@ -669,6 +683,8 @@ def draw_nfl_scoreboard(display, transition: bool = False) -> ScreenImage:
     _apply_style_overrides()
     now = datetime.datetime.now(CENTRAL_TIME)
     games = _fetch_games_for_week(now)
+    if not games:
+        games = _fetch_next_games(now.date())
     show_super_bowl_logo = len(games) == 1 and _is_super_bowl_game(games[0])
 
     if not games:
