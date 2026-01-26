@@ -535,18 +535,24 @@
       });
     }
 
-    function movePlaylist(playlistId, direction) {
+    function movePlaylistToIndex(playlistId, nextIndex) {
       const index = playlists.findIndex((playlist) => playlist.id === playlistId);
       if (index === -1) return;
-      const newIndex = index + direction;
-      if (newIndex < 0 || newIndex >= playlists.length) return;
+      const boundedIndex = Math.max(0, Math.min(nextIndex, playlists.length - 1));
+      if (boundedIndex === index) return;
       const updated = [...playlists];
       const [item] = updated.splice(index, 1);
-      updated.splice(newIndex, 0, item);
+      updated.splice(boundedIndex, 0, item);
       playlists = updated;
       savePlaylistState();
       renderScreens(getCurrentScreens());
       markDirty();
+    }
+
+    function movePlaylist(playlistId, direction) {
+      const index = playlists.findIndex((playlist) => playlist.id === playlistId);
+      if (index === -1) return;
+      movePlaylistToIndex(playlistId, index + direction);
     }
 
     function renamePlaylist(playlistId) {
@@ -608,18 +614,6 @@
       if (isCollapsed) {
         row.classList.add("is-collapsed");
       }
-      const toggle = document.createElement("button");
-      toggle.type = "button";
-      toggle.className = "btn-secondary";
-      toggle.textContent = isCollapsed ? "Expand" : "Collapse";
-      toggle.setAttribute("aria-expanded", String(!isCollapsed));
-      toggle.addEventListener("click", () => {
-        collapsedPlaylists[groupKey] = !collapsedPlaylists[groupKey];
-        savePlaylistState();
-        renderScreens(getCurrentScreens());
-      });
-      actions.append(toggle);
-
       if (playlist.id) {
         const moveUp = document.createElement("button");
         moveUp.type = "button";
@@ -633,6 +627,18 @@
         moveDown.textContent = "Move down";
         moveDown.addEventListener("click", () => movePlaylist(playlist.id, 1));
 
+        const moveTop = document.createElement("button");
+        moveTop.type = "button";
+        moveTop.className = "btn-secondary";
+        moveTop.textContent = "Move to top";
+        moveTop.addEventListener("click", () => movePlaylistToIndex(playlist.id, 0));
+
+        const moveBottom = document.createElement("button");
+        moveBottom.type = "button";
+        moveBottom.className = "btn-secondary";
+        moveBottom.textContent = "Move to bottom";
+        moveBottom.addEventListener("click", () => movePlaylistToIndex(playlist.id, playlists.length - 1));
+
         const rename = document.createElement("button");
         rename.type = "button";
         rename.className = "btn-secondary";
@@ -645,8 +651,20 @@
         remove.textContent = "Remove";
         remove.addEventListener("click", () => removePlaylist(playlist.id));
 
-        actions.append(moveUp, moveDown, rename, remove);
+        actions.append(moveUp, moveDown, moveTop, moveBottom, rename, remove);
       }
+
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "btn-secondary";
+      toggle.textContent = isCollapsed ? "Expand" : "Collapse";
+      toggle.setAttribute("aria-expanded", String(!isCollapsed));
+      toggle.addEventListener("click", () => {
+        collapsedPlaylists[groupKey] = !collapsedPlaylists[groupKey];
+        savePlaylistState();
+        renderScreens(getCurrentScreens());
+      });
+      actions.append(toggle);
 
       row.append(meta, actions);
       return row;
@@ -813,6 +831,10 @@
       const hideZero = hideZeroFreqToggle.checked;
       const rows = [...screenTable.querySelectorAll(".screen-row")];
       rows.forEach((row) => {
+        if (row.dataset.collapsed === "true") {
+          row.style.display = "none";
+          return;
+        }
         if (!hideZero) {
           row.style.display = "";
           return;
@@ -839,11 +861,15 @@
         const header = buildPlaylistHeader(group, groupScreens.length);
         screenTable.appendChild(header);
         const groupKey = group.id || "ungrouped";
-        if (!collapsedPlaylists[groupKey]) {
-          groupScreens.forEach((screen) => {
-            screenTable.appendChild(buildRow(screen));
-          });
-        }
+        const isCollapsed = Boolean(collapsedPlaylists[groupKey]);
+        groupScreens.forEach((screen) => {
+          const row = buildRow(screen);
+          if (isCollapsed) {
+            row.dataset.collapsed = "true";
+            row.style.display = "none";
+          }
+          screenTable.appendChild(row);
+        });
       });
       updateZeroFrequencyVisibility();
     }
