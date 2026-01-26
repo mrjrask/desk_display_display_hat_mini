@@ -1,7 +1,7 @@
 # screens_catalog.py
 # A single source of truth for all of your possible screen IDs.
 
-SCREEN_IDS = [
+RAW_SCREEN_IDS = [
     "date", "time", "nixie",
     "weather logo", "weather1", "weather2", "weather hourly", "weather radar", "inside", "sensors",
     "verano logo", "vrnof", "travel", "travel map", "travel v2", "travel map v2",
@@ -18,3 +18,5 @@ SCREEN_IDS = [
     "NL Overview", "NL East", "NL Central", "NL West", "NL Wild Card",
     "AL Overview", "AL East", "AL Central", "AL West", "AL Wild Card",
 ]
+
+SCREEN_IDS = list(dict.fromkeys(RAW_SCREEN_IDS))
