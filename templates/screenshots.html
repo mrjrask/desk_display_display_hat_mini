@@ -38,6 +38,23 @@
       margin: 0;
       font-size: 0.95rem;
     }
+    .controls {
+      margin-top: 1rem;
+      display: flex;
+      justify-content: center;
+    }
+    .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+      color: #cbd5f5;
+    }
+    .toggle input {
+      width: 1rem;
+      height: 1rem;
+      accent-color: #38bdf8;
+    }
     .grid {
       display: grid;
       gap: 1.25rem;
@@ -54,6 +71,9 @@
       flex-direction: column;
       gap: 0.75rem;
       box-shadow: 0 18px 35px rgba(15, 23, 42, 0.45);
+    }
+    .card.is-hidden {
+      display: none;
     }
     .card h2 {
       font-size: 1rem;
@@ -105,10 +125,16 @@
     <h1>Latest Screen Captures</h1>
     <p class="subtitle">Click any preview to open the full-resolution screenshot.</p>
     <p class="subtitle"><a href="{{ url_for('screen_config') }}">Return to screen configuration</a></p>
+    <div class="controls">
+      <label class="toggle">
+        <input type="checkbox" id="hideMissingScreens">
+        Hide screens without screenshots
+      </label>
+    </div>
   </header>
   <section class="grid">
     {% for screen in screens %}
-    <article class="card">
+    <article class="card" data-has-screenshot="{{ 'true' if screen.filename else 'false' }}">
       <h2>{{ screen.id }}</h2>
       <div class="preview">
         {% if screen.filename %}
@@ -126,5 +152,24 @@
     </article>
     {% endfor %}
   </section>
+  <script>
+    const hideMissingToggle = document.getElementById("hideMissingScreens");
+    const screenshotCards = document.querySelectorAll(".card");
+
+    function updateMissingVisibility() {
+      const shouldHide = hideMissingToggle.checked;
+      screenshotCards.forEach((card) => {
+        const hasScreenshot = card.dataset.hasScreenshot === "true";
+        if (!hasScreenshot && shouldHide) {
+          card.classList.add("is-hidden");
+        } else {
+          card.classList.remove("is-hidden");
+        }
+      });
+    }
+
+    hideMissingToggle.addEventListener("change", updateMissingVisibility);
+    updateMissingVisibility();
+  </script>
 </body>
 </html>
