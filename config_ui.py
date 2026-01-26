@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, abort, jsonify, render_template, request, send_from_directory
 
+from paths import resolve_storage_paths
 from schedule import build_scheduler
 from screens_catalog import SCREEN_IDS
 
@@ -24,6 +27,7 @@ STYLE_CONFIG_PATH = os.environ.get(
 
 SCREEN_CONFIG_HOST = os.environ.get("SCREEN_CONFIG_HOST", "0.0.0.0")
 SCREEN_CONFIG_PORT = int(os.environ.get("SCREEN_CONFIG_PORT", "5002"))
+ALLOWED_SCREEN_EXTS = (".png", ".jpg", ".jpeg")
 
 app = Flask(__name__)
 
@@ -89,6 +93,46 @@ def _serialize_alt_screen(value: Any) -> str:
     if isinstance(value, str):
         return value
     return ""
+
+
+def _sanitize_filename_prefix(name: str) -> str:
+    """Return a filesystem-friendly filename prefix."""
+
+    safe = name.strip().replace("/", "-").replace("\\", "-")
+    safe = safe.replace(" ", "_")
+    safe = "".join(ch for ch in safe if ch.isalnum() or ch in ("_", "-"))
+    return safe or "screen"
+
+
+def _current_screenshot_dir() -> Path:
+    storage_paths = resolve_storage_paths()
+    return storage_paths.current_screenshot_dir
+
+
+def _format_timestamp(timestamp: float) -> str:
+    return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _build_screenshot_entries() -> List[Dict[str, Optional[str]]]:
+    current_dir = _current_screenshot_dir()
+    entries: List[Dict[str, Optional[str]]] = []
+    for screen_id in SCREEN_IDS:
+        prefix = _sanitize_filename_prefix(screen_id)
+        filename = f"{prefix}.png"
+        path = current_dir / filename
+        entry: Dict[str, Optional[str]] = {
+            "id": screen_id,
+            "filename": None,
+            "timestamp": None,
+        }
+        if path.exists():
+            entry["filename"] = filename
+            try:
+                entry["timestamp"] = _format_timestamp(path.stat().st_mtime)
+            except OSError:
+                entry["timestamp"] = None
+        entries.append(entry)
+    return entries
 
 
 def _normalise_hex_color(value: str) -> Optional[str]:
@@ -278,6 +322,20 @@ def screen_config() -> str:
         screen_ids=sorted(SCREEN_IDS),
         config_path=DEFAULT_CONFIG_PATH,
     )
+
+
+@app.get("/screenshots")
+def screen_screenshots() -> str:
+    entries = _build_screenshot_entries()
+    return render_template("screenshots.html", screens=entries)
+
+
+@app.get("/screenshots/current/<path:filename>")
+def screenshot_current(filename: str) -> Any:
+    if not filename.lower().endswith(ALLOWED_SCREEN_EXTS):
+        abort(404)
+    current_dir = _current_screenshot_dir()
+    return send_from_directory(str(current_dir), filename)
 
 
 @app.get("/api/screens")
