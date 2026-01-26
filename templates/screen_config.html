@@ -139,6 +139,10 @@
       border: 1px dashed rgba(148, 163, 184, 0.35);
       background: rgba(30, 41, 59, 0.7);
     }
+    .playlist-row.is-collapsed {
+      border-style: solid;
+      opacity: 0.9;
+    }
     .playlist-row .meta {
       display: flex;
       align-items: baseline;
@@ -428,6 +432,7 @@
     let isDirty = false;
     let playlists = [];
     let playlistAssignments = {};
+    let collapsedPlaylists = {};
 
     function getDragAfterElement(container, y) {
       const draggableElements = [...container.querySelectorAll(".screen-row:not(.dragging)")];
@@ -483,9 +488,13 @@
         if (data?.assignments && typeof data.assignments === "object") {
           playlistAssignments = { ...data.assignments };
         }
+        if (data?.collapsed && typeof data.collapsed === "object") {
+          collapsedPlaylists = { ...data.collapsed };
+        }
       } catch (error) {
         playlists = [];
         playlistAssignments = {};
+        collapsedPlaylists = {};
       }
     }
 
@@ -493,7 +502,11 @@
       try {
         localStorage.setItem(
           playlistStorageKey,
-          JSON.stringify({ playlists, assignments: playlistAssignments })
+          JSON.stringify({
+            playlists,
+            assignments: playlistAssignments,
+            collapsed: collapsedPlaylists,
+          })
         );
       } catch (error) {
         console.warn("Unable to save playlist state.", error);
@@ -514,6 +527,12 @@
         }
       });
       playlists = playlists.filter((playlist) => playlist?.id && playlist?.name);
+      const validGroups = new Set(["ungrouped", ...playlists.map((playlist) => playlist.id)]);
+      Object.keys(collapsedPlaylists).forEach((groupId) => {
+        if (!validGroups.has(groupId)) {
+          delete collapsedPlaylists[groupId];
+        }
+      });
     }
 
     function movePlaylist(playlistId, direction) {
@@ -583,6 +602,23 @@
 
       const actions = document.createElement("div");
       actions.className = "playlist-actions";
+
+      const groupKey = playlist.id || "ungrouped";
+      const isCollapsed = Boolean(collapsedPlaylists[groupKey]);
+      if (isCollapsed) {
+        row.classList.add("is-collapsed");
+      }
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "btn-secondary";
+      toggle.textContent = isCollapsed ? "Expand" : "Collapse";
+      toggle.setAttribute("aria-expanded", String(!isCollapsed));
+      toggle.addEventListener("click", () => {
+        collapsedPlaylists[groupKey] = !collapsedPlaylists[groupKey];
+        savePlaylistState();
+        renderScreens(getCurrentScreens());
+      });
+      actions.append(toggle);
 
       if (playlist.id) {
         const moveUp = document.createElement("button");
@@ -685,6 +721,7 @@
         screens: getCurrentScreens(),
         playlists,
         assignments: playlistAssignments,
+        collapsed: collapsedPlaylists,
       };
       try {
         sessionStorage.setItem(draftStorageKey, JSON.stringify(payload));
@@ -801,9 +838,12 @@
         );
         const header = buildPlaylistHeader(group, groupScreens.length);
         screenTable.appendChild(header);
-        groupScreens.forEach((screen) => {
-          screenTable.appendChild(buildRow(screen));
-        });
+        const groupKey = group.id || "ungrouped";
+        if (!collapsedPlaylists[groupKey]) {
+          groupScreens.forEach((screen) => {
+            screenTable.appendChild(buildRow(screen));
+          });
+        }
       });
       updateZeroFrequencyVisibility();
     }
@@ -971,6 +1011,9 @@
             }
             if (draft.assignments && typeof draft.assignments === "object") {
               playlistAssignments = { ...draft.assignments };
+            }
+            if (draft.collapsed && typeof draft.collapsed === "object") {
+              collapsedPlaylists = { ...draft.collapsed };
             }
             savePlaylistState();
             isDirty = true;
