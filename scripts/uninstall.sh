@@ -6,9 +6,33 @@ warn() { printf '[WARN] %s\n' "$*"; }
 
 SERVICE_NAME="desk_display.service"
 
+detect_existing_venv() {
+  local project_dir="$1"
+  local candidates=(
+    "$project_dir/venv"
+    "$project_dir/.venv"
+  )
+
+  for candidate in "${candidates[@]}"; do
+    if [[ -f "$candidate/pyvenv.cfg" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  local venv_cfg
+  venv_cfg=$(find "$project_dir" -maxdepth 2 -mindepth 2 -type f -name pyvenv.cfg -print -quit 2>/dev/null || true)
+  if [[ -n "$venv_cfg" ]]; then
+    dirname "$venv_cfg"
+    return 0
+  fi
+
+  return 1
+}
+
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
-VENV_DIR="$PROJECT_DIR/venv"
+VENV_DIR=$(detect_existing_venv "$PROJECT_DIR" || true)
 SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
 
 if [[ $EUID -ne 0 ]]; then
@@ -41,15 +65,23 @@ else
   warn "systemctl not found; skipping service removal"
 fi
 
-if [[ -d "$VENV_DIR" ]]; then
+if [[ -n "$VENV_DIR" && -d "$VENV_DIR" ]]; then
   if [[ "${KEEP_VENV:-}" == "1" ]]; then
     log "Keeping virtual environment at $VENV_DIR (KEEP_VENV=1)"
+  elif [[ -t 0 ]]; then
+    read -r -p "Keep virtual environment at $VENV_DIR? [y/N]: " keep_reply
+    if [[ "$keep_reply" =~ ^[Yy]$ ]]; then
+      log "Keeping virtual environment at $VENV_DIR"
+    else
+      log "Removing virtual environment at $VENV_DIR"
+      rm -rf "$VENV_DIR"
+    fi
   else
-    log "Removing virtual environment at $VENV_DIR"
+    warn "No interactive terminal detected; removing virtual environment at $VENV_DIR"
     rm -rf "$VENV_DIR"
   fi
 else
-  warn "No virtual environment found at $VENV_DIR"
+  warn "No virtual environment found for $PROJECT_DIR"
 fi
 
 log "Uninstall complete. Project files remain in $PROJECT_DIR"
